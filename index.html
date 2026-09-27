@@ -500,7 +500,6 @@ let unsubscribers=[], cachedCaptains=[], cachedOrders=[], cachedCaptainLocations
 let toastTimeout, seenCancelNotices={}, firstSnapshotDone=false;
 
 // ── POS STATE ──
-let posMenu=loadMenu();
 let activeCat=0, cart=[], selProduct=null, selVariant=null, posQty=1;
 let addVars=[{name:'وحدة',price:0}], addImg='';
 let selCaptainId=null, pendingOrderType=null;
@@ -581,6 +580,8 @@ const defaultMenu=[
     {name:"فنكر",img:"",variants:[{name:"صغير",price:1000},{name:"وسط",price:1500},{name:"بالبين",price:3000}]},
   ]},
 ];
+
+let posMenu=loadMenu();
 
 function loadMenu(){
   try{const s=localStorage.getItem('bw_menu');return s?JSON.parse(s):JSON.parse(JSON.stringify(defaultMenu));}
