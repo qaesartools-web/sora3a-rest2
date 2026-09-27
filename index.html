@@ -12,6 +12,8 @@
 <title>سرعة - تطبيق المطعم v1780268280</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=Reem+Kufi:wght@500;700&display=swap" rel="stylesheet">
 <style>
+#installBtn{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#2196f3;color:#fff;border:none;border-radius:20px;padding:10px 20px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;z-index:99999;box-shadow:0 4px 20px rgba(33,150,243,.6);}
+
 :root {
   --bg:#0f1115; --panel:#161922; --panel-2:#1d212c; --line:#262b38;
   --text:#e8eaf0; --muted:#8a93a6; --accent:#4dabf7; --accent-2:#74c0fc;
@@ -269,6 +271,8 @@ if('serviceWorker' in navigator){
 }
 </script></head>
 <body>
+<button id="installBtn" onclick="doInstall()">📲 تثبيت التطبيق</button>
+
 
 <!-- LOGIN -->
 <div class="login-screen" id="loginScreen" style="display:none;">
@@ -1225,6 +1229,22 @@ window.openChangeCaptain = function(orderId) {
 
 
 setInterval(()=>{if(currentUser){renderOrdersScreen();renderCaptainsScreen();}},5000);
+
+let installPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();installPrompt=e;
+  const b=document.getElementById('installBtn');
+  if(b) b.style.display='block';
+});
+window.doInstall=function(){
+  if(!installPrompt)return;
+  installPrompt.prompt();
+  installPrompt.userChoice.then(()=>{
+    const b=document.getElementById('installBtn');
+    if(b) b.style.display='none';
+    installPrompt=null;
+  });
+};
 </script>
 </body>
 </html>
