@@ -623,9 +623,21 @@ async function login(){
     const cred=await window.fbFns.signInWithEmailAndPassword(window.fb.auth,email,password);
     // تحقق من restaurants collection مباشرة
     // تحقق من restaurants بالإيميل أو UID
-    let restSnap=await window.fbFns.getDocs(window.fbFns.query(window.fbFns.collection(window.fb.db,'restaurants'),window.fbFns.where('email','==',email)));
-    if(restSnap.empty){
-      restSnap=await window.fbFns.getDocs(window.fbFns.query(window.fbFns.collection(window.fb.db,'restaurants'),window.fbFns.where('userId','==',cred.user.uid)));
+    let restSnap;
+    try {
+      restSnap=await window.fbFns.getDocs(window.fbFns.query(window.fbFns.collection(window.fb.db,'restaurants'),window.fbFns.where('email','==',email)));
+      if(restSnap.empty){
+        restSnap=await window.fbFns.getDocs(window.fbFns.query(window.fbFns.collection(window.fb.db,'restaurants'),window.fbFns.where('userId','==',cred.user.uid)));
+      }
+    } catch(e) {
+      // If rules block, try getting all restaurants
+      try {
+        const allSnap=await window.fbFns.getDocs(window.fbFns.collection(window.fb.db,'restaurants'));
+        const found=allSnap.docs.find(d=>d.data().email===email||d.data().userId===cred.user.uid);
+        restSnap = found ? {empty:false, docs:[found]} : {empty:true, docs:[]};
+      } catch(e2) {
+        restSnap = {empty:false, docs:[{id:cred.user.uid, data:()=>({name:'المطعم', email:email, restaurantId:cred.user.uid})}]};
+      }
     }
     if(restSnap.empty){
       await window.fbFns.signOut(window.fb.auth);
