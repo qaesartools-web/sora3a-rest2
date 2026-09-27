@@ -2,43 +2,43 @@
 <html lang="ar" dir="rtl">
 <head>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#2196f3">
+<meta name="theme-color" content="#008b2c">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0"><meta name="version" content="1780268299">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#f3f7f4">
 <title>سرعة - تطبيق المطعم v1780268280</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=Reem+Kufi:wght@500;700&display=swap" rel="stylesheet">
 <style>
-#installBtn{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#2196f3;color:#fff;border:none;border-radius:20px;padding:10px 20px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;z-index:99999;box-shadow:0 4px 20px rgba(33,150,243,.6);}
+#installBtn{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#008b2c;color:#fff;border:none;border-radius:20px;padding:10px 20px;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;z-index:99999;box-shadow:0 4px 20px rgba(33,150,243,.6);}
 
 :root {
-  --bg:#0f1115; --panel:#161922; --panel-2:#1d212c; --line:#262b38;
-  --text:#e8eaf0; --muted:#8a93a6; --accent:#4dabf7; --accent-2:#74c0fc;
-  --success:#2ecc71; --danger:#ff4757; --info:#4dabf7; --warning:#ffc83d;
-  --role-color:#4dabf7; --orange:#ff6b3d; --orange2:#f5a623;
+  --bg:#f3f7f4; --panel:#ffffff; --panel-2:#eef3ef; --line:#e1e8e3;
+  --text:#16241c; --muted:#6b7d72; --accent:#008b2c; --accent-2:#00b84a;
+  --success:#00a83e; --danger:#e5484d; --info:#2f80ed; --warning:#f2994a;
+  --role-color:#008b2c; --orange:#008b2c; --orange2:#00b84a;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px;}
 
 /* ── LOGIN ── */
 .login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
-  background-image:radial-gradient(circle at 20% 30%,rgba(77,171,247,.15) 0%,transparent 50%),radial-gradient(circle at 80% 70%,rgba(116,192,252,.1) 0%,transparent 50%);}
+  background-image:radial-gradient(circle at 20% 30%,rgba(0,139,44,.15) 0%,transparent 50%),radial-gradient(circle at 80% 70%,rgba(116,192,252,.1) 0%,transparent 50%);}
 .login-card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:30px 24px;max-width:420px;width:100%;}
-.login-logo{width:70px;height:70px;background:linear-gradient(135deg,var(--role-color),var(--accent-2));border-radius:18px;display:grid;place-items:center;font-size:34px;margin:0 auto 18px;box-shadow:0 10px 30px rgba(77,171,247,.4);}
+.login-logo{width:70px;height:70px;background:linear-gradient(135deg,var(--role-color),var(--accent-2));border-radius:18px;display:grid;place-items:center;font-size:34px;margin:0 auto 18px;box-shadow:0 10px 30px rgba(0,139,44,.4);}
 .login-title{text-align:center;font-family:'Reem Kufi';font-size:24px;margin-bottom:6px;}
 .login-subtitle{text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px;}
 .cloud-status{display:flex;align-items:center;gap:6px;background:rgba(46,204,113,.1);border:1px solid var(--success);color:var(--success);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;margin:0 auto 16px;width:fit-content;}
-.role-badge-top{background:rgba(77,171,247,.15);border:1px solid var(--role-color);color:var(--role-color);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;text-align:center;margin:0 auto 18px;width:fit-content;}
+.role-badge-top{background:rgba(0,139,44,.15);border:1px solid var(--role-color);color:var(--role-color);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;text-align:center;margin:0 auto 18px;width:fit-content;}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--success);animation:blink 1.5s infinite;display:inline-block;margin-left:4px;}
 @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
 .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;animation:spin .6s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
 /* ── HEADER ── */
-header{background:linear-gradient(135deg,#1a1d28,#161922);border-bottom:1px solid var(--line);padding:12px 14px;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+header{background:linear-gradient(135deg,#ffffff,#eef3ef);border-bottom:1px solid var(--line);padding:12px 14px;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 2px 12px rgba(16,36,24,.05);}
 .header-logo{display:flex;align-items:center;gap:8px;min-width:0;flex:1;}
 .header-logo-mark{width:36px;height:36px;background:linear-gradient(135deg,var(--role-color),var(--accent-2));border-radius:10px;display:grid;place-items:center;font-size:17px;flex-shrink:0;}
 .header-logo h1{font-family:'Reem Kufi';font-size:14px;}
@@ -71,19 +71,19 @@ main{padding:14px;max-width:900px;margin:0 auto;}
 .btn{padding:12px 18px;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;}
 .btn:active{transform:scale(.98);}
 .btn:disabled{opacity:.5;cursor:not-allowed;}
-.btn-primary{background:linear-gradient(135deg,var(--role-color),var(--accent-2));color:white;box-shadow:0 4px 14px rgba(77,171,247,.25);}
+.btn-primary{background:linear-gradient(135deg,var(--role-color),var(--accent-2));color:white;box-shadow:0 4px 14px rgba(0,139,44,.25);}
 .btn-ghost{background:var(--panel-2);color:var(--text);border:1px solid var(--line);}
 .btn-orange{background:linear-gradient(135deg,var(--orange),var(--orange2));color:white;}
 .btn-sm{padding:8px 12px!important;font-size:12px!important;}
-.hint{background:rgba(77,171,247,.08);border:1px solid rgba(77,171,247,.3);border-radius:10px;padding:10px 12px;font-size:11px;color:var(--info);margin-bottom:12px;line-height:1.6;}
+.hint{background:rgba(0,139,44,.08);border:1px solid rgba(0,139,44,.3);border-radius:10px;padding:10px 12px;font-size:11px;color:var(--info);margin-bottom:12px;line-height:1.6;}
 .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
 .stat-mini{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center;}
 .stat-mini-value{font-size:18px;font-weight:900;font-family:'Reem Kufi';color:var(--role-color);}
 .stat-mini-label{font-size:10px;color:var(--muted);margin-top:2px;}
 .badge{display:inline-block;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap;}
 .badge-pending{background:rgba(255,200,61,.15);color:var(--warning);}
-.badge-accepted{background:rgba(77,171,247,.15);color:var(--info);}
-.badge-pickup{background:rgba(255,107,61,.15);color:#ff6b3d;}
+.badge-accepted{background:rgba(0,139,44,.15);color:var(--info);}
+.badge-pickup{background:rgba(0,139,44,.15);color:#008b2c;}
 .badge-delivering{background:rgba(255,184,77,.2);color:#ffb84d;}
 .badge-delivered{background:rgba(46,204,113,.15);color:var(--success);}
 .badge-cancelled{background:rgba(255,71,87,.15);color:var(--danger);}
@@ -158,7 +158,7 @@ main{padding:14px;max-width:900px;margin:0 auto;}
 .modal-handle{width:40px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px;}
 .variants-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
 .variant-btn{background:var(--panel-2);border:1.5px solid var(--line);border-radius:10px;padding:10px 8px;cursor:pointer;transition:all .2s;text-align:center;}
-.variant-btn.selected{border-color:var(--orange);background:rgba(255,107,61,.1);}
+.variant-btn.selected{border-color:var(--orange);background:rgba(0,139,44,.1);}
 .variant-name{font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px;}
 .variant-price{font-size:12px;color:var(--orange2);font-weight:900;}
 .qty-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
@@ -183,7 +183,7 @@ main{padding:14px;max-width:900px;margin:0 auto;}
 /* Captain select modal */
 .captain-card{background:var(--panel-2);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .2s;}
 .captain-card:active{transform:scale(.98);}
-.captain-card.selected{border-color:var(--orange);background:rgba(255,107,61,.08);}
+.captain-card.selected{border-color:var(--orange);background:rgba(0,139,44,.08);}
 .captain-avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
 .captain-info{flex:1;}
 .captain-name{font-size:14px;font-weight:700;}
@@ -1011,7 +1011,7 @@ window.openImageFullscreen=function(orderId){
   const order=cachedOrders.find(o=>o.id===orderId);if(!order?.deliveryProof)return;
   const overlay=document.createElement('div');
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;flex-direction:column;gap:14px;';
-  overlay.innerHTML=`<div style="color:white;font-size:16px;">📸 إثبات تسليم</div><img src="${order.deliveryProof.image}" style="max-width:100%;max-height:75vh;border-radius:12px;"><div style="color:#8a93a6;font-size:13px;">${order.deliveryProof.capturedBy} - ${order.deliveryProof.time}</div><button style="background:#4dabf7;color:white;border:none;padding:12px 24px;border-radius:10px;font-weight:700;font-family:inherit;">إغلاق</button>`;
+  overlay.innerHTML=`<div style="color:white;font-size:16px;">📸 إثبات تسليم</div><img src="${order.deliveryProof.image}" style="max-width:100%;max-height:75vh;border-radius:12px;"><div style="color:#8a93a6;font-size:13px;">${order.deliveryProof.capturedBy} - ${order.deliveryProof.time}</div><button style="background:#008b2c;color:white;border:none;padding:12px 24px;border-radius:10px;font-weight:700;font-family:inherit;">إغلاق</button>`;
   overlay.onclick=()=>overlay.remove();document.body.appendChild(overlay);
 };
 
