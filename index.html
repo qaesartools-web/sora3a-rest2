@@ -244,6 +244,37 @@ main{padding:14px;max-width:900px;margin:0 auto;}
   .pos-cart{width:155px;}
   .pos-layout{height:calc(100vh - 120px);}
 }
+
+/* ── STOCK BADGES ── */
+.product-card{position:relative;}
+.stock-badge{position:absolute;top:6px;right:6px;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:800;z-index:2;}
+.stock-out{background:rgba(229,72,77,.15);color:var(--danger);}
+.stock-low{background:rgba(242,153,74,.18);color:var(--warning);}
+.product-card.disabled{opacity:.45;pointer-events:none;}
+
+/* ── DISCOUNT ROW ── */
+.discount-row{display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--panel-2);border-radius:10px;margin:6px 0;}
+.discount-row input{width:56px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 6px;color:var(--text);font-family:inherit;font-size:12px;text-align:center;}
+.discount-row label{font-size:11px;color:var(--muted);flex:1;}
+.discount-off{font-size:11px;color:var(--danger);font-weight:700;}
+
+/* ── FAVORITES STRIP ── */
+.fav-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px;}
+.fav-strip::-webkit-scrollbar{height:0;}
+.fav-chip{flex-shrink:0;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border-radius:12px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;box-shadow:0 4px 14px rgba(0,139,44,.25);}
+
+/* ── FAB SPEED DIAL ── */
+.fab-wrap{position:fixed;left:14px;bottom:78px;z-index:500;display:flex;flex-direction:column;align-items:center;gap:10px;}
+.fab-item{width:44px;height:44px;border-radius:50%;background:var(--panel);border:1px solid var(--line);box-shadow:0 6px 18px rgba(16,36,24,.15);display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;opacity:0;transform:translateY(10px) scale(.8);pointer-events:none;transition:all .25s;}
+.fab-wrap.open .fab-item{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+.fab-wrap.open .fab-item:nth-child(2){transition-delay:.03s;}
+.fab-wrap.open .fab-item:nth-child(3){transition-delay:.06s;}
+.fab-main{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border:none;box-shadow:0 8px 22px rgba(0,139,44,.4);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .25s;order:99;}
+.fab-wrap.open .fab-main{transform:rotate(135deg);}
+
+/* ── STALE ORDER PULSE ── */
+@keyframes staleBlink{0%,100%{box-shadow:0 0 0 0 rgba(229,72,77,.5);}70%{box-shadow:0 0 0 10px rgba(229,72,77,0);}}
+.order-stale{animation:staleBlink 1.6s ease-out 3;border-color:var(--danger)!important;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
@@ -312,6 +343,7 @@ if('serviceWorker' in navigator){
 <section class="screen active" id="screen-cashier">
   <div class="pos-layout">
     <div class="pos-menu">
+      <div class="fav-strip" id="favStrip"></div>
       <div class="cats-bar" id="cats"></div>
       <div class="products-grid" id="products"></div>
     </div>
@@ -327,6 +359,7 @@ if('serviceWorker' in navigator){
       </div>
       <div class="cart-items" id="cartItems"><div class="cart-empty-msg">السلة فارغة</div></div>
       <div class="cart-footer">
+        <div class="discount-row"><label>🏷️ خصم %</label><input type="number" id="cartDiscount" min="0" max="100" value="0" oninput="renderCart()"></div>
         <div class="cart-total-row"><span>المجموع</span><span class="cart-total-val" id="cartTotal">٠ د.ع</span></div>
         <button class="checkout-btn" id="checkoutBtn" disabled onclick="openOrderTypeModal()">🚀 ترحيل الطلب</button>
       </div>
@@ -384,6 +417,10 @@ if('serviceWorker' in navigator){
     </div>
   </div>
   <div class="card">
+    <div class="card-title"><span class="dot"></span> 🏆 الأكثر مبيعاً</div>
+    <div id="anTopItems"></div>
+  </div>
+  <div class="card">
     <div class="card-title"><span class="dot"></span> 👥 الزبائن</div>
     <input type="text" id="anCustSearch" class="an-input" placeholder="🔍 ابحث..." style="margin-bottom:10px;" oninput="renderAnCustomers()">
     <button class="btn btn-primary btn-sm" style="margin-bottom:10px;" onclick="exportAnCustomers()">📊 Excel</button>
@@ -397,6 +434,12 @@ if('serviceWorker' in navigator){
 </section>
 </main>
 
+<div class="fab-wrap" id="fabWrap">
+  <div class="fab-item" title="إعادة آخر طلب" onclick="quickReorderLast()">🔁</div>
+  <div class="fab-item" title="طباعة آخر فاتورة" onclick="quickReprintLast()">🖨️</div>
+  <div class="fab-item" title="الأكثر مبيعاً" onclick="quickTopSeller()">📊</div>
+  <button class="fab-main" onclick="toggleFab()">⚡</button>
+</div>
 <nav class="bottom-nav">
   <button class="nav-btn active" data-screen="cashier"><div class="nav-icon">🧾</div><div>الكاشير</div></button>
   <button class="nav-btn" data-screen="orders"><div class="nav-icon">📋</div><div>الطلبات</div></button>
@@ -744,16 +787,43 @@ function renderPosMenu(){
   document.getElementById('cats').innerHTML=posMenu.map((c,i)=>
     `<button class="cat-btn ${i===activeCat?'active':''}" onclick="selectCat(${i})">${c.emoji} ${c.cat}</button>`
   ).join('');
-  document.getElementById('products').innerHTML=posMenu[activeCat].items.map((p,i)=>`
-    <div class="product-card" onclick="openVariantModal(${activeCat},${i})">
+  document.getElementById('products').innerHTML=posMenu[activeCat].items.map((p,i)=>{
+    const out=p.stock!==undefined&&p.stock!==null&&p.stock<=0;
+    const low=p.stock!==undefined&&p.stock!==null&&p.stock>0&&p.stock<=3;
+    return`
+    <div class="product-card ${out?'disabled':''}" onclick="openVariantModal(${activeCat},${i})">
+      ${out?'<div class="stock-badge stock-out">نفذ</div>':low?`<div class="stock-badge stock-low">باقي ${toA(p.stock)}</div>`:''}
       <div class="product-img">${p.img?`<img src="${p.img}">`:`<span>${posMenu[activeCat].emoji}</span>`}</div>
       <div class="product-info">
         <div class="product-name">${p.name}</div>
         <div class="product-price">${p.variants.length===1?p.variants[0].price.toLocaleString('ar-IQ')+' د.ع':'متعدد الأحجام'}</div>
       </div>
       ${p.variants.length>1?`<div class="product-badge">${p.variants.length} أحجام</div>`:''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
+  renderFavStrip();
 }
+
+// ── FAVORITES (top-selling quick access) ──
+function getTopSellingItems(limit){
+  const history=JSON.parse(localStorage.getItem('bw_orders')||'[]');
+  const map={};
+  history.forEach(o=>o.items.forEach(it=>{map[it.name]=(map[it.name]||0)+it.qty;}));
+  return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,limit||4).map(([name,qty])=>({name,qty}));
+}
+function renderFavStrip(){
+  const top=getTopSellingItems(4);
+  const strip=document.getElementById('favStrip');
+  if(!strip)return;
+  if(!top.length){strip.innerHTML='';return;}
+  strip.innerHTML=top.map(t=>`<div class="fav-chip" onclick="quickAddByName('${t.name.replace(/'/g,"\\'")}')">⭐ ${t.name}</div>`).join('');
+}
+window.quickAddByName=function(name){
+  for(let ci=0;ci<posMenu.length;ci++){
+    const pi=posMenu[ci].items.findIndex(p=>p.name===name);
+    if(pi!==-1){openVariantModal(ci,pi);return;}
+  }
+};
 function selectCat(i){activeCat=i;renderPosMenu();}
 
 // ── VARIANT MODAL ──
@@ -795,10 +865,18 @@ function renderCart(){
       <div class="cart-qty-btn" onclick="cQty(${i},-1)">${toA(c.qty)}</div>
       <div class="cart-remove" onclick="removeCartItem(${i})">✕</div>
     </div>`).join('');
-  const total=cart.reduce((s,c)=>s+c.price*c.qty,0);
-  document.getElementById('cartTotal').textContent=total.toLocaleString('ar-IQ')+' د.ع';
+  const subtotal=cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const discPct=Math.min(100,Math.max(0,parseInt(document.getElementById('cartDiscount')?.value)||0));
+  const total=Math.round(subtotal*(1-discPct/100));
+  document.getElementById('cartTotal').textContent=total.toLocaleString('ar-IQ')+' د.ع'+(discPct>0?` (خصم ${toA(discPct)}%)`:'');
   document.getElementById('cartCount').textContent=toA(cart.reduce((s,c)=>s+c.qty,0))+' عنصر';
   document.getElementById('checkoutBtn').disabled=cart.length===0;
+}
+function getCartTotals(){
+  const subtotal=cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const discPct=Math.min(100,Math.max(0,parseInt(document.getElementById('cartDiscount')?.value)||0));
+  const total=Math.round(subtotal*(1-discPct/100));
+  return{subtotal,discPct,total};
 }
 function cQty(i,d){cart[i].qty+=d;if(cart[i].qty<=0)cart.splice(i,1);renderCart();}
 function removeCartItem(i){cart.splice(i,1);renderCart();}
@@ -864,7 +942,7 @@ async function finalizeOrder(type,captain){
   const custName=document.getElementById('custName').value.trim();
   const custPhone=document.getElementById('custPhone').value.trim();
   const custAddress=document.getElementById('custAddress').value.trim();
-  const total=cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const {subtotal,discPct,total}=getCartTotals();
   const orderNum=Math.floor(1000+Math.random()*9000);
   const now=new Date();
   const timeStr=now.toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'});
@@ -895,6 +973,7 @@ async function finalizeOrder(type,captain){
   <div class="info-row"><span>الوقت:</span><span>${timeStr}</span></div>
   <div class="divider"></div>
   ${cart.map(c=>`<div class="item-row"><span class="item-name">${c.name}</span><span class="item-qty">(${c.variant}) ×${c.qty}</span><span class="item-price">${(c.price*c.qty).toLocaleString('ar-IQ')}</span></div>`).join('')}
+  ${discPct>0?`<div class="info-row"><span>الفرعي:</span><span>${subtotal.toLocaleString('ar-IQ')} د.ع</span></div><div class="info-row"><span>خصم ${discPct}%:</span><span>-${(subtotal-total).toLocaleString('ar-IQ')} د.ع</span></div>`:''}
   <div class="total-row"><span>المجموع</span><span>${total.toLocaleString('ar-IQ')} د.ع</span></div>
   <div class="divider"></div>
   <div class="footer">شكراً لزيارتكم ❤️<br>07726537637 — 07736008900</div>
@@ -907,6 +986,7 @@ async function finalizeOrder(type,captain){
       await window.fbFns.addDoc(window.fbFns.collection(window.fb.db,'orders'),{
         restaurantId:currentUserData.id,restaurantName:currentUserData.name,
         customer:custName,phone:custPhone,address:custAddress,value:total,fee:5000,notes,
+        discount:discPct,subtotal,
         commission:Math.round(total*0.10),
         captainId:captain.id,captainName:captain.name,
         status:'pending',createdAt:timeStr,createdAtMs:Date.now(),
@@ -918,9 +998,28 @@ async function finalizeOrder(type,captain){
 
   // Save to local history
   const history=JSON.parse(localStorage.getItem('bw_orders')||'[]');
-  history.unshift({num:orderNum,type,typeName:typeNames[type],custName,custPhone,custAddress,items:[...cart],total,date:dateStr,time:timeStr,receiptHTML,captainName:captain?.name||''});
+  history.unshift({num:orderNum,type,typeName:typeNames[type],custName,custPhone,custAddress,items:[...cart],total,discPct,date:dateStr,time:timeStr,receiptHTML,captainName:captain?.name||''});
   if(history.length>100)history.pop();
   localStorage.setItem('bw_orders',JSON.stringify(history));
+
+  // Decrement stock + low-stock alerts
+  let stockChanged=false;
+  cart.forEach(ci=>{
+    for(let c=0;c<posMenu.length;c++){
+      const idx=posMenu[c].items.findIndex(p=>p.name===ci.name);
+      if(idx!==-1){
+        const item=posMenu[c].items[idx];
+        if(item.stock!==undefined&&item.stock!==null){
+          item.stock=Math.max(0,item.stock-ci.qty);
+          stockChanged=true;
+          if(item.stock===0)setTimeout(()=>showToast('⛔ نفذ الصنف: '+item.name,'⚠️'),1200);
+          else if(item.stock<=3)setTimeout(()=>showToast('⚠️ مخزون منخفض: '+item.name+' (باقي '+toA(item.stock)+')','⚠️'),1200);
+        }
+        break;
+      }
+    }
+  });
+  if(stockChanged){saveMenu();renderPosMenu();}
 
   // Auto print
   let iframe=document.getElementById('printFrame');
@@ -929,7 +1028,7 @@ async function finalizeOrder(type,captain){
   iframe.srcdoc=receiptHTML;
 
   showToast('✅ تم الترحيل — #'+orderNum);
-  setTimeout(()=>{cart=[];document.getElementById('custName').value='';document.getElementById('custPhone').value='';document.getElementById('custAddress').value='';renderCart();},1000);
+  setTimeout(()=>{cart=[];document.getElementById('custName').value='';document.getElementById('custPhone').value='';document.getElementById('custAddress').value='';document.getElementById('cartDiscount').value='0';renderCart();},1000);
 }
 
 // ── ORDERS SCREEN ──
@@ -939,17 +1038,34 @@ function renderOrdersScreen(){
   document.getElementById('r-done').textContent=cachedOrders.filter(o=>o.status==='delivered').length;
   const list=document.getElementById('restaurantOrders');
   if(!cachedOrders.length){list.innerHTML='<div class="empty"><div class="empty-icon">📦</div><p>لا توجد طلبات</p></div>';return;}
-  list.innerHTML=cachedOrders.map(o=>`
-    <div class="order-item">
+  list.innerHTML=cachedOrders.map(o=>{
+    const isStale=o.status==='pending'&&(Date.now()-(o.createdAtMs||0))>15*60*1000;
+    return `
+    <div class="order-item ${isStale?'order-stale':''}">
       <div class="order-row"><span class="order-id">${o.id.substring(0,6).toUpperCase()}</span><span class="order-time">${o.createdAt}</span></div>
       <div class="order-info">👤 ${o.customer} • 📞 ${o.phone}</div>
       <div class="order-info">📍 ${o.address}</div>
       <div class="order-info">💰 ${fmt(o.value)} + ${fmt(o.fee)} توصيل</div>
       <div class="order-row" style="margin-top:8px">${statusBadge(o.status)}<span style="font-size:11px;color:var(--muted)">${o.captainName||'يبحث...'}</span></div>
-      ${['pending','accepted'].includes(o.status)?`<button onclick="openChangeCaptain('${o.id}')" style="margin-top:8px;width:100%;padding:8px;border-radius:8px;border:1px solid var(--warning);background:transparent;color:var(--warning);font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🔄 تغيير الكابتن</button>`:''}
+      ${['pending','accepted'].includes(o.status)?`<div style="display:flex;gap:6px;margin-top:8px;">
+        <button onclick="openChangeCaptain('${o.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--warning);background:transparent;color:var(--warning);font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🔄 تغيير الكابتن</button>
+        <button onclick="cancelOrder('${o.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--danger);background:transparent;color:var(--danger);font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">❌ إلغاء</button>
+      </div>`:''}
       ${o.deliveryProof?`<div class="delivery-proof">✅ <strong>تم التسليم بصورة</strong> ${o.deliveryProof.time}<img src="${o.deliveryProof.image}" onclick="openImageFullscreen('${o.id}')"></div>`:''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
+
+window.cancelOrder=async function(id){
+  if(!confirm('إلغاء هذا الطلب؟'))return;
+  try{
+    await window.fbFns.updateDoc(window.fbFns.doc(window.fb.db,'orders',id),{
+      status:'cancelled',
+      cancelNotice:{by:'المطعم',time:new Date().toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'}),timestamp:Date.now(),seen:true}
+    });
+    showToast('❌ تم إلغاء الطلب');
+  }catch(e){showToast('❌ '+e.message,'⚠️');}
+};
 
 function statusBadge(s){
   const m={pending:{c:'badge-pending',t:'🟡 ينتظر'},accepted:{c:'badge-accepted',t:'🔵 مقبول'},pickup:{c:'badge-pickup',t:'🟠 في المطعم'},delivering:{c:'badge-delivering',t:'🛵 يتوصل'},delivered:{c:'badge-delivered',t:'✅ مسلّم'},cancelled:{c:'badge-cancelled',t:'❌ ملغي'}};
@@ -1039,6 +1155,7 @@ function renderAddForm(){
     <div style="margin-bottom:6px;"><span class="form-lbl">الأسعار / الأحجام *</span>
     <div id="variantsList"></div>
     <button class="add-variant-row-btn" onclick="addVarRow()">+ إضافة حجم</button></div>
+    <div style="margin-bottom:12px;"><span class="form-lbl">المخزون (اتركه فاضي = غير محدود)</span><input class="form-input" id="newStock" type="number" min="0" placeholder="مثال: 20"></div>
     <button class="save-item-btn" onclick="saveNewItem()">✅ حفظ الصنف</button>`;
   renderVarRows();
 }
@@ -1064,7 +1181,9 @@ function saveNewItem(){
   if(!name){showToast('⚠️ أدخل اسم الصنف','⚠️');return;}
   const variants=addVars.filter(v=>v.name&&v.price>0);
   if(!variants.length){showToast('⚠️ أضف سعراً','⚠️');return;}
-  posMenu[catIdx].items.push({name,img:addImg,variants});
+  const stockRaw=document.getElementById('newStock').value;
+  const stock=stockRaw===''?null:Math.max(0,parseInt(stockRaw)||0);
+  posMenu[catIdx].items.push({name,img:addImg,variants,stock});
   saveMenu();if(activeCat===catIdx)renderPosMenu();
   showToast('✅ تم إضافة: '+name);renderAddForm();
 }
@@ -1073,10 +1192,18 @@ function renderItemsList(){
   document.getElementById('manageBody').innerHTML=all.map(p=>`
     <div class="manage-item">
       <div class="manage-item-img">${p.img?`<img src="${p.img}">`:`<span>${p.emoji}</span>`}</div>
-      <div class="manage-item-info"><div class="manage-item-name">${p.name}</div><div class="manage-item-cat">${p.emoji} ${p.catName}</div><div class="manage-item-price">${p.variants.map(v=>v.price.toLocaleString('ar-IQ')+' د.ع').join(' / ')}</div></div>
+      <div class="manage-item-info"><div class="manage-item-name">${p.name}</div><div class="manage-item-cat">${p.emoji} ${p.catName}</div><div class="manage-item-price">${p.variants.map(v=>v.price.toLocaleString('ar-IQ')+' د.ع').join(' / ')}</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:4px;"><span style="font-size:11px;color:var(--muted);">📦 المخزون:</span><input type="number" min="0" value="${p.stock??''}" placeholder="غير محدود" style="width:70px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:3px 6px;color:var(--text);font-family:inherit;font-size:11px;" onchange="updateStock(${p.ci},${p.pi},this.value)"></div></div>
       <button class="manage-item-del" onclick="deleteItem(${p.ci},${p.pi})">حذف</button>
     </div>`).join('');
 }
+window.updateStock=function(ci,pi,val){
+  const stock=val===''?null:Math.max(0,parseInt(val)||0);
+  posMenu[ci].items[pi].stock=stock;
+  saveMenu();
+  if(activeCat===ci)renderPosMenu();
+  showToast('✅ تم تحديث المخزون');
+};
 function deleteItem(ci,pi){
   const name=posMenu[ci].items[pi].name;
   if(!confirm('حذف "'+name+'"؟'))return;
@@ -1094,6 +1221,7 @@ function renderOrderHistory(){
       <div class="order-card-info">👤 ${o.custName}${o.custPhone?' — '+o.custPhone:''} | 🕐 ${o.time} ${o.date}</div>
       <div class="order-card-items">${o.items.map(c=>`• ${c.name} (${c.variant}) ×${c.qty}`).join('<br>')}</div>
       <div class="order-card-footer"><span class="order-card-total">${o.total.toLocaleString('ar-IQ')} د.ع</span>
+      <button class="reprint-btn" onclick="reorderFromHistory(${i})" style="background:var(--accent-2);">🔁 إعادة الطلب</button>
       <button class="reprint-btn" onclick="reprintOrder(${i})">🖨️ إعادة طباعة</button></div>
     </div>`).join('');
 }
@@ -1107,6 +1235,57 @@ function reprintOrder(i){
   showToast('🖨️ جاري الطباعة — #'+o.num);
 }
 function clearOrderHistory(){if(!confirm('مسح كل الطلبات؟'))return;localStorage.removeItem('bw_orders');renderOrderHistory();showToast('🗑️ تم المسح');}
+
+window.reorderFromHistory=function(i){
+  const history=JSON.parse(localStorage.getItem('bw_orders')||'[]');
+  const o=history[i];if(!o)return;
+  cart=o.items.map(it=>({...it}));
+  document.getElementById('custName').value=o.custName||'';
+  document.getElementById('custPhone').value=o.custPhone||'';
+  document.getElementById('custAddress').value=o.custAddress||'';
+  closeManage();
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.nav-btn[data-screen="cashier"]').forEach(b=>b.classList.add('active'));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-cashier').classList.add('active');
+  renderCart();
+  showToast('✅ رجعنا نفس أصناف الطلب #'+o.num+' — راجع السلة وأرسل');
+};
+
+// ── FAB SPEED DIAL ──
+window.toggleFab=function(){document.getElementById('fabWrap').classList.toggle('open');};
+window.quickReorderLast=function(){
+  const history=JSON.parse(localStorage.getItem('bw_orders')||'[]');
+  if(!history.length){showToast('⚠️ لا يوجد طلبات سابقة','⚠️');toggleFab();return;}
+  reorderFromHistory(0);
+  toggleFab();
+};
+window.quickReprintLast=function(){
+  const history=JSON.parse(localStorage.getItem('bw_orders')||'[]');
+  if(!history.length){showToast('⚠️ لا يوجد طلبات سابقة','⚠️');toggleFab();return;}
+  reprintOrder(0);
+  toggleFab();
+};
+window.quickTopSeller=function(){
+  const top=getTopSellingItems(3);
+  toggleFab();
+  if(!top.length){showToast('⚠️ لا توجد بيانات مبيعات بعد','⚠️');return;}
+  showToast('📊 الأكثر مبيعاً: '+top.map(t=>t.name+' ('+toA(t.qty)+')').join(' • '));
+};
+
+// ── STALE ORDER REMINDER ──
+let staleAlerted={};
+setInterval(()=>{
+  if(!cachedOrders||!cachedOrders.length)return;
+  const now=Date.now();
+  cachedOrders.forEach(o=>{
+    if(o.status==='pending'&&(now-(o.createdAtMs||0))>15*60*1000&&!staleAlerted[o.id]){
+      staleAlerted[o.id]=true;
+      showToast('⏰ طلب #'+o.id.substring(0,6).toUpperCase()+' لسه ينتظر من أكثر من 15 دقيقة','⚠️');
+      playAlertSound();
+    }
+  });
+},60000);
 
 // ── ANALYTICS ──
 function setAnDefaultDates(){
@@ -1141,7 +1320,28 @@ function renderAnalytics(){
   document.getElementById('an-cancelled').textContent=cancelled.length;
   document.getElementById('an-total-value').textContent=fmt(totalValue);
   document.getElementById('an-avg-value').textContent=fmt(delivered.length?Math.round(totalValue/delivered.length):0);
-  renderAnCustomers();renderAnCaptains();
+  renderAnCustomers();renderAnCaptains();renderTopItems();
+}
+function renderTopItems(){
+  const el=document.getElementById('anTopItems');
+  if(!el)return;
+  const{start,end}=getAnRange();
+  const history=JSON.parse(localStorage.getItem('bw_orders')||'[]');
+  const map={};
+  history.forEach(o=>{
+    const t=new Date(o.date+' '+o.time).getTime()||0;
+    if(t<start||t>=end)return;
+    o.items.forEach(it=>{
+      if(!map[it.name])map[it.name]={qty:0,total:0};
+      map[it.name].qty+=it.qty;map[it.name].total+=it.price*it.qty;
+    });
+  });
+  const top=Object.entries(map).sort((a,b)=>b[1].qty-a[1].qty).slice(0,8);
+  el.innerHTML=top.length?top.map(([name,d],i)=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;">
+      <span>${i===0?'🥇':i===1?'🥈':i===2?'🥉':'▫️'} ${name}</span>
+      <span style="color:var(--accent);font-weight:800;">${toA(d.qty)} قطعة — ${fmt(d.total)} د.ع</span>
+    </div>`).join(''):'<div style="text-align:center;color:var(--muted);padding:16px;">لا توجد بيانات لهذه الفترة</div>';
 }
 function computeAnCustomers(){
   const orders=getAnOrders(),map={};
