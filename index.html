@@ -719,7 +719,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, doc, addDoc, updateDoc, getDocs, setDoc, arrayUnion, query, where, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, doc, addDoc, updateDoc, getDoc, getDocs, setDoc, arrayUnion, query, where, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
   apiKey:"AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ",
@@ -733,7 +733,7 @@ const app = initializeApp({
 const auth = initializeAuth(app, {persistence:[indexedDBLocalPersistence,browserLocalPersistence]});
 const db = getFirestore(app);
 enableIndexedDbPersistence(db).catch(()=>{});
-window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,getDocs,setDoc,arrayUnion,query,where,onSnapshot};
+window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,getDoc,getDocs,setDoc,arrayUnion,query,where,onSnapshot};
 window.dispatchEvent(new Event('fbReady'));
 </script>
 
@@ -828,6 +828,7 @@ function getNextSalonNum(){
   return n;
 }
 
+const safeImg=u=>typeof u==='string'&&/^(data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+|https:\/\/[^"'<>\s]+)$/.test(u);
 const toA=n=>n.toString().replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
 const fmt=n=>Number(n||0).toLocaleString('ar-IQ');
 const nowT=()=>{const d=new Date();return`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;};
@@ -865,14 +866,20 @@ window.addEventListener('fbReady',()=>{
   fb.onAuthStateChanged(fb.auth,async user=>{
     if(user){
       try{
-        let snap=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('email','==',user.email)));
-        if(snap.empty)snap=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('userId','==',user.uid)));
-        if(snap.empty){await fb.signOut(fb.auth);return;}
-        restData={id:snap.docs[0].id,...snap.docs[0].data()};
-        if(restData.userId!==user.uid)fb.updateDoc(fb.doc(fb.db,'restaurants',restData.id),{userId:user.uid}).catch(()=>{});
+        // الصلاحية من users/{uid} فقط — لا بحث بالإيميل ولا إعادة ربط تلقائية
+        const u=await fb.getDoc(fb.doc(fb.db,'users',user.uid));
+        const ud=u.exists()?u.data():null;
+        if(!ud||ud.disabled||ud.role!=='restaurant'){await denyLogin('❌ هذا الحساب غير مسجل كمطعم');return;}
+        if(!ud.restaurantId){await denyLogin('⚠️ الحساب غير مرتبط بمطعم — تواصل مع الإدارة');return;}
+        const rs=await fb.getDoc(fb.doc(fb.db,'restaurants',ud.restaurantId));
+        if(!rs.exists()||rs.data().userId!==user.uid){await denyLogin('❌ هذا الحساب غير مرتبط بمطعم');return;}
+        const rd=rs.data();
+        if(rd.active===false){await denyLogin('⏸️ حساب المطعم موقوف — تواصل مع الإدارة');return;}
+        if(rd.expiryMs&&rd.expiryMs<Date.now()){await denyLogin('⛔ انتهى الاشتراك — تواصل مع الإدارة للتجديد');return;}
+        restData={id:rs.id,...rd};
         menu=JSON.parse(JSON.stringify(defaultMenu));loadMenu();
         enterApp();
-      }catch(e){console.error(e);await fb.signOut(fb.auth);}
+      }catch(e){console.error(e);await denyLogin('❌ تعذّر تحميل الحساب، حاول مجدداً');}
     }else{
       restData=null;unsubs.forEach(u=>u&&u());unsubs=[];
       showLoginPage();
@@ -881,6 +888,12 @@ window.addEventListener('fbReady',()=>{
   document.getElementById('inPass').addEventListener('keypress',e=>{if(e.key==='Enter')doLogin();});
 });
 
+async function denyLogin(msg){
+  try{await window._fb.signOut(window._fb.auth);}catch(e){}
+  const err=document.getElementById('errBox');
+  if(err){err.textContent=msg;err.style.display='block';}
+  showLoginPage();
+}
 function showLoginPage(){
   // Hide splash first
   document.getElementById('splash').classList.add('hide');
@@ -915,17 +928,11 @@ window.doLogin=async()=>{
   err.style.display='none';btn.innerHTML='<div class="spin"></div>';btn.disabled=true;
   try{
     const fb=window._fb;
-    const cred=await fb.signInWithEmailAndPassword(fb.auth,email,pass);
-    let snap=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('email','==',email)));
-    if(snap.empty)snap=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('userId','==',cred.user.uid)));
-    if(snap.empty){
-      await fb.signOut(fb.auth);
-      err.textContent='❌ هذا الحساب غير مسجل كمطعم';err.style.display='block';
-      btn.innerHTML='🔐 دخول';btn.disabled=false;
-    }
+    await fb.signInWithEmailAndPassword(fb.auth,email,pass);
+    // التحقق من الصلاحية يتم في onAuthStateChanged
   }catch(e){
-    let msg=e.message;
-    if(['auth/invalid-credential','auth/wrong-password','auth/user-not-found'].includes(e.code))msg='❌ بيانات الدخول غير صحيحة';
+    let msg='❌ تعذّر الدخول، تحقق من الإنترنت';
+    if(['auth/invalid-credential','auth/wrong-password','auth/user-not-found','auth/invalid-email'].includes(e.code))msg='❌ بيانات الدخول غير صحيحة';
     else if(e.code==='auth/too-many-requests')msg='⚠️ محاولات كثيرة، انتظر';
     err.textContent=msg;err.style.display='block';
     btn.innerHTML='🔐 دخول';btn.disabled=false;
@@ -989,10 +996,10 @@ function showRejectNotification(order,notice,type='reject'){
   const title=type==='cancel'?'ألغى الكابتن الطلب':'رفض الكابتن الطلب';
   document.getElementById('rejTitle').textContent=title;
   document.getElementById('rejInfo').innerHTML=`
-    <div>🛵 الكابتن: <strong>${notice.by||'—'}</strong></div>
-    <div>📋 الطلب: <strong>${order.id.substring(0,6).toUpperCase()}</strong></div>
-    <div>👤 الزبون: ${order.customer||'—'}</div>
-    <div style="color:var(--orange)">🕐 ${notice.time||''}</div>`;
+    <div>🛵 الكابتن: <strong>${esc(notice.by||'—')}</strong></div>
+    <div>📋 الطلب: <strong>${esc(order.id.substring(0,6).toUpperCase())}</strong></div>
+    <div>👤 الزبون: ${esc(order.customer||'—')}</div>
+    <div style="color:var(--orange)">🕐 ${esc(notice.time||'')}</div>`;
   document.getElementById('rejOverlay').classList.add('show');
   try{
     const ctx=new(window.AudioContext||window.webkitAudioContext)();
@@ -1015,12 +1022,12 @@ window.changeRejectedCaptain=()=>{
 // ── MENU ──
 function renderMenu(){
   document.getElementById('cats').innerHTML=menu.map((c,i)=>
-    `<button class="cb ${i===activeCat?'on':''}" onclick="selCat(${i})">${c.emoji} ${c.cat}</button>`
+    `<button class="cb ${i===activeCat?'on':''}" onclick="selCat(${i})">${esc(c.emoji)} ${esc(c.cat)}</button>`
   ).join('');
   document.getElementById('prods').innerHTML=menu[activeCat].items.map((p,i)=>{const hs=typeof p.stock==='number',out=hs&&p.stock<=0,low=hs&&p.stock>0&&p.stock<=3;return `
     <div class="prod ${out?'soldout':''}" onclick="openVar(${activeCat},${i})">${out?'<div class="pstock out">نفذ</div>':low?`<div class="pstock low">باقي ${toA(p.stock)}</div>`:''}
-      <div class="pimg">${p.img?`<img src="${p.img}">`:`${menu[activeCat].emoji}`}</div>
-      <div class="pinfo"><div class="pname">${p.name}</div><div class="pprice">${p.variants.length===1?fmt(p.variants[0].price)+' د.ع':'متعدد'}</div></div>
+      <div class="pimg">${safeImg(p.img)?`<img src="${p.img}" alt="">`:`${esc(menu[activeCat].emoji)}`}</div>
+      <div class="pinfo"><div class="pname">${esc(p.name)}</div><div class="pprice">${p.variants.length===1?fmt(p.variants[0].price)+' د.ع':'متعدد'}</div></div>
       ${p.variants.length>1?`<div class="pbadge">${p.variants.length}</div>`:''}
     </div>`;}).join('');
 }
@@ -1033,7 +1040,7 @@ window.openVar=(ci,ii)=>{
   document.getElementById('varTitle').textContent=selProd.name;
   document.getElementById('qVal').textContent=toA(qty);
   document.getElementById('varsGrid').innerHTML=selProd.variants.map((v,i)=>`
-    <div class="vbtn" onclick="selV(${i})" id="v${i}"><div class="vn">${v.name}</div><div class="vp">${fmt(v.price)} د.ع</div></div>`).join('');
+    <div class="vbtn" onclick="selV(${i})" id="v${i}"><div class="vn">${esc(v.name)}</div><div class="vp">${fmt(v.price)} د.ع</div></div>`).join('');
   selV(0);document.getElementById('varOv').classList.add('on');
 };
 window.selV=i=>{selVar=i;document.querySelectorAll('.vbtn').forEach((b,j)=>b.classList.toggle('on',j===i));};
@@ -1054,7 +1061,7 @@ function renderCart(){
   if(!cart.length){el.innerHTML='<div class="cempty">السلة فارغة</div>';}
   else el.innerHTML=cart.map((c,i)=>`
     <div class="citem">
-      <div class="cii"><div class="cin">${c.name}</div><div class="cip">${fmt(c.price*c.qty)} د.ع</div><div class="cis">${c.variant} ×${toA(c.qty)}</div></div>
+      <div class="cii"><div class="cin">${esc(c.name)}</div><div class="cip">${fmt(c.price*c.qty)} د.ع</div><div class="cis">${esc(c.variant)} ×${toA(c.qty)}</div></div>
       <div class="cq" onclick="cQ(${i},1)">+</div><div class="cq" onclick="cQ(${i},-1)">${toA(c.qty)}</div>
       <div class="cdel" onclick="cDel(${i})">✕</div>
     </div>`).join('');
@@ -1068,7 +1075,7 @@ window.cDel=i=>{cart.splice(i,1);renderCart();};
 
 // ── ORDER TYPE ──
 window.openOrderType=()=>{
-  document.getElementById('sumBox').innerHTML=cart.map(c=>`<div>• ${c.name} (${c.variant}) ×${c.qty}</div>`).join('');
+  document.getElementById('sumBox').innerHTML=cart.map(c=>`<div>• ${esc(c.name)} (${esc(c.variant)}) ×${c.qty}</div>`).join('');
   document.getElementById('typeOv').classList.add('on');
 };
 window.closeType=e=>{if(!e||e.target===document.getElementById('typeOv'))document.getElementById('typeOv').classList.remove('on');};
@@ -1098,9 +1105,9 @@ function renderCapList(){
   const avail=captains.filter(c=>c.available!==false);
   const busy=captains.filter(c=>c.available===false);
   document.getElementById('capList').innerHTML=[...avail,...busy].map(cap=>`
-    <div class="capcard" onclick="selCap('${cap.id}')" id="cc_${cap.id}">
+    <div class="capcard" onclick="selCap('${esc(cap.id)}')" id="cc_${esc(cap.id)}">
       <div class="capav">🏍️</div>
-      <div style="flex:1"><div class="capname">${cap.name}</div><div class="capph">${cap.phone||''}</div></div>
+      <div style="flex:1"><div class="capname">${esc(cap.name)}</div><div class="capph">${esc(cap.phone||'')}</div></div>
       <span class="capstat ${cap.available!==false?'cavail':'cbusy'}">${cap.available!==false?'✅ متاح':'🔴 مشغول'}</span>
     </div>`).join('')||'<div style="text-align:center;color:var(--muted);padding:12px">لا يوجد كباتن</div>';
 }
@@ -1136,6 +1143,8 @@ window.confirmDelivery=async()=>{
         captainId:cap.id,captainName:cap.name,status:'pending',rejectedBy:[],
         customer:name,phone,address:addr,fee
       });
+      const _o=orders.find(x=>x.id===changingOrderId)||{};
+      syncTracking(changingOrderId,{status:'pending',value:_o.value,fee,captainId:cap.id,captainName:''});
       toast('✅ تم تحويل الطلب إلى '+cap.name);
     }catch(e){alert('خطأ: '+e.message);}
     changingOrderId=null;
@@ -1156,7 +1165,7 @@ function buildReceipt(type,custInfo,captain,salonNum,rItems,rTotal){
   }else if(type==='takeaway'){
     header=`<div class="type">🥡 سفري</div>`;
   }else{
-    header=`<div class="type">🏍️ دلفري — ${captain?.name||''}</div>`;
+    header=`<div class="type">🏍️ دلفري — ${esc(captain?.name||'')}</div>`;
   }
   return `<html><head><meta charset="UTF-8">
   <style>@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
@@ -1169,22 +1178,22 @@ function buildReceipt(type,custInfo,captain,salonNum,rItems,rTotal){
   .total{display:flex;justify-content:space-between;font-size:14px;font-weight:900;margin-top:4px;padding-top:4px;border-top:2px solid #000;}
   .foot{text-align:center;font-size:11px;color:#555;margin-top:8px;}
   </style></head><body>
-  <div class="logo">🤠 Burger West</div>
-  <div class="sub">الحسينية — السكلات منطقة 12</div>
+  <div class="logo">${esc(restData?.receiptTitle||restData?.name||'سرعة')}</div>
+  <div class="sub">${esc(restData?.receiptSub||restData?.area||'')}</div>
   <div class="div"></div>
   ${header}
   <div class="div"></div>
-  ${custInfo?.name?`<div class="row"><span>الزبون:</span><span>${custInfo.name}</span></div>`:''}
-  ${custInfo?.phone?`<div class="row"><span>الهاتف:</span><span>${custInfo.phone}</span></div>`:''}
-  ${custInfo?.addr&&type==='delivery'?`<div class="row"><span>العنوان:</span><span>${custInfo.addr}</span></div>`:''}
+  ${custInfo?.name?`<div class="row"><span>الزبون:</span><span>${esc(custInfo.name)}</span></div>`:''}
+  ${custInfo?.phone?`<div class="row"><span>الهاتف:</span><span>${esc(custInfo.phone)}</span></div>`:''}
+  ${custInfo?.addr&&type==='delivery'?`<div class="row"><span>العنوان:</span><span>${esc(custInfo.addr)}</span></div>`:''}
   ${custInfo?.fee&&type==='delivery'?`<div class="row"><span>أجور التوصيل:</span><span>${fmt(custInfo.fee)} د.ع</span></div>`:''}
   <div class="row"><span>الوقت:</span><span>${t} ${d.toLocaleDateString('ar-IQ')}</span></div>
   <div class="div"></div>
-  ${_its.map(c=>`<div class="item"><span>${c.name}(${c.variant})</span><span>×${c.qty} — ${fmt(c.price*c.qty)}</span></div>`).join('')}
+  ${_its.map(c=>`<div class="item"><span>${esc(c.name)}(${esc(c.variant)})</span><span>×${c.qty} — ${fmt(c.price*c.qty)}</span></div>`).join('')}
   <div class="total"><span>المجموع</span><span>${fmt(total)} د.ع</span></div>
   ${custInfo?.fee&&type==='delivery'?`<div class="row" style="margin-top:4px;font-weight:700;"><span>الإجمالي مع التوصيل:</span><span>${fmt(total+(custInfo.fee||0))} د.ع</span></div>`:''}
   <div class="div"></div>
-  <div class="foot">شكراً لزيارتكم ❤️<br>07726537637</div>
+  <div class="foot">شكراً لزيارتكم ❤️${restData?.phone?'<br>'+esc(restData.phone):''}</div>
   </body></html>`;
 }
 
@@ -1233,6 +1242,7 @@ async function finalOrder(type,captain,custInfo){
       }
       const _ref=await window._fb.addDoc(window._fb.collection(window._fb.db,'orders'),orderData);
       oid=_ref&&_ref.id;
+      if(type==='delivery')syncTracking(oid,{...orderData,captainName:''});
     }catch(e){console.error(e);}
   }
 
@@ -1281,7 +1291,7 @@ function orderActions(o){
   if(t==='delivery'&&['pending','accepted','pickup'].includes(s))b.push(['🥡 استلمه بنفسه','ordSelfPickup']);
   if(EDITABLE.includes(s))b.push(['✏️ تعديل / إضافة','ordEdit']);
   b.push([s==='delivered'?'↩️ إلغاء / مردود':'❌ إلغاء','ordCancel']);
-  return `<div class="ac-btns">${b.map(([l,fn])=>`<button class="ac-b ${fn==='ordCancel'?'del':''}" onclick="${fn}('${o.id}')">${l}</button>`).join('')}</div>`;
+  return `<div class="ac-btns">${b.map(([l,fn])=>`<button class="ac-b ${fn==='ordCancel'?'del':''}" onclick="${fn}('${esc(o.id)}')">${l}</button>`).join('')}</div>`;
 }
 function renderOrdSum(){
   const el=document.getElementById('ordSum');if(!el)return;
@@ -1331,14 +1341,14 @@ function renderOrders(){
     const items=orderItemsFull(o);
     return `
     <div class="ocard">
-      <div class="orow"><span class="oid">${o.id.substring(0,6).toUpperCase()}</span><span class="otime">${o.createdAt||''}</span></div>
+      <div class="orow"><span class="oid">${esc(o.id.substring(0,6).toUpperCase())}</span><span class="otime">${esc(o.createdAt||'')}</span></div>
       <div style="margin-bottom:4px;">${typeBadge(o)}</div>
       ${o.customer?`<div class="oinfo">👤 ${esc(o.customer)}${o.phone?' • 📞 '+esc(o.phone):''}</div>`:''}
       ${o.address?`<div class="oinfo">📍 ${esc(o.address)}</div>`:''}
       ${items.length?`<div class="ac-sub" style="margin:4px 0">${items.map(i=>'• '+esc(i.name)+(i.variant&&i.variant!=='وحدة'?' ('+esc(i.variant)+')':'')+' ×'+toA(i.qty)).join('<br>')}</div>`:''}
       <div class="oinfo">💰 ${fmt(o.value)} د.ع${o.fee?` + ${fmt(o.fee)} توصيل`:''}</div>
       <div class="orow" style="margin-top:5px">
-        <span class="bdg ${stBadge[o.status]||'bp'}">${stLabel[o.status]||o.status}</span>
+        <span class="bdg ${stBadge[o.status]||'bp'}">${stLabel[o.status]||esc(o.status)}</span>
         <span style="font-size:11px;color:var(--muted)">${esc(o.captainName||'')}</span>
       </div>
       ${o.status==='cancelled'?`<div class="oinfo" style="color:#e11d48">❌ ${esc(o.cancelReason||'')}${o.cancelNote?' — '+esc(o.cancelNote):''}</div>`:''}
@@ -1440,7 +1450,7 @@ window.renderRep=()=>{
       <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
           <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-size:16px;">🏍️</div>
-          <div style="flex:1"><div style="font-weight:700;font-size:14px;">${cap.name}</div></div>
+          <div style="flex:1"><div style="font-weight:700;font-size:14px;">${esc(cap.name)}</div></div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;">
           <div style="background:var(--panel2);border-radius:8px;padding:8px;"><div style="font-size:16px;font-weight:900;color:var(--blue);">${cap.count}</div><div style="font-size:10px;color:var(--muted);">طلبات</div></div>
@@ -1456,10 +1466,10 @@ window.renderRep=()=>{
   document.getElementById('repList').innerHTML=fil.length?fil.map(o=>`
     <div style="background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px;margin-bottom:7px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-        <span style="font-weight:700;font-size:12px;">${o.id.substring(0,6).toUpperCase()}</span>
-        <span style="font-size:11px;color:var(--muted);">${o.createdAt||''}</span>
+        <span style="font-weight:700;font-size:12px;">${esc(o.id.substring(0,6).toUpperCase())}</span>
+        <span style="font-size:11px;color:var(--muted);">${esc(o.createdAt||'')}</span>
       </div>
-      ${o.customer?`<div style="font-size:11px;color:var(--muted);">👤 ${o.customer}</div>`:''}
+      ${o.customer?`<div style="font-size:11px;color:var(--muted);">👤 ${esc(o.customer)}</div>`:''}
       <div style="display:flex;justify-content:space-between;margin-top:4px;">
         <span style="font-size:11px;">${typeIcon(o)} ${typeLabel(o)}</span>
         <span style="font-size:12px;font-weight:700;color:var(--orange2);">${fmt(o.value||0)} د.ع</span>
@@ -2211,6 +2221,15 @@ window.setItemStock=(ci,pi)=>{
 
 // ══════════ إدارة الطلبات: تعديل / إضافة / إلغاء / تسليم ══════════
 let edState=null;
+// صفحة تتبع الزبون: نسخة محدودة من الطلب بدون هاتف أو عنوان
+function syncTracking(id,o){
+  if(!id||!restData)return;
+  const t={status:o.status,restaurantName:restData.name||'',value:o.value||0,fee:o.fee||0,restaurantId:restData.id,updatedAtMs:Date.now()};
+  if(o.captainName!==undefined)t.captainName=o.captainName||'';
+  if(o.captainId!==undefined)t.captainId=o.captainId||'';
+  const fb=window._fb;
+  fb.setDoc(fb.doc(fb.db,'tracking',id),t,{merge:true}).catch(e=>console.warn('tracking',e.code));
+}
 function orderTotalFromItems(items){return items.reduce((s,i)=>s+(i.price||0)*i.qty,0);}
 async function orderUpdate(id,fields,text,status){
   const fb=window._fb,o=orders.find(x=>x.id===id);
@@ -2225,6 +2244,7 @@ window.ordSelfPickup=async id=>{
   if(!confirm('الزبون استلم الطلب بنفسه؟\nيتحول من دلفري إلى سفري، يتحرر الكابتن، وتنلغي أجور التوصيل.'))return;
   try{
     await orderUpdate(id,{orderType:'takeaway',status:'delivered',fee:0,prevFee:o.fee||0,commission:0,captainId:null,captainName:'',releasedCaptain:{id:o.captainId||null,name:o.captainName||''},deliveredAt:Date.now()},'الزبون استلم الطلب بنفسه (تحوّل من دلفري إلى سفري) — أجور التوصيل أُلغيت','delivered');
+    syncTracking(id,{status:'delivered',value:o.value,fee:0,captainId:'',captainName:''});
     toast('🥡 تم — سُلّم للزبون واتحرر الكابتن');
   }catch(e){toast('❌ '+e.message);}
 };
@@ -2238,6 +2258,7 @@ window.ordCancel=id=>{
     const items=orderItemsFull(o);
     orderUpdate(id,{status:'cancelled',cancelReason:v.why,cancelNote:(v.note||'').trim(),cancelledBy:'المطعم',cancelledAt:Date.now(),cancelledFrom:o.status,cancelStock:o.inv?v.stock:'none',
       cancelNotice:{by:'المطعم',time:nowT(),timestamp:Date.now(),seen:true}},'أُلغي الطلب — '+v.why,'cancelled').then(()=>{
+        if(getOrderType(o)==='delivery')syncTracking(id,{status:'cancelled',value:o.value,fee:o.fee});
         if(o.inv){if(v.stock==='return')consumeItems(items,'sale_return',id,'إلغاء طلب');else wasteItems(items,id,'إلغاء بعد التحضير');saveAcc();saveMenu();renderMenu();}
         toast('❌ تم إلغاء الطلب');
       }).catch(e=>toast('❌ '+e.message));
@@ -2407,6 +2428,7 @@ async function doTransfer(id,cap,info){
     await orderUpdate(id,{orderType:'delivery',status:'pending',held:false,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee||5000,
       captainId:cap.id,captainName:cap.name,commission:Math.round((o.value||0)*.1),deliveryProof:null,rejectedBy:[],transferredAt:Date.now()},
       'حُوّل الطلب إلى الكابتن '+cap.name,'pending');
+    syncTracking(id,{status:'pending',value:o.value,fee:info.fee||5000,captainId:cap.id,captainName:''});
     printOrderReceipt({...o,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee||5000},'delivery',cap);
     toast('🏍️ تم تحويل الطلب إلى '+cap.name);
   }catch(e){toast('❌ '+e.message);}
