@@ -395,7 +395,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s;white-space:nowrap;}
 .toast.on{transform:translateX(-50%) translateY(0);}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=2">
+<link rel="stylesheet" href="pos-pro.css?v=3">
 </head>
 <body>
 
@@ -488,6 +488,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
             <div class="cexp">▲</div>
           </div>
           <div class="shift-warn" id="shiftWarn" onclick="goTab('shift')">⚠️ لا توجد وردية مفتوحة — اضغط لفتح وردية</div>
+          <div class="cur-cust" id="curCust"></div>
           <div class="clist" id="cartList"><div class="cempty">السلة فارغة</div></div>
           <div class="cfoot">
             <div id="cartBreak"></div>
@@ -693,6 +694,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
       <div class="dform-title">معلومات الزبون</div>
       <div class="dfield"><div class="dlbl">اسم الزبون *</div><input class="dinp" id="dName" placeholder="الاسم الكامل"></div>
       <div class="dfield"><div class="dlbl">رقم الهاتف *</div><input class="dinp" id="dPhone" placeholder="07xxxxxxxxx" type="tel"></div>
+      <div id="custHint"></div>
       <div class="dfield"><div class="dlbl">المنطقة / العنوان *</div><input class="dinp" id="dAddr" placeholder="الحي والشارع"></div>
       <div class="dfield">
         <div class="dlbl">أجور التوصيل (د.ع)</div>
@@ -758,13 +760,16 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
   </div>
 </div>
 
+<!-- INCOMING CALLS -->
+<div class="calls" id="callsBox"></div>
+
 <div class="toast" id="toast"></div>
 
 <!-- FIREBASE -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, doc, addDoc, updateDoc, getDoc, getDocs, setDoc, arrayUnion, query, where, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, doc, addDoc, updateDoc, getDoc, getDocs, setDoc, arrayUnion, increment, query, where, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
   apiKey:"AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ",
@@ -778,7 +783,7 @@ const app = initializeApp({
 const auth = initializeAuth(app, {persistence:[indexedDBLocalPersistence,browserLocalPersistence]});
 const db = getFirestore(app);
 enableIndexedDbPersistence(db).catch(()=>{});
-window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,getDoc,getDocs,setDoc,arrayUnion,query,where,onSnapshot,app};
+window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,getDoc,getDocs,setDoc,arrayUnion,increment,query,where,onSnapshot,app};
 window.dispatchEvent(new Event('fbReady'));
 </script>
 
@@ -914,7 +919,8 @@ window.addEventListener('fbReady',()=>{
         // الصلاحية من users/{uid} فقط — لا بحث بالإيميل ولا إعادة ربط تلقائية
         const u=await fb.getDoc(fb.doc(fb.db,'users',user.uid));
         const ud=u.exists()?u.data():null;
-        if(ud&&(ud.disabled||ud.role!=='restaurant')){await denyLogin('❌ هذا الحساب غير مسجل كمطعم');return;}
+        if(ud&&(ud.disabled||!['restaurant','cashier'].includes(ud.role))){await denyLogin('❌ هذا الحساب غير مسجل كمطعم');return;}
+        const isCashierAcc=!!ud&&ud.role==='cashier';
         let restId=ud&&ud.restaurantId;
         if(!restId){
           // حسابات قديمة قبل "ربط الحسابات": المطعم مربوط بحسابه عبر userId الذي وضعته الإدارة (ليس بالإيميل)
@@ -922,11 +928,13 @@ window.addEventListener('fbReady',()=>{
         }
         if(!restId){await denyLogin('⚠️ الحساب غير مرتبط بمطعم — تواصل مع الإدارة');return;}
         const rs=await fb.getDoc(fb.doc(fb.db,'restaurants',restId));
-        if(!rs.exists()||rs.data().userId!==user.uid){await denyLogin('❌ هذا الحساب غير مرتبط بمطعم');return;}
+        if(!rs.exists()||(!isCashierAcc&&rs.data().userId!==user.uid)){await denyLogin('❌ هذا الحساب غير مرتبط بمطعم');return;}
         const rd=rs.data();
         if(rd.active===false){await denyLogin('⏸️ حساب المطعم موقوف — تواصل مع الإدارة');return;}
         if(rd.expiryMs&&rd.expiryMs<Date.now()){await denyLogin('⛔ انتهى الاشتراك — تواصل مع الإدارة للتجديد');return;}
         restData={id:rs.id,...rd};
+        // من يستخدم الكاشير: صاحب المطعم (كل الصلاحيات) أو كاشير بصلاحيات يحددها صاحب المطعم
+        window.posUser={uid:user.uid,role:isCashierAcc?'cashier':'owner',name:(ud&&ud.name)||'',perms:isCashierAcc?(ud.perms||{}):null};
         menu=JSON.parse(JSON.stringify(defaultMenu));loadMenu();
         enterApp();
       }catch(e){console.error(e);await denyLogin('❌ تعذّر تحميل الحساب، حاول مجدداً');}
@@ -2560,6 +2568,6 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=2"></script>
+<script src="pos-pro.js?v=3"></script>
 </body>
 </html>
