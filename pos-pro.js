@@ -18,6 +18,9 @@
   const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
   const money = (n) => fmt(Math.round(n || 0)) + ' د.ع';
   const num = (v) => { const n = Number(String(v ?? '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^\d.]/g, '')); return isFinite(n) ? n : 0; };
+  // صلاحيات: صاحب المطعم كل شيء، والكاشير حسب ما يحدده صاحب المطعم من تطبيق الإدارة
+  const can = (p) => !window.posUser || window.posUser.role === 'owner' || !!((window.posUser.perms || {})[p]);
+  const deny = () => toast('🔒 ليس لديك صلاحية — اطلبها من صاحب المطعم');
   const deviceId = lsGet('pos_device', null) || (() => { const d = uid('dev'); lsSet('pos_device', d); return d; })();
 
   // ══════════ الإعدادات ══════════
@@ -119,20 +122,36 @@
     if ($('menuScreen').classList.contains('on')) { initMenuManage(); if ($('mListSec').style.display !== 'none') renderMList(); }
   }
 
+  let menuUnsub = null;
+  function onMenuSnap(s) {
+    if (s.metadata.hasPendingWrites) return;
+    if (!s.exists()) {
+      if (s.metadata.fromCache) return;          // غياب بالذاكرة المحلية فقط ليس حكماً نهائياً
+      menuCloudExists = false;
+      if (hasLocalMenu) pushMenu();              // أول جهاز يرفع منيو المطعم
+      renderMenu();
+      return;
+    }
+    menuCloudExists = true;
+    const d = s.data();
+    if (d.device === deviceId && d.updatedAtMs <= menuCloudTs) return;
+    menuCloudTs = Math.max(menuCloudTs, d.updatedAtMs || 0);
+    applyCloudMenu(d);
+  }
   function listenMenu() {
-    unsubs.push(fb().onSnapshot(sub('menu', 'main'), (s) => {
-      if (s.metadata.hasPendingWrites) return;
-      if (!s.exists()) {
-        menuCloudExists = false;
-        if (hasLocalMenu) pushMenu();       // أول جهاز يرفع منيو المطعم
-        renderMenu();
-        return;
-      }
-      menuCloudExists = true;
-      const d = s.data();
-      if (d.device === deviceId && d.updatedAtMs <= menuCloudTs) return;
-      if (d.updatedAtMs > menuCloudTs || d.device !== deviceId) { menuCloudTs = d.updatedAtMs; applyCloudMenu(d); }
-    }, (e) => console.warn('menu listen', e.code)));
+    const myRid = rid();
+    if (menuUnsub) menuUnsub();
+    menuUnsub = fb().onSnapshot(sub('menu', 'main'), onMenuSnap, (e) => {
+      // خطأ عابر (مثلاً مباشرة بعد الدخول): نعيد الاشتراك بدل أن يبقى المنيو فارغاً
+      console.warn('menu listen', e.code);
+      setTimeout(() => { if (rid() === myRid) listenMenu(); }, 2000);
+    });
+    unsubs.push(() => { if (menuUnsub) { menuUnsub(); menuUnsub = null; } });
+    // ضمان إضافي: إذا بقي المنيو فارغاً نجلبه مباشرة من السحابة
+    setTimeout(async () => {
+      if (rid() !== myRid || menu.some((c) => c.items.length)) return;
+      try { const s = await fb().getDoc(sub('menu', 'main')); if (s.exists()) { menuCloudTs = 0; onMenuSnap(s); } } catch (e) {}
+    }, 4000);
   }
 
   // ══════════ عرض المنيو + البحث ══════════
@@ -219,6 +238,8 @@
     $('cartCnt').textContent = toA(cart.reduce((s, c) => s + c.qty, 0)) + ' عنصر';
     $('sendBtn').disabled = cart.length === 0;
     $('discBtn').classList.toggle('on', !!t.disc);
+    $('discBtn').style.display = can('discount') ? '' : 'none';
+    renderCurCust();
   };
   window.cNote = (i) => {
     const c = cart[i]; if (!c) return;
@@ -235,6 +256,7 @@
     cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
   };
   window.openDiscount = () => {
+    if (!can('discount')) { deny(); return; }
     if (!cart.length) { toast('السلة فارغة'); return; }
     acDialog('٪ خصم على الطلب', 'المجموع ' + money(totals(null).sub), [
       { id: 't', label: 'نوع الخصم', type: 'select', value: disc.type, options: [{ v: 'amt', t: 'مبلغ (د.ع)' }, { v: 'pct', t: 'نسبة ٪' }] },
@@ -268,6 +290,12 @@
     _openDeliv();
     $('dFee').value = settings.defaultFee || 5000;
     renderFeePresets();
+    $('custHint').innerHTML = '';
+    if (curCust) {
+      $('dPhone').value = curCust.phone;
+      if (curCust.data) { $('dName').value = curCust.data.name || ''; $('dAddr').value = curCust.data.address || ''; }
+      showCustHint(curCust.data);
+    }
   };
   function renderFeePresets() {
     const el = $('feePresets'); if (!el) return;
@@ -312,7 +340,8 @@
     }
     o.timeline = [{ status: o.status, time: now, text: 'تم إنشاء الطلب' }];
     f.setDoc(ref, o).catch((e) => toast('❌ تعذّر حفظ الطلب: ' + (e.code || e.message)));
-    if (type === 'delivery') syncTracking(ref.id, { ...o, captainName: '' });
+    if (type === 'delivery') { syncTracking(ref.id, { ...o, captainName: '' }); saveCustomer(o); }
+    curCust = null;
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
     printHTML(receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen));
     const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: '🏍️ دلفري — ' + (captain ? captain.name : '') };
@@ -329,6 +358,8 @@
     Object.assign(o, { held: true, holdNum: num_, customer: info.name || ('سفري #' + num_), phone: info.phone || '', note: info.note || '',
       status: 'preparing', timeline: [{ status: 'preparing', time: now, text: 'تم إنشاء الطلب — قيد التحضير' }] });
     f.setDoc(ref, o).catch((e) => toast('❌ تعذر حفظ الطلب: ' + (e.code || e.message)));
+    if (info.phone) saveCustomer({ ...o, customer: info.name || '' });
+    curCust = null;
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
     printSlip('🍳 تذكرة مطبخ #' + num_, { customer: o.customer, phone: o.phone }, items.map((i) => ({ ...i, name: i.name + (i.note ? ' [' + i.note + ']' : '') })), t.total, 'المجموع', o.note);
     toast('🍳 حُفظ الطلب #' + num_ + ' — قيد التحضير');
@@ -350,6 +381,7 @@
   const _orderActions = orderActions;
   window.orderActions = orderActions = function (o) {
     let h = _orderActions(o);
+    if (h && !can('cancel')) h = h.replace(/<button class="ac-b del"[^>]*ordCancel[^<]*<\/button>/, '');
     if (h && o.payment && o.payment.method === 'later' && o.status !== 'cancelled') {
       h = h.replace('<div class="ac-btns">', `<div class="ac-btns"><button class="ac-b" style="border-color:#d97706;color:#b45309" onclick="ordCollect('${esc(o.id)}')">💵 تحصيل ${money(o.value)}</button>`);
     }
@@ -695,6 +727,7 @@
   // ══════════ الإعدادات (واجهة) ══════════
   const _showMTab = window.showMTab;
   window.showMTab = (tab) => {
+    if (tab === 'settings' ? !can('settings') : !can('menu')) { deny(); return; }
     if (tab !== 'settings') { $('mSetSec').style.display = 'none'; $('mt4').classList.remove('on'); _showMTab(tab); return; }
     ['mAddSec', 'mListSec', 'mCatsSec'].forEach((id) => { $(id).style.display = 'none'; });
     ['mt1', 'mt2', 'mt3'].forEach((id) => $(id).classList.remove('on'));
@@ -780,20 +813,27 @@
       let tokens = [];
       try { const s = await f.getDoc(ref); tokens = s.exists() ? (s.data().tokens || []) : []; } catch (e) {}
       tokens = [token, ...tokens.filter((t) => t !== token)].slice(0, 5);
-      await f.setDoc(ref, { tokens, role: 'restaurant', captainId: '', restaurantId: rid(), updatedAtMs: Date.now() });
+      await f.setDoc(ref, { tokens, role: window.posUser && window.posUser.role === 'cashier' ? 'cashier' : 'restaurant', captainId: '', restaurantId: rid(), updatedAtMs: Date.now() });
       if (loud) toast('🔔 تم تفعيل الإشعارات');
     } catch (e) { console.warn('push', e); if (loud) toast('❌ تعذّر تفعيل الإشعارات'); }
   }
 
   // ══════════ التنقل ══════════
   const TABS = ['cashier', 'orders', 'kitchen', 'shift', 'reports', 'menu', 'acc'];
+  const TAB_PERM = { reports: 'reports', acc: 'inventory' };
+  const tabAllowed = (t) => t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
   window.goTab = (tab) => {
     if (!TABS.includes(tab)) tab = 'cashier';
+    if (!tabAllowed(tab)) { deny(); return; }
     TABS.forEach((t) => $(t + 'Screen').classList.toggle('on', t === tab));
     document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     if (tab === 'reports') renderRep();
     if (tab === 'orders') renderOrders();
-    if (tab === 'menu') { initMenuManage(); if ($('mt4').classList.contains('on')) renderSettings(); }
+    if (tab === 'menu') {
+      initMenuManage();
+      // الكاشير بدون صلاحية المنيو يدخل مباشرة للإعدادات (إن سُمح له)
+      if (!can('menu')) showMTab('settings'); else if ($('mt4').classList.contains('on')) { if (can('settings')) renderSettings(); else showMTab('add'); }
+    }
     if (tab === 'acc') renderAcc();
     if (tab === 'kitchen') renderKds();
     if (tab === 'shift') { renderShift(); loadClosedShifts().then(() => { if ($('shiftScreen').classList.contains('on')) renderShift(); }); }
@@ -802,6 +842,179 @@
     const n = lowCount();
     const b = $('nb5'); if (b) { const ni = b.querySelector('.ni'); if (ni) ni.textContent = n ? '📦❗' : '📦'; }
     const d = document.querySelector('.dnb[data-tab="acc"]'); if (d) d.textContent = '📦 المخزون والحسابات' + (n ? ' (' + toA(n) + ')' : '');
+  };
+
+  const _ordCancel = window.ordCancel;
+  window.ordCancel = (id) => { if (!can('cancel')) { deny(); return; } _ordCancel(id); };
+
+  // ══════════ الصلاحيات (واجهة) ══════════
+  function applyPerms() {
+    const u = window.posUser || {};
+    document.querySelectorAll('[data-tab]').forEach((b) => { b.style.display = tabAllowed(b.dataset.tab) ? '' : 'none'; });
+    $('mt1').style.display = $('mt2').style.display = $('mt3').style.display = can('menu') ? '' : 'none';
+    $('mt4').style.display = can('settings') ? '' : 'none';
+    const os = $('ordSum'); if (os) os.style.display = can('reports') ? '' : 'none';
+    const rn = $('restName');
+    if (rn) rn.textContent = (restData.name || 'المطعم') + (u.role === 'cashier' ? ' • 👤 ' + (u.name || 'كاشير') : '');
+    const ts = $('themeSwitcher'); if (ts && u.role === 'cashier' && !can('settings')) ts.style.display = 'none';
+    // إذا كان على شاشة لم يعد مسموحاً بها
+    const cur = TABS.find((t) => $(t + 'Screen').classList.contains('on'));
+    if (cur && !tabAllowed(cur)) goTab('cashier');
+    renderCart();
+  }
+  // الصلاحيات تتحدّث فوراً عند تغييرها من تطبيق الإدارة
+  function listenMe() {
+    const u = window.posUser; if (!u || u.role !== 'cashier') return;
+    unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'users', u.uid), (s) => {
+      const d = s.exists() ? s.data() : null;
+      if (!d || d.disabled || d.role !== 'cashier') { toast('⛔ تم إيقاف حسابك'); setTimeout(() => fb().signOut(fb().auth), 1500); return; }
+      const before = JSON.stringify(u.perms || {});
+      u.perms = d.perms || {}; u.name = d.name || u.name;
+      if (before !== JSON.stringify(u.perms)) { applyPerms(); toast('🔄 تم تحديث صلاحياتك'); }
+    }, () => {}));
+  }
+
+  // ══════════ سجل الزبائن ══════════
+  let curCust = null;            // الزبون الحالي (من مكالمة أو بحث)
+  const custCache = new Map();
+  function phoneKey(p) {
+    let x = String(p || '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^\d]/g, '');
+    if (x.startsWith('00964')) x = x.slice(5); else if (x.startsWith('964')) x = x.slice(3);
+    if (x.length === 10 && x[0] === '7') x = '0' + x;
+    return x;
+  }
+  async function getCustomer(phone) {
+    const k = phoneKey(phone); if (k.length < 7) return null;
+    if (custCache.has(k)) return custCache.get(k);
+    try { const s = await fb().getDoc(sub('customers', k)); const d = s.exists() ? s.data() : null; custCache.set(k, d); return d; }
+    catch (e) { return null; }
+  }
+  function saveCustomer(o) {
+    const k = phoneKey(o.phone); if (k.length < 7 || !rid()) return;
+    const f = fb(), counts = {};
+    (o.items || []).forEach((i) => { const n = String(i.name || '').slice(0, 60); if (n) counts[n] = f.increment(i.qty || 1); });
+    const d = { phone: k, orders: f.increment(1), spent: f.increment(o.value || 0), lastOrderAt: Date.now(),
+      lastItems: (o.items || []).slice(0, 15).map((i) => { const x = { name: i.name, variant: i.variant, qty: i.qty }; if (i.note) x.note = i.note; return x; }), itemCounts: counts };
+    if (o.customer && !/^(سفري|صالة|طاولة)/.test(o.customer)) d.name = String(o.customer).slice(0, 60);
+    if (o.address) d.address = String(o.address).slice(0, 200);
+    f.setDoc(sub('customers', k), d, { merge: true }).catch(() => {});
+    custCache.delete(k);
+  }
+  const ago = (ms) => { const d = Math.floor((Date.now() - ms) / 86400000); return d <= 0 ? 'اليوم' : d === 1 ? 'أمس' : 'قبل ' + toA(d) + ' يوم'; };
+  function favs(d, n) { return Object.entries((d && d.itemCounts) || {}).sort((a, b) => b[1] - a[1]).slice(0, n || 3); }
+  function custSummary(d) {
+    if (!d) return '<span class="cs-new">🆕 زبون جديد</span>';
+    const f = favs(d, 3);
+    return `<b>${esc(d.name || 'بدون اسم')}</b>${d.address ? ' • 📍 ' + esc(d.address) : ''}<br>
+      ⭐ ${toA(d.orders || 0)} طلب${d.spent ? ' • ' + money(d.spent) : ''}${d.lastOrderAt ? ' • آخر طلب ' + ago(d.lastOrderAt) : ''}
+      ${f.length ? '<br>❤️ ' + f.map(([n, q]) => esc(n) + ' ×' + toA(q)).join('، ') : ''}`;
+  }
+  function showCustHint(d) {
+    const el = $('custHint'); if (!el) return;
+    el.innerHTML = d ? `<div class="cust-hint">${custSummary(d)}${(d.lastItems || []).length ? `<button type="button" onclick="repeatLast()">🔁 أضف آخر طلب للسلة</button>` : ''}</div>` : '';
+  }
+  // كتابة الرقم بنموذج الدلفري تملأ الاسم والعنوان تلقائياً
+  let phoneT = null;
+  $('dPhone').addEventListener('input', () => {
+    clearTimeout(phoneT);
+    phoneT = setTimeout(async () => {
+      const d = await getCustomer($('dPhone').value);
+      if (d) { if (!$('dName').value) $('dName').value = d.name || ''; if (!$('dAddr').value) $('dAddr').value = d.address || ''; curCust = { phone: phoneKey($('dPhone').value), data: d }; }
+      showCustHint(d);
+    }, 350);
+  });
+  window.repeatLast = () => {
+    const d = curCust && curCust.data; if (!d || !(d.lastItems || []).length) return;
+    let added = 0;
+    d.lastItems.forEach((i) => {
+      let p = null, v = null;
+      menu.forEach((c) => c.items.forEach((it) => { if (it.name === i.name) { p = it; v = it.variants.find((x) => x.name === i.variant) || it.variants[0]; } }));
+      if (p && v) { const ex = cart.find((c) => c.name === p.name && c.variant === v.name && (c.note || '') === (i.note || '')); if (ex) ex.qty += i.qty; else cart.push({ name: p.name, variant: v.name, price: v.price, qty: i.qty, note: i.note || '' }); added++; }
+    });
+    renderCart();
+    toast(added ? '🔁 أُضيف آخر طلب للسلة' : '⚠️ أصناف الطلب السابق غير موجودة بالمنيو الحالي');
+  };
+  function renderCurCust() {
+    const el = $('curCust'); if (!el) return;
+    if (!curCust) { el.classList.remove('on'); el.innerHTML = ''; return; }
+    el.classList.add('on');
+    el.innerHTML = `<div style="flex:1;min-width:0">📞 <b dir="ltr">${esc(curCust.phone)}</b> — ${curCust.data ? esc(curCust.data.name || 'زبون') + ' • ' + toA(curCust.data.orders || 0) + ' طلب' : 'زبون جديد'}</div><button type="button" title="إلغاء" onclick="clearCurCust()">✕</button>`;
+  }
+  window.clearCurCust = () => { curCust = null; renderCart(); };
+  // سفري قيد التحضير: نفس التعبئة التلقائية
+  window.openHold = () => {
+    if (!cart.length) return;
+    const d = curCust && curCust.data;
+    acDialog('🍳 حفظ الطلب قيد التحضير', 'يبقى بالكاشير لحد ما تحوله للكابتن أو يستلمه الزبون', [
+      { id: 'name', label: 'اسم الزبون (اختياري)', ph: 'مثال: أبو علي', value: (d && d.name) || '' },
+      { id: 'phone', label: 'رقم الهاتف (اختياري)', type: 'tel', ph: '07xxxxxxxxx', value: curCust ? curCust.phone : '' },
+      { id: 'note', label: 'ملاحظة للمطبخ (اختياري)', ph: 'بدون بصل...' },
+    ], (v) => { holdOrder({ name: v.name.trim(), phone: v.phone.trim(), note: v.note.trim() }); }, '🍳 حفظ وطباعة تذكرة المطبخ');
+  };
+
+  // ══════════ المكالمات الواردة (توكن جوكر) ══════════
+  const calls = new Map();      // id -> {id, number, line, data, at}
+  let callsReady = false, callRingT = null;
+  function listenCalls() {
+    const f = fb();
+    callsReady = false; calls.clear(); renderCalls();
+    unsubs.push(f.onSnapshot(f.query(f.collection(f.db, 'incomingCalls'), f.where('restaurantId', '==', rid()), f.where('status', '==', 'ringing')), (s) => {
+      if (!callsReady) { callsReady = true; return; }   // مكالمات قديمة قبل فتح الكاشير لا تُعرض
+      s.docChanges().forEach((ch) => {
+        if (ch.type === 'added') {
+          const c = { id: ch.doc.id, ...ch.doc.data(), at: Date.now(), data: undefined };
+          calls.set(c.id, c);
+          getCustomer(c.number).then((d) => { const x = calls.get(c.id); if (x) { x.data = d; renderCalls(); } });
+          notifyCall(c);
+        } else if (ch.type === 'removed') calls.delete(ch.doc.id);     // استلمها كاشير آخر
+      });
+      renderCalls();
+    }, (e) => console.warn('calls', e.code)));
+  }
+  function ringCall() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, .25, .5].forEach((d) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.type = 'sine'; o.frequency.value = d === .25 ? 660 : 880;
+        g.gain.setValueAtTime(.0001, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.4, ctx.currentTime + d + .03); g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d + .22); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .24); });
+    } catch (e) {}
+  }
+  function notifyCall(c) {
+    ringCall();
+    clearInterval(callRingT);
+    let n = 0; callRingT = setInterval(() => { if (!calls.size || ++n > 8) { clearInterval(callRingT); return; } ringCall(); }, 2500);
+    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+      navigator.serviceWorker && navigator.serviceWorker.getRegistration().then((r) => r && r.showNotification('📞 مكالمة واردة — خط ' + (c.line || ''), { body: c.number, tag: 'call-' + c.id, dir: 'rtl', lang: 'ar', requireInteraction: true }));
+    }
+  }
+  function renderCalls() {
+    const el = $('callsBox'); if (!el) return;
+    // تختفي تلقائياً بعد دقيقتين
+    [...calls.values()].forEach((c) => { if (Date.now() - c.at > 120000) calls.delete(c.id); });
+    el.innerHTML = [...calls.values()].sort((a, b) => b.at - a.at).slice(0, 4).map((c) => `
+      <div class="call-card">
+        <div class="call-top"><span class="call-pulse">📞</span> مكالمة واردة <span class="call-line">خط ${esc(c.line || '—')}</span>
+          <button type="button" class="call-x" title="إخفاء" onclick="callHide('${esc(c.id)}')">✕</button></div>
+        <button type="button" class="call-num" onclick="callTake('${esc(c.id)}')" dir="ltr">${esc(phoneKey(c.number) || c.number)}</button>
+        <div class="call-info">${c.data === undefined ? '⏳ جاري البحث عن الزبون…' : custSummary(c.data)}</div>
+        <div class="call-btns">
+          <button type="button" class="call-go" onclick="callTake('${esc(c.id)}')">✅ استلام وتعبئة</button>
+          ${c.data && (c.data.lastItems || []).length ? `<button type="button" onclick="callTake('${esc(c.id)}',true)">🔁 كرر آخر طلب</button>` : ''}
+        </div>
+      </div>`).join('');
+  }
+  setInterval(() => { if (calls.size) renderCalls(); }, 15000);
+  window.callHide = (id) => { calls.delete(id); renderCalls(); };
+  window.callTake = async (id, repeat) => {
+    const c = calls.get(id); if (!c) return;
+    calls.delete(id); clearInterval(callRingT); renderCalls();
+    fb().updateDoc(fb().doc(fb().db, 'incomingCalls', id), { status: 'taken', takenBy: deviceId, takenAtMs: Date.now() }).catch(() => {});
+    const d = c.data === undefined ? await getCustomer(c.number) : c.data;
+    curCust = { phone: phoneKey(c.number) || c.number, data: d };
+    goTab('cashier');
+    if (repeat) repeatLast();
+    renderCart();
+    if (window.matchMedia('(max-width:600px)').matches && repeat) document.querySelector('.cside').classList.add('open');
+    toast(d ? '👤 ' + (d.name || 'الزبون') + ' — اختر الأصناف ثم «ترحيل» والمعلومات معبّأة' : '🆕 زبون جديد — الرقم معبّأ تلقائياً');
   };
 
   // السلة على الهاتف: تفتح وتغلق بلمسة على رأسها
@@ -834,6 +1047,10 @@
     _enterApp();
     listenMenu();
     listenShifts();
+    listenCalls();
+    listenMe();
+    curCust = null; custCache.clear();
+    applyPerms();
     $('kdsSoundBtn').textContent = kdsSound ? '🔔 الصوت: يعمل' : '🔕 الصوت: مطفأ';
     if ('Notification' in window && Notification.permission === 'granted') registerRestPush(false);
   };
