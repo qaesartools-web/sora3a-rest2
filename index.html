@@ -914,9 +914,14 @@ window.addEventListener('fbReady',()=>{
         // الصلاحية من users/{uid} فقط — لا بحث بالإيميل ولا إعادة ربط تلقائية
         const u=await fb.getDoc(fb.doc(fb.db,'users',user.uid));
         const ud=u.exists()?u.data():null;
-        if(!ud||ud.disabled||ud.role!=='restaurant'){await denyLogin('❌ هذا الحساب غير مسجل كمطعم');return;}
-        if(!ud.restaurantId){await denyLogin('⚠️ الحساب غير مرتبط بمطعم — تواصل مع الإدارة');return;}
-        const rs=await fb.getDoc(fb.doc(fb.db,'restaurants',ud.restaurantId));
+        if(ud&&(ud.disabled||ud.role!=='restaurant')){await denyLogin('❌ هذا الحساب غير مسجل كمطعم');return;}
+        let restId=ud&&ud.restaurantId;
+        if(!restId){
+          // حسابات قديمة قبل "ربط الحسابات": المطعم مربوط بحسابه عبر userId الذي وضعته الإدارة (ليس بالإيميل)
+          try{const q=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('userId','==',user.uid)));if(!q.empty)restId=q.docs[0].id;}catch(e){}
+        }
+        if(!restId){await denyLogin('⚠️ الحساب غير مرتبط بمطعم — تواصل مع الإدارة');return;}
+        const rs=await fb.getDoc(fb.doc(fb.db,'restaurants',restId));
         if(!rs.exists()||rs.data().userId!==user.uid){await denyLogin('❌ هذا الحساب غير مرتبط بمطعم');return;}
         const rd=rs.data();
         if(rd.active===false){await denyLogin('⏸️ حساب المطعم موقوف — تواصل مع الإدارة');return;}
