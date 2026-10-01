@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0a0a0f">
+<meta name="theme-color" content="#008b2c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="كاشير سرعة">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>سرعة — كاشير</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -395,6 +395,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s;white-space:nowrap;}
 .toast.on{transform:translateX(-50%) translateY(0);}
 </style>
+<link rel="stylesheet" href="pos-pro.css?v=2">
 </head>
 <body>
 
@@ -417,7 +418,9 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
   <div class="ts-panel" id="tsPanel">
     <div class="ts-title">🎨 لون التطبيق</div>
     <div class="ts-row">
-      <div class="tc on" id="tc-dark" style="background:linear-gradient(135deg,#0a0a0f,#ff6b3d);" onclick="setTheme('dark')" title="داكن برتقالي"></div>
+      <div class="tc" id="tc-sora3a" style="background:linear-gradient(135deg,#fff,#008b2c);" onclick="setTheme('sora3a')" title="سرعة"></div>
+      <div class="tc" id="tc-sora3aDark" style="background:linear-gradient(135deg,#0d1410,#1fbf55);" onclick="setTheme('sora3aDark')" title="سرعة داكن"></div>
+      <div class="tc" id="tc-dark" style="background:linear-gradient(135deg,#0a0a0f,#ff6b3d);" onclick="setTheme('dark')" title="داكن برتقالي"></div>
       <div class="tc" id="tc-light" style="background:linear-gradient(135deg,#fff,#ff6b3d);" onclick="setTheme('light')" title="أبيض برتقالي"></div>
       <div class="tc" id="tc-ocean" style="background:linear-gradient(135deg,#0d1b2a,#4fc3f7);" onclick="setTheme('ocean')" title="المحيط"></div>
       <div class="tc" id="tc-green" style="background:linear-gradient(135deg,#f0fdf4,#16a34a);" onclick="setTheme('green')" title="أخضر"></div>
@@ -427,8 +430,8 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <div class="ts-sep"></div>
     <div class="ts-label">فاتح / داكن</div>
     <div class="ts-toggle">
-      <button class="ts-toggle-btn" id="tl-dark" onclick="setTheme('dark')">🌙 داكن</button>
-      <button class="ts-toggle-btn on" id="tl-light" onclick="setTheme('light')">☀️ فاتح</button>
+      <button class="ts-toggle-btn" id="tl-dark" onclick="setTheme('sora3aDark')">🌙 داكن</button>
+      <button class="ts-toggle-btn on" id="tl-light" onclick="setTheme('sora3a')">☀️ فاتح</button>
     </div>
   </div>
 </div>
@@ -460,11 +463,13 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
   </div>
 
   <div class="desktop-nav" id="desktopNav">
-    <button class="dnb on" onclick="goTab('cashier')">🧾 الكاشير</button>
-    <button class="dnb" onclick="goTab('orders')">📋 الطلبات</button>
-    <button class="dnb" onclick="goTab('reports')">📊 التقارير</button>
-    <button class="dnb" onclick="goTab('menu')">⚙️ المنيو</button>
-    <button class="dnb" onclick="goTab('acc')">📦 المخزون والحسابات</button>
+    <button class="dnb on" data-tab="cashier" onclick="goTab('cashier')">🧾 الكاشير</button>
+    <button class="dnb" data-tab="orders" onclick="goTab('orders')">📋 الطلبات</button>
+    <button class="dnb" data-tab="kitchen" onclick="goTab('kitchen')">👨‍🍳 المطبخ <span class="nav-pill" id="kdsPillD"></span></button>
+    <button class="dnb" data-tab="shift" onclick="goTab('shift')">🧮 الوردية</button>
+    <button class="dnb" data-tab="reports" onclick="goTab('reports')">📊 التقارير</button>
+    <button class="dnb" data-tab="menu" onclick="goTab('menu')">🍔 المنيو والإعدادات</button>
+    <button class="dnb" data-tab="acc" onclick="goTab('acc')">📦 المخزون والحسابات</button>
   </div>
   <div class="content">
     <!-- CASHIER -->
@@ -472,24 +477,42 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
       <div class="pos">
         <div class="mside">
           <div class="hold-strip" id="holdStrip"></div>
+          <div class="psearch"><input id="prodSearch" type="search" placeholder="🔍 ابحث عن صنف…" title="اختصار: /" autocomplete="off"></div>
           <div class="cats" id="cats"></div>
           <div class="prods" id="prods"></div>
         </div>
         <div class="cside">
-          <div class="chead">
-            <div class="ctitle">🛒 السلة</div>
-            <div class="ccnt" id="cartCnt">٠ عنصر</div>
+          <div class="chead" id="cartHead">
+            <div><div class="ctitle">🛒 السلة</div><div class="ccnt" id="cartCnt">٠ عنصر</div></div>
+            <div class="cmini" id="cartMini"></div>
+            <div class="cexp">▲</div>
           </div>
-          <div class="cust-area">
-            <button class="send-btn" id="sendBtn" disabled onclick="openOrderType()">🚀 ترحيل الطلب</button>
-          </div>
+          <div class="shift-warn" id="shiftWarn" onclick="goTab('shift')">⚠️ لا توجد وردية مفتوحة — اضغط لفتح وردية</div>
           <div class="clist" id="cartList"><div class="cempty">السلة فارغة</div></div>
           <div class="cfoot">
-            <div class="trow"><span>المجموع</span><span class="tval" id="cartTotal">٠ د.ع</span></div>
+            <div id="cartBreak"></div>
+            <div class="trow ttotal"><span>الإجمالي</span><span class="tval" id="cartTotal">٠ د.ع</span></div>
+            <div class="cact">
+              <button class="cact-b" id="discBtn" onclick="openDiscount()">٪ خصم</button>
+              <button class="cact-b" onclick="clearCart()">🗑️ تفريغ</button>
+            </div>
+            <button class="send-btn" id="sendBtn" disabled onclick="openOrderType()">🚀 ترحيل الطلب <small>F9</small></button>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- KITCHEN DISPLAY -->
+    <div class="screen" id="kitchenScreen">
+      <div class="kds-head">
+        <div><b>👨‍🍳 شاشة المطبخ</b><span class="kds-sub" id="kdsSub"></span></div>
+        <button class="cact-b" id="kdsSoundBtn" onclick="kdsToggleSound()">🔔 الصوت: يعمل</button>
+      </div>
+      <div class="kds-grid" id="kdsGrid"></div>
+    </div>
+
+    <!-- SHIFT -->
+    <div class="screen" id="shiftScreen"><div id="shiftBody"></div></div>
 
     <!-- ORDERS -->
     <div class="screen" id="ordersScreen">
@@ -561,7 +584,9 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
         <button class="mtab on" id="mt1" onclick="showMTab('add')">➕ إضافة</button>
         <button class="mtab" id="mt2" onclick="showMTab('list')">📋 الأصناف</button>
         <button class="mtab" id="mt3" onclick="showMTab('cats')">🗂️ الفروع</button>
+        <button class="mtab" id="mt4" onclick="showMTab('settings')">⚙️ الإعدادات</button>
       </div>
+      <div id="mSetSec" style="display:none;"></div>
       <div id="mAddSec">
         <div class="flbl">اسم الصنف *</div>
         <input class="finp" id="nName" placeholder="مثال: برغر خاص">
@@ -606,11 +631,13 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
   </div>
 
   <nav class="bnav">
-    <button class="nb on" id="nb1" onclick="goTab('cashier')"><div class="ni">🧾</div><div>الكاشير</div></button>
-    <button class="nb" id="nb2" onclick="goTab('orders')"><div class="ni">📋</div><div>الطلبات</div></button>
-    <button class="nb" id="nb3" onclick="goTab('reports')"><div class="ni">📊</div><div>التقارير</div></button>
-    <button class="nb" id="nb4" onclick="goTab('menu')"><div class="ni">⚙️</div><div>المنيو</div></button>
-    <button class="nb" id="nb5" onclick="goTab('acc')"><div class="ni">📦</div><div>المخزون</div></button>
+    <button class="nb on" id="nb1" data-tab="cashier" onclick="goTab('cashier')"><div class="ni">🧾</div><div>الكاشير</div></button>
+    <button class="nb" id="nb2" data-tab="orders" onclick="goTab('orders')"><div class="ni">📋</div><div>الطلبات</div></button>
+    <button class="nb" id="nb6" data-tab="kitchen" onclick="goTab('kitchen')"><div class="ni">👨‍🍳<span class="nav-pill" id="kdsPillM"></span></div><div>المطبخ</div></button>
+    <button class="nb" id="nb7" data-tab="shift" onclick="goTab('shift')"><div class="ni">🧮</div><div>الوردية</div></button>
+    <button class="nb" id="nb3" data-tab="reports" onclick="goTab('reports')"><div class="ni">📊</div><div>التقارير</div></button>
+    <button class="nb" id="nb4" data-tab="menu" onclick="goTab('menu')"><div class="ni">🍔</div><div>المنيو</div></button>
+    <button class="nb" id="nb5" data-tab="acc" onclick="goTab('acc')"><div class="ni">📦</div><div>المخزون</div></button>
   </nav>
 </div>
 
@@ -626,6 +653,8 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
       <button class="qb" onclick="chQ(1)">+</button>
       <span style="font-size:11px;color:var(--muted);margin-right:auto;">الكمية</span>
     </div>
+    <input class="dinp vnote" id="varNote" placeholder="📝 ملاحظة للمطبخ (اختياري) — مثال: بدون بصل" maxlength="80">
+    <div class="vquick" id="varQuick"></div>
     <button class="abtn" onclick="addToCart()">إضافة للسلة</button>
   </div>
 </div>
@@ -636,17 +665,21 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <div class="ctit">🚀 ترحيل الطلب</div>
     <div class="csub">اختر نوع الطلب</div>
     <div class="sumbox" id="sumBox"></div>
-    <button class="otype" style="border-color:rgba(255,107,61,.3);background:#fff8f5;" onclick="pickType('salon')">
+    <button class="otype" onclick="pickType('salon')">
       <div class="oic">🪑</div>
-      <div><div class="oname">صالة</div><div class="osub">طلب داخل المطعم — طباعة فوراً</div></div>
+      <div><div class="oname">صالة <kbd>1</kbd></div><div class="osub">دفع وطباعة فوراً</div></div>
     </button>
-    <button class="otype" style="border-color:rgba(255,170,61,.3);background:#fff8f5;" onclick="pickType('takeaway')">
+    <button class="otype" onclick="pickType('quick')">
+      <div class="oic">🛍️</div>
+      <div><div class="oname">سفري فوري <kbd>2</kbd></div><div class="osub">دفع وتسليم مباشر</div></div>
+    </button>
+    <button class="otype" onclick="pickType('takeaway')">
       <div class="oic">🥡</div>
-      <div><div class="oname">سفري / قيد التحضير</div><div class="osub">يبقى بالكاشير لحد ما يتحول للكابتن أو يستلمه الزبون</div></div>
+      <div><div class="oname">سفري — قيد التحضير <kbd>3</kbd></div><div class="osub">يبقى بالكاشير لحد التسليم أو التحويل للكابتن</div></div>
     </button>
-    <button class="otype" style="border-color:rgba(255,107,61,.4);background:#fff5f0;" onclick="pickType('delivery')">
+    <button class="otype" onclick="pickType('delivery')">
       <div class="oic">🏍️</div>
-      <div><div class="oname">دلفري — توصيل</div><div class="osub">كابتن + معلومات الزبون</div></div>
+      <div><div class="oname">دلفري — توصيل <kbd>4</kbd></div><div class="osub">كابتن + معلومات الزبون</div></div>
     </button>
     <button class="cancel" onclick="closeType()">إلغاء</button>
   </div>
@@ -666,9 +699,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
         <div class="fee-row">
           <input class="dinp" id="dFee" type="number" placeholder="5000" value="5000">
           <div class="fee-presets">
-            <button class="fee-p" onclick="setFee(3000)">٣</button>
-            <button class="fee-p" onclick="setFee(5000)">٥</button>
-            <button class="fee-p" onclick="setFee(7000)">٧</button>
+            <span id="feePresets"><button class="fee-p" onclick="setFee(3000)">٣</button><button class="fee-p" onclick="setFee(5000)">٥</button><button class="fee-p" onclick="setFee(7000)">٧</button></span>
           </div>
         </div>
       </div>
@@ -713,6 +744,20 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
   </div>
 </div>
 
+<!-- PAYMENT -->
+<div class="cov" id="payOv" onclick="if(event.target===this)payClose()">
+  <div class="cmodal pay-modal">
+    <div class="ctit" id="payTitle">💵 الدفع</div>
+    <div class="pay-due"><span>المطلوب</span><b id="payDue">0</b></div>
+    <div id="payBreak" class="pay-break"></div>
+    <div id="payTable" class="pay-table"></div>
+    <div class="pay-methods" id="payMethods"></div>
+    <div id="payBody"></div>
+    <button class="confbtn" id="payOk">✅ تأكيد الدفع وطباعة <kbd>Enter</kbd></button>
+    <button class="cancel" onclick="payClose()">إلغاء</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- FIREBASE -->
@@ -733,7 +778,7 @@ const app = initializeApp({
 const auth = initializeAuth(app, {persistence:[indexedDBLocalPersistence,browserLocalPersistence]});
 const db = getFirestore(app);
 enableIndexedDbPersistence(db).catch(()=>{});
-window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,getDoc,getDocs,setDoc,arrayUnion,query,where,onSnapshot};
+window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,getDoc,getDocs,setDoc,arrayUnion,query,where,onSnapshot,app};
 window.dispatchEvent(new Event('fbReady'));
 </script>
 
@@ -2441,6 +2486,8 @@ function printOrderReceipt(o,type,captain){
 
 // ── THEME SYSTEM ──
 const themes = {
+  sora3a: {bg:'#f3f7f4',panel:'#ffffff',panel2:'#eef3ef',line:'#e1e8e3',text:'#16241c',muted:'#6b7d72',orange:'#008b2c',orange2:'#00a83e',splash:'linear-gradient(135deg,#f3f7f4,#e3efe6,#f3f7f4)',pimg:'linear-gradient(135deg,#e6f2e9,#d4eadb)'},
+  sora3aDark: {bg:'#0d1410',panel:'#152019',panel2:'#1b2920',line:'#25362b',text:'#e7f1ea',muted:'#8fa597',orange:'#1fbf55',orange2:'#34d36b',splash:'linear-gradient(135deg,#0d1410,#13241a,#0d1410)',pimg:'linear-gradient(135deg,#1b2920,#21362a)'},
   dark: {bg:'#0a0a0f',panel:'#111118',panel2:'#18181f',line:'#252530',text:'#eeeef5',muted:'#666680',orange:'#ff6b3d',orange2:'#ffaa3d',splash:'linear-gradient(135deg,#0a0a0f,#1a0a05,#0a0a0f)',pimg:'linear-gradient(135deg,#1a0a05,#2d1208)'},
   light: {bg:'#f5f5f5',panel:'#ffffff',panel2:'#fff5f0',line:'#ffe0d6',text:'#1a1a1a',muted:'#888888',orange:'#ff6b3d',orange2:'#ff9f3d',splash:'linear-gradient(135deg,#fff5f0,#ffe0d6,#fff5f0)',pimg:'linear-gradient(135deg,#ffe0d6,#ffd0b8)'},
   ocean: {bg:'#0d1b2a',panel:'#112236',panel2:'#0d2040',line:'#1e3a5f',text:'#e0f0ff',muted:'#4a7fa5',orange:'#4fc3f7',orange2:'#80deea',splash:'linear-gradient(135deg,#0d1b2a,#0a2540,#0d1b2a)',pimg:'linear-gradient(135deg,#0a2040,#0d3060)'},
@@ -2449,10 +2496,13 @@ const themes = {
   night: {bg:'#070d1a',panel:'#0d1630',panel2:'#0a1228',line:'#1e3a5f',text:'#cdd9f0',muted:'#4a6080',orange:'#60a5fa',orange2:'#93c5fd',splash:'linear-gradient(135deg,#070d1a,#0a1228,#070d1a)',pimg:'linear-gradient(135deg,#0a1228,#0d1840)'},
 };
 
-let currentTheme = localStorage.getItem('pos_theme') || 'light';
+// النسخة الجديدة: هوية سرعة الخضراء هي الافتراضية (مرة واحدة فقط، ويبقى اختيار المستخدم بعدها)
+if(!localStorage.getItem('pos_theme_v2')){try{localStorage.setItem('pos_theme_v2','1');localStorage.setItem('pos_theme',(localStorage.getItem('pos_theme')||'').match(/dark|night|ocean/)?'sora3aDark':'sora3a');}catch(e){}}
+let currentTheme = localStorage.getItem('pos_theme') || 'sora3a';
 
 function applyTheme(name) {
-  const t = themes[name] || themes.light;
+  const t = themes[name] || themes.sora3a;
+  document.documentElement.dataset.theme = name;
   const root = document.documentElement;
   root.style.setProperty('--bg', t.bg);
   root.style.setProperty('--panel', t.panel);
@@ -2472,7 +2522,7 @@ function applyTheme(name) {
   const tc = document.getElementById('tc-' + name);
   if(tc) tc.classList.add('on');
   // Light/dark toggle
-  const lightThemes = ['light','green','purple'];
+  const lightThemes = ['sora3a','light','green','purple'];
   const isLight = lightThemes.includes(name);
   document.getElementById('tl-light').classList.toggle('on', isLight);
   document.getElementById('tl-dark').classList.toggle('on', !isLight);
@@ -2505,5 +2555,6 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
+<script src="pos-pro.js?v=2"></script>
 </body>
 </html>
