@@ -26,7 +26,7 @@
   // ══════════ الإعدادات ══════════
   const DEFAULTS = {
     receiptTitle: '', receiptSub: '', receiptPhone: '', receiptFooter: 'شكراً لزيارتكم ❤️',
-    defaultFee: 5000, feePresets: [3000, 5000, 7000], taxPct: 0, servicePct: 0, tables: 0,
+    defaultFee: 5000, feePresets: [3000, 5000, 7000], taxPct: 0, servicePct: 0, tables: 0, pagers: 10,
     printKitchen: false, quickAdd: true, paper: 80,
     quickNotes: ['بدون بصل', 'بدون صوص', 'حار', 'زيادة جبن', 'بدون مخلل'],
   };
@@ -240,6 +240,7 @@
     $('discBtn').classList.toggle('on', !!t.disc);
     $('discBtn').style.display = can('discount') ? '' : 'none';
     renderCurCust();
+    renderPagers();
   };
   window.cNote = (i) => {
     const c = cart[i]; if (!c) return;
@@ -339,6 +340,7 @@
       if (type === 'salon') { o.salonNum = salonNum; o.customer = tbl ? 'طاولة ' + tbl : 'صالة #' + salonNum; if (tbl) o.tableNo = tbl; }
       else o.customer = 'سفري';
     }
+    if (type !== 'delivery' && pagerSel) { o.pager = pagerSel; pagerSel = 0; }
     o.timeline = [{ status: o.status, time: now, text: 'تم إنشاء الطلب' }];
     f.setDoc(ref, o).catch((e) => toast('❌ تعذّر حفظ الطلب: ' + (e.code || e.message)));
     if (type === 'delivery') { syncTracking(ref.id, { ...o, captainName: '' }); saveCustomer(o); }
@@ -346,7 +348,7 @@
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
     printHTML(receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen));
     const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: '🏍️ دلفري — ' + (captain ? captain.name : '') };
-    toast('✅ تم — ' + names[type] + (pay && pay.payment.change ? ' • الباقي ' + money(pay.payment.change) : ''));
+    toast('✅ تم — ' + names[type] + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : '') + (pay && pay.payment.change ? ' • الباقي ' + money(pay.payment.change) : ''));
     cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
   };
 
@@ -358,12 +360,13 @@
     const o = baseOrder('takeaway', t, items);
     Object.assign(o, { held: true, holdNum: num_, customer: info.name || ('سفري #' + num_), phone: info.phone || '', note: info.note || '',
       status: 'preparing', timeline: [{ status: 'preparing', time: now, text: 'تم إنشاء الطلب — قيد التحضير' }] });
+    if (pagerSel) { o.pager = pagerSel; pagerSel = 0; }
     f.setDoc(ref, o).catch((e) => toast('❌ تعذر حفظ الطلب: ' + (e.code || e.message)));
     if (info.phone) saveCustomer({ ...o, customer: info.name || '' });
     curCust = null;
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
     printSlip('🍳 تذكرة مطبخ #' + num_, { customer: o.customer, phone: o.phone }, items.map((i) => ({ ...i, name: i.name + (i.note ? ' [' + i.note + ']' : '') })), t.total, 'المجموع', o.note);
-    toast('🍳 حُفظ الطلب #' + num_ + ' — قيد التحضير');
+    toast('🍳 حُفظ الطلب #' + num_ + ' — قيد التحضير' + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : ''));
     cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
   };
 
@@ -371,7 +374,7 @@
   window.ordHandover = async (id) => {
     const o = orders.find((x) => x.id === id); if (!o) return;
     if (o.payment && o.payment.method !== 'later') {
-      await orderUpdate(id, { status: 'delivered', deliveredAt: Date.now(), kitchen: 'ready' }, 'سُلّم للزبون', 'delivered');
+      await orderUpdate(id, { status: 'delivered', deliveredAt: Date.now(), kitchen: 'ready', ...(o.pager ? { pagerDone: true } : {}) }, 'سُلّم للزبون', 'delivered');
       printOrderReceipt(o, 'takeaway', null); toast('🤝 تم التسليم للزبون'); return;
     }
     openPay({ kind: 'collect', order: o, handover: true });
@@ -466,7 +469,7 @@
     try {
       const fields = { payment };
       let text = 'تم تحصيل ' + money(o.value);
-      if (c.handover) { Object.assign(fields, { status: 'delivered', deliveredAt: Date.now(), kitchen: 'ready' }); text = 'سُلّم للزبون — ' + text; }
+      if (c.handover) { Object.assign(fields, { status: 'delivered', deliveredAt: Date.now(), kitchen: 'ready', ...(o.pager ? { pagerDone: true } : {}) }); text = 'سُلّم للزبون — ' + text; }
       await orderUpdate(o.id, fields, text, c.handover ? 'delivered' : o.status);
       printHTML(receiptHTML({ ...o, ...fields }, null, { payment }, false));
       toast(c.handover ? '🤝 تم التسليم والتحصيل' : '💵 تم التحصيل' + (payment.change ? ' • الباقي ' + money(payment.change) : ''));
@@ -485,6 +488,7 @@
     const head = type === 'salon' ? `<div class="num">#${esc(o.tableNo ? 'طاولة ' + o.tableNo : o.salonNum)}</div><div class="type">🪑 صالة</div>`
       : type === 'takeaway' ? `${o.holdNum ? `<div class="num">#${esc(o.holdNum)}</div>` : ''}<div class="type">🥡 سفري</div>`
       : `<div class="type">🏍️ دلفري — ${esc(o.captainName || (captain && captain.name) || '')}</div>`;
+    const pg = o.pager ? `<div class="type" style="font-size:18px">📟 بيجر رقم ${esc(o.pager)}</div>` : '';
     const sub_ = o.subtotal != null ? o.subtotal : items.reduce((s, i) => s + (i.price || 0) * i.qty, 0);
     const p = (pay && pay.payment) || o.payment || {};
     const W = settings.paper === 58 ? 210 : 300;
@@ -498,7 +502,7 @@
       .total{display:flex;justify-content:space-between;font-size:16px;font-weight:900;margin-top:4px;padding-top:4px;border-top:2px solid #000;}
       .foot{text-align:center;font-size:11px;margin-top:8px;}.kt .item{font-size:16px;font-weight:900;}.pb{page-break-before:always;}`;
     const rcpt = `<div class="logo">${esc(title)}</div>${subL ? `<div class="sub">${esc(subL)}</div>` : ''}${phone ? `<div class="sub">📞 ${esc(phone)}</div>` : ''}
-      <div class="div"></div>${head}<div class="div"></div>
+      <div class="div"></div>${head}${pg}<div class="div"></div>
       <div class="row"><span>رقم الطلب</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div>
       <div class="row"><span>التاريخ</span><span>${esc(d.toLocaleDateString('ar-IQ'))} ${esc(o.createdAt || '')}</span></div>
       ${o.customer && type === 'delivery' ? `<div class="row"><span>الزبون</span><span>${esc(o.customer)}</span></div>` : ''}
@@ -516,7 +520,7 @@
       ${p.card && p.method === 'mixed' ? `<div class="row"><span>بطاقة</span><span>${fmt(p.card)}</span></div>` : ''}
       ${p.received && (p.method === 'cash' || p.method === 'mixed') ? `<div class="row"><span>المستلم نقداً</span><span>${fmt(p.received)}</span></div><div class="row"><span>الباقي</span><span>${fmt(p.change || 0)}</span></div>` : ''}
       <div class="div"></div><div class="foot">${esc(settings.receiptFooter || 'شكراً لزيارتكم ❤️')}</div>`;
-    const kt = withKitchen ? `<div class="pb kt"><div class="logo">🍳 تذكرة مطبخ</div><div class="div"></div>${head}
+    const kt = withKitchen ? `<div class="pb kt"><div class="logo">🍳 تذكرة مطبخ</div><div class="div"></div>${head}${pg}
       <div class="row"><span>${esc(o.createdAt || '')}</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div><div class="div"></div>
       ${items.map((i) => `<div class="item">${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<div class="n">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}</div>` : '';
     return `<html><head><meta charset="UTF-8"><style>${css}</style></head><body>${rcpt}${kt}</body></html>`;
@@ -698,7 +702,7 @@
       const m = Math.floor((Date.now() - (o.createdAtMs || Date.now())) / 60000), t = getOrderType(o);
       const cls = m >= 20 ? 'late' : m >= 10 ? 'warn' : '';
       const label = t === 'salon' ? '🪑 ' + (o.tableNo ? 'طاولة ' + o.tableNo : 'صالة #' + (o.salonNum || '')) : t === 'takeaway' ? '🥡 ' + (o.holdNum ? 'سفري #' + o.holdNum : 'سفري') : '🏍️ دلفري';
-      return `<div class="kds-card ${cls}"><div class="kds-top"><div><div class="kds-num">${esc(label)}</div><div class="kds-type">#${esc(o.id.substring(0, 6).toUpperCase())} • ${esc(o.createdAt || '')}</div></div>
+      return `<div class="kds-card ${cls}"><div class="kds-top"><div><div class="kds-num">${esc(label)}</div><div class="kds-type">#${esc(o.id.substring(0, 6).toUpperCase())} • ${esc(o.createdAt || '')}${o.pager ? ` • <b class="kds-pager">📟 ${toA(o.pager)}</b>` : ''}</div></div>
         <div class="kds-time">⏱ ${toA(m)} د</div></div>
         <div class="kds-items">${orderItemsFull(o).map((i, k) => { const n = (o.items && o.items[k] && o.items[k].note) || ''; return `<div class="kds-it"><span class="q">${toA(i.qty)}×</span><span>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${n ? `<span class="n">📝 ${esc(n)}</span>` : ''}</span></div>`; }).join('')}</div>
         ${o.note ? `<div class="kds-note">📝 ${esc(o.note)}</div>` : ''}
@@ -722,6 +726,7 @@
   window.renderOrders = renderOrders = function () {
     _renderOrders();
     renderKds();
+    renderPagers();
     if (shift && $('shiftScreen').classList.contains('on')) renderShift();
   };
 
@@ -753,7 +758,8 @@
           <div><div class="flbl">خدمة الصالة ٪</div><input class="finp" id="stSvc" type="number" min="0" max="50" value="${s.servicePct || 0}"></div></div>
         <div class="set-row"><div><div class="flbl">أجرة التوصيل الافتراضية</div><input class="finp" id="stFee" type="number" min="0" value="${s.defaultFee || 0}"></div>
           <div><div class="flbl">أزرار الأجرة السريعة (مفصولة بفاصلة)</div><input class="finp" id="stFees" value="${esc((s.feePresets || []).join(','))}"></div></div>
-        <div class="set-row"><div><div class="flbl">عدد الطاولات (0 = بدون)</div><input class="finp" id="stTables" type="number" min="0" max="200" value="${s.tables || 0}"></div><div></div></div>
+        <div class="set-row"><div><div class="flbl">عدد الطاولات (0 = بدون)</div><input class="finp" id="stTables" type="number" min="0" max="200" value="${s.tables || 0}"></div>
+          <div><div class="flbl">📟 عدد أجهزة البيجر (0 = بدون)</div><input class="finp" id="stPagers" type="number" min="0" max="30" value="${s.pagers != null ? s.pagers : 10}"></div></div>
       </div>
       <div class="sh-card"><div class="sh-title">⚡ السرعة</div>
         <label class="set-check"><input type="checkbox" id="stQuick" ${s.quickAdd ? 'checked' : ''}> إضافة سريعة: الصنف ذو السعر الواحد ينضاف بضغطة واحدة</label>
@@ -773,7 +779,7 @@
       receiptTitle: $('stTitle').value.trim(), receiptSub: $('stSub').value.trim(), receiptPhone: $('stPhone').value.trim(), receiptFooter: $('stFooter').value.trim(),
       paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked,
       taxPct: clamp($('stTax').value, 0, 50), servicePct: clamp($('stSvc').value, 0, 50), defaultFee: clamp($('stFee').value, 0, 1e6),
-      feePresets: list($('stFees').value).map(num).filter((x) => x > 0).slice(0, 4), tables: Math.round(clamp($('stTables').value, 0, 200)),
+      feePresets: list($('stFees').value).map(num).filter((x) => x > 0).slice(0, 4), tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
       quickAdd: $('stQuick').checked, quickNotes: list($('stNotes').value).slice(0, 10).map((x) => x.slice(0, 30)),
     };
     settings = { ...DEFAULTS, ...next };
@@ -934,6 +940,72 @@
   }
   window.dutyLogout = async () => { try { await fb().signOut(fb().auth); } catch (e) {} location.reload(); };
   setInterval(dutyCheck, 20000);
+
+  // ══════════ البيجر (جهاز استدعاء الزبائن بالصالة) ══════════
+  // الكاشير يختار رقم البيجر قبل الترحيل ← يظهر الرقم مشغولاً ← عند «جاهز» من المطبخ يصير أخضر ويرن
+  // ← الكاشير يضغط زر الرقم على جهاز البيجر ← بعد استلام الزبون يضغط الرقم هنا فيتحرر
+  let pagerSel = 0;
+  const pagerAlerted = new Set();
+  let pagerReady = false;
+  const pagerOrders = () => {
+    const m = new Map();
+    orders.forEach((o) => {
+      if (!o.pager || o.pagerDone || o.status === 'cancelled' || Date.now() - (o.createdAtMs || 0) > 12 * 3600000) return;
+      const prev = m.get(o.pager); if (!prev || (o.createdAtMs || 0) > (prev.createdAtMs || 0)) m.set(o.pager, o);
+    });
+    return m;
+  };
+  const pagerIsReady = (o) => o.kitchen === 'ready' || o.status === 'ready';
+  function pagerBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, .18, .36, .7, .88, 1.06].forEach((d) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.type = 'square'; o.frequency.value = 1046;
+        g.gain.setValueAtTime(.0001, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.25, ctx.currentTime + d + .02); g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d + .14); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .16); });
+    } catch (e) {}
+  }
+  function renderPagers() {
+    let el = $('pagerBar');
+    const n = Number(settings.pagers != null ? settings.pagers : 10) || 0;
+    if (!el) {
+      const anchor = $('curCust'); if (!anchor) return;
+      el = document.createElement('div'); el.id = 'pagerBar'; el.className = 'pager-bar';
+      anchor.parentNode.insertBefore(el, anchor);
+      el.addEventListener('click', (e) => { const b = e.target.closest('[data-pg]'); if (b) pagerClick(+b.dataset.pg); });
+    }
+    if (!n || !restData) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    const busy = pagerOrders();
+    // تنبيه عند صيرورة طلب جاهزاً
+    const fresh = [];
+    busy.forEach((o, p) => { if (pagerIsReady(o) && !pagerAlerted.has(o.id)) { pagerAlerted.add(o.id); if (pagerReady) fresh.push(p); } });
+    pagerReady = true;
+    if (fresh.length) { pagerBeep(); toast('📟 اضغط البيجر رقم ' + fresh.map(toA).join(' و ') + ' — الطلب جاهز'); }
+    if (pagerSel && busy.has(pagerSel)) pagerSel = 0;
+    const readyN = [...busy.values()].filter(pagerIsReady).length;
+    el.innerHTML = `<div class="pg-head"><span>📟 البيجر</span><small>${pagerSel ? 'للطلب الحالي: <b>' + toA(pagerSel) + '</b>' : (cart.length ? 'اختر رقم للطلب' : '')}${readyN ? ' • <b class="pg-rd">' + toA(readyN) + ' جاهز</b>' : ''}</small></div>
+      <div class="pg-grid">${Array.from({ length: n }, (_, i) => {
+        const p = i + 1, o = busy.get(p);
+        const cls = o ? (pagerIsReady(o) ? 'ready' : 'busy') : (pagerSel === p ? 'sel' : '');
+        const tip = o ? (pagerIsReady(o) ? 'جاهز — اضغط البيجر ثم اضغط هنا بعد الاستلام' : 'قيد التحضير — ' + (o.customer || '')) : 'متاح';
+        return `<button type="button" class="pg ${cls}" data-pg="${p}" title="${esc(tip)}">${toA(p)}</button>`;
+      }).join('')}</div>`;
+  }
+  function pagerClick(p) {
+    const o = pagerOrders().get(p);
+    if (!o) { pagerSel = pagerSel === p ? 0 : p; renderPagers(); if (pagerSel) toast('📟 بيجر ' + toA(p) + ' للطلب الحالي — أعطِ الجهاز للزبون'); return; }
+    const label = (o.customer || '') + ' • ' + orderItemsFull(o).map((i) => toA(i.qty) + '× ' + i.name).join('، ');
+    if (!pagerIsReady(o)) {
+      acDialog('📟 بيجر ' + toA(p) + ' — قيد التحضير', label, [], () => { kdsDone(o.id); }, '✅ الطلب جاهز — نادِ الزبون');
+      return;
+    }
+    acDialog('📟 بيجر ' + toA(p) + ' — جاهز', 'اضغط رقم ' + toA(p) + ' على جهاز البيجر. بعد ما يستلم الزبون طلبه ويرجّع الجهاز اضغط «استلم» — ' + label, [], () => { pagerFree(o); }, '🤝 الزبون استلم — حرّر البيجر');
+  }
+  async function pagerFree(o) {
+    try {
+      if (o.held && o.status !== 'delivered') { ordHandover(o.id); return; }
+      else { await fb().updateDoc(fb().doc(fb().db, 'orders', o.id), { pagerDone: true }); toast('✅ تحرر البيجر ' + toA(o.pager)); }
+    } catch (e) { toast('❌ تعذّر التحديث'); }
+  }
 
   // ══════════ سجل الزبائن ══════════
   let curCust = null;            // الزبون الحالي (من مكالمة أو بحث)
