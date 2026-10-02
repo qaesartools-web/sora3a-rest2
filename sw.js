@@ -1,8 +1,11 @@
 // سرعة — كاشير المطعم: Service Worker (يعمل بدون إنترنت + إشعارات الخلفية)
-const CACHE_VERSION = 'rest2-v12';
+const CACHE_VERSION = 'rest2-v13';
 const CACHE_NAME = `app-cache-${CACHE_VERSION}`;
 const SCOPE = '/sora3a-rest2/';
-const PRECACHE = [SCOPE, SCOPE + 'index.html', SCOPE + 'pos-pro.js?v=10', SCOPE + 'pos-pro.css?v=7', SCOPE + 'manifest.json'];
+const PRECACHE = [SCOPE, SCOPE + 'index.html', SCOPE + 'pos-pro.js?v=11', SCOPE + 'pos-pro.css?v=8', SCOPE + 'manifest.json',
+  SCOPE + 'logo.svg', SCOPE + 'icon-192.png', SCOPE + 'icon-512.png'];
+// مكتبات Firebase تُخزَّن مسبقاً حتى يفتح الكاشير بدون إنترنت حتى لو أول مرة بعد التحديث
+const PRECACHE_CDN = ['app', 'auth', 'firestore'].map((m) => `https://www.gstatic.com/firebasejs/10.7.1/firebase-${m}.js`);
 
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
@@ -33,7 +36,8 @@ self.addEventListener('notificationclick', (event) => {
 });
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(PRECACHE).catch(() => {})).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE_NAME).then((c) => Promise.all([c.addAll(PRECACHE).catch(() => {}),
+    ...PRECACHE_CDN.map((u) => c.add(new Request(u, { mode: 'cors' })).catch(() => {}))])).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
@@ -46,11 +50,18 @@ self.addEventListener('fetch', (event) => {
   if (/firebaseio\.com|firestore\.googleapis|identitytoolkit|securetoken|fcmregistrations|firebaseinstallations/.test(url.hostname)) return;
   // ملفات التطبيق نفسه: الشبكة أولاً (حتى تصل التحديثات فوراً) ثم النسخة المخزنة بدون إنترنت
   if (url.origin === self.location.origin) {
-    event.respondWith(fetch(req).then((r) => put(req, r)).catch(() => caches.match(req).then((r) => r || (req.mode === 'navigate' ? caches.match(SCOPE + 'index.html') : undefined))));
+    // إنترنت ضعيف: ننتظر الشبكة ٣ ثواني فقط ثم نفتح النسخة المخزنة
+    const cached = () => caches.match(req, { ignoreSearch: req.mode === 'navigate' }).then((r) => r || (req.mode === 'navigate' ? caches.match(SCOPE + 'index.html') : undefined));
+    event.respondWith(new Promise((resolve) => {
+      let settled = false;
+      const t = setTimeout(() => cached().then((r) => { if (r && !settled) { settled = true; resolve(r); } }), 3000);
+      fetch(req).then((r) => { put(req, r); if (!settled) { settled = true; clearTimeout(t); resolve(r); } })
+        .catch(() => cached().then((r) => { if (!settled) { settled = true; clearTimeout(t); resolve(r || Response.error()); } }));
+    }));
     return;
   }
   // مكتبات ثابتة بإصدار محدد + الخطوط: من الذاكرة أولاً
-  if (/^https:\/\/(www\.gstatic\.com\/firebasejs|fonts\.(googleapis|gstatic)\.com)/.test(url.href)) {
+  if (/^https:\/\/(www\.gstatic\.com\/firebasejs|fonts\.(googleapis|gstatic)\.com|cdn\.jsdelivr\.net\/npm\/qz-tray@)/.test(url.href)) {
     event.respondWith(caches.match(req).then((c) => c || fetch(req).then((r) => put(req, r))));
   }
 });
