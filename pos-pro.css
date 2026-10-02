@@ -239,3 +239,8 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 
 /* الشاشات اللي تمرّر نفسها: محتواها ما ينضغط أبداً (كان شريط فلاتر الطلبات يختفي لما القائمة تطول) */
 #ordersScreen>*,#accScreen>*,#reportsScreen>*,#menuScreen>*,#kitchenScreen>*,#shiftScreen>*{flex-shrink:0;}
+
+/* رأس شاشة المطبخ: لا يتكسر على الموبايل */
+.kds-head{flex-wrap:wrap;}
+.kds-head>div:first-child b{white-space:nowrap;}
+.kds-head .kds-sub{white-space:nowrap;}
