@@ -771,7 +771,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, updateDoc as _updateDoc, getDoc, getDocs, setDoc as _setDoc, arrayUnion, increment, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, updateDoc as _updateDoc, deleteDoc as _deleteDoc, getDoc, getDocs, setDoc as _setDoc, arrayUnion, increment, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
   apiKey:"AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ",
@@ -798,8 +798,9 @@ function settle(p){
 }
 const setDoc=(...a)=>settle(_setDoc(...a));
 const updateDoc=(...a)=>settle(_updateDoc(...a));
+const deleteDoc=(...a)=>settle(_deleteDoc(...a));
 const addDoc=(col,data)=>{const ref=doc(col);return settle(_setDoc(ref,data)).then(()=>ref);};
-window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,getDoc,getDocs,setDoc,arrayUnion,increment,query,where,onSnapshot,app};
+window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,deleteDoc,getDoc,getDocs,setDoc,arrayUnion,increment,query,where,onSnapshot,app};
 window.dispatchEvent(new Event('fbReady'));
 </script>
 
@@ -1065,9 +1066,19 @@ function startListeners(){
       captains=snap.docs.map(d=>({id:d.id,...d.data()}));
     })
   );
+  unsubs.push(fb.onSnapshot(fb.collection(fb.db,'accounting',restData.id,'expenses'),snap=>{
+    accExp=snap.docs.map(d=>({id:d.id,...d.data()}));
+    const scr=document.getElementById('accScreen');if(scr&&scr.classList.contains('on')&&!document.getElementById('acOv').classList.contains('on'))renderAcc();
+  },()=>{}));
+  let migrated=false;
   unsubs.push(fb.onSnapshot(fb.doc(fb.db,'accounting',restData.id),snap=>{
     if(snap.exists()&&!snap.metadata.hasPendingWrites){
       const _d=snap.data();acc=normAcc(_d.movesOmitted?Object.assign({},_d,{moves:acc.moves}):_d);
+      // ترحيل المصروفات القديمة (داخل المستند) إلى سجلات منفصلة — يقوم به المالك مرة واحدة
+      if(!migrated&&isOwnerPOS()&&acc.expenses.length&&!snap.metadata.fromCache){migrated=true;
+        const list=acc.expenses.slice();
+        Promise.all(list.map(e=>fb.setDoc(fb.doc(fb.db,'accounting',restData.id,'expenses',e.id),{cat:e.cat||'أخرى',amount:Number(e.amount)||0,note:e.note||'',ts:e.ts||Date.now(),by:e.by||'',createdAtMs:e.ts||Date.now()})))
+          .then(()=>{acc.expenses=[];saveAcc();}).catch(()=>{migrated=false;});}
       try{localStorage.setItem(accKey(),JSON.stringify(acc));}catch(e){}
       updateAccBadge();
       const scr=document.getElementById('accScreen');if(scr&&scr.classList.contains('on')&&!document.getElementById('acOv').classList.contains('on'))renderAcc();
@@ -1754,6 +1765,12 @@ const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const fmtQ=n=>toA(r3(n));
 const UNITS=['كغم','غرام','لتر','مل','حبة','قطعة','علبة','كيس','كرتون','رغيف'];
 const WASTE_REASONS=['تلف','انتهاء صلاحية','كسر / سقوط','ضيافة / تجربة','استهلاك موظفين','أخرى'];
+// من يستخدم الجهاز: المالك يعدّل ويحذف، الكاشير يضيف ويشاهد فقط
+const isOwnerPOS=()=>!window.posUser||window.posUser.role!=='cashier';
+const whoAmI=()=>(window.posUser&&window.posUser.name)||(isOwnerPOS()?'صاحب المطعم':'كاشير');
+let accExp=[];   // restaurants المصروفات: accounting/{rid}/expenses/{id}
+const allExp=()=>{const ids=new Set(accExp.map(e=>e.id));return accExp.concat(acc.expenses.filter(e=>!ids.has(e.id)).map(e=>({...e,_legacy:true})));};
+function ownerOnly(){if(isOwnerPOS())return true;toast('🔒 التعديل والحذف من صلاحية الإدارة فقط');return false;}
 const EXP_CATS=['رواتب','إيجار','كهرباء وماء','غاز / وقود','صيانة','تغليف','تسويق وإعلان','مشتريات أخرى','أخرى'];
 const CANCEL_REASONS=['الزبون غيّر رأيه','خطأ من الكاشير','الصنف نفد','تأخير بالتحضير أو التوصيل','طلب مكرر','الزبون ما حضر','أخرى'];
 const EDITABLE=['pending','accepted','pickup','preparing','ready'];
@@ -1829,6 +1846,7 @@ function mvAdd(m,type,qty,unitCost,note,ref,valueOverride){
     if(ex){ex.qty=r3(ex.qty+qty);ex.value=r2(ex.value+value);ex.cost=ex.qty?r2(Math.abs(ex.value/ex.qty)):cost;m.qty=r3(m.qty+qty);return ex;}
   }
   const e={id:uid('v'),mid:m.id,name:m.name,unit:m.unit,type,qty,cost,value,ts:Date.now(),note:note||''};
+  if(type!=='sale'&&type!=='sale_return')e.by=whoAmI().slice(0,60);
   if(type==='sale'||type==='sale_return')e.day=ymd(new Date());
   if(ref)e.ref=ref;
   acc.moves.push(e);m.qty=r3(m.qty+qty);return e;
@@ -1929,11 +1947,14 @@ window.acTab=t=>{if(t!==acCur){acHist.push(acCur);if(acHist.length>20)acHist.shi
 window.acBack=()=>{if(!acHist.length)return;acCur=acHist.pop();renderAcc();const sc=document.getElementById('accScreen');if(sc)sc.scrollTop=0;};
 function renderAcc(){
   const tabs=document.getElementById('acTabs');
-  if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+AC_TABS.map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('');
+  if(!isOwnerPOS()&&acCur==='tools')acCur='mat';
+  if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+AC_TABS.filter(([k])=>k!=='tools'||isOwnerPOS()).map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('');
   const body=document.getElementById('acBody');if(!body)return;
   const fn={mat:tabMat,mov:tabMov,rec:tabRec,exp:tabExp,fin:tabFin,tools:tabTools}[acCur]||tabMat;
   body.innerHTML=fn();
   if(acCur==='mat')renderMatList();
+  // الكاشير: الوصفات للمشاهدة فقط
+  if(!isOwnerPOS()&&acCur==='rec')body.querySelectorAll('input,select,button[onclick^="rec"]').forEach(el=>{el.disabled=true;});
 }
 
 // ---- المخزون (المواد) ----
@@ -1957,7 +1978,7 @@ function renderMatList(){
     return `<div class="ac-row"><div class="ac-top"><div><div class="ac-name">${esc(m.name)}<span class="ac-bd ${s}">${s==='out'?'نفذ':s==='low'?'منخفض':'متوفر'}</span></div>
     <div class="ac-sub">الحد الأدنى ${fmtQ(m.min)} ${esc(m.unit)} • تكلفة الوحدة ${fmt(Math.round(m.cost))} د.ع (متوسط مرجّح)</div></div>
     <div class="ac-qty">${fmtQ(m.qty)} <span style="font-size:11px;font-weight:600;color:var(--muted)">${esc(m.unit)}</span></div></div>
-    <div class="ac-btns"><button class="ac-b" onclick="matBuy('${m.id}')">➕ وارد</button><button class="ac-b" onclick="matWaste('${m.id}')">🗑️ تالف</button><button class="ac-b" onclick="matCount('${m.id}')">📋 جرد</button><button class="ac-b" onclick="matReturn('${m.id}')">↩️ مرتجع</button><button class="ac-b" onclick="matCard('${m.id}')">📇 كارت</button><button class="ac-b" onclick="matEdit('${m.id}')">✏️</button><button class="ac-b del" onclick="matDel('${m.id}')">✖</button></div></div>`;}).join('')
+    <div class="ac-btns"><button class="ac-b" onclick="matBuy('${m.id}')">➕ وارد</button><button class="ac-b" onclick="matWaste('${m.id}')">🗑️ تالف</button><button class="ac-b" onclick="matCount('${m.id}')">📋 جرد</button><button class="ac-b" onclick="matReturn('${m.id}')">↩️ مرتجع</button><button class="ac-b" onclick="matCard('${m.id}')">📇 كارت</button>${isOwnerPOS()?`<button class="ac-b" onclick="matEdit('${m.id}')">✏️</button><button class="ac-b del" onclick="matDel('${m.id}')">✖</button>`:''}</div></div>`;}).join('')
     :`<div class="ac-empty">${acc.materials.length?'لا توجد نتائج':'لا توجد مواد بعد — أضف موادك الخام (لحم، خبز، جبن، صوص، زيت...)'}</div>`;
 }
 window.matNew=()=>acDialog('➕ مادة جديدة','مادة خام تدخل بالوصفات',[
@@ -2018,7 +2039,7 @@ window.matReturn=id=>{const m=matById(id);if(!m)return;
     mvAdd(m,'purchase_return',-q,refund/q,'مرتجع للمورد',null,-refund);
     saveAcc();renderAcc();toast('✅ تم تسجيل المرتجع');
   });};
-window.matEdit=id=>{const m=matById(id);if(!m)return;
+window.matEdit=id=>{if(!ownerOnly())return;const m=matById(id);if(!m)return;
   acDialog('✏️ تعديل: '+m.name,'',[
     {id:'name',label:'الاسم *',value:m.name},
     {id:'unit',label:'وحدة القياس',type:'select',options:UNITS.map(u=>({v:u,t:u})),value:m.unit},
@@ -2031,7 +2052,7 @@ window.matEdit=id=>{const m=matById(id);if(!m)return;
     acc.moves.forEach(e=>{if(e.mid===m.id){e.name=name;e.unit=v.unit;}});
     saveAcc();renderAcc();toast('✅ تم التعديل');
   });};
-window.matDel=id=>{const m=matById(id);if(!m)return;
+window.matDel=id=>{if(!ownerOnly())return;const m=matById(id);if(!m)return;
   if(!confirm('حذف "'+m.name+'"؟ راح تنشال من كل الوصفات (سجل حركاتها يبقى).'))return;
   acc.materials=acc.materials.filter(x=>x.id!==id);
   Object.keys(acc.recipes).forEach(k=>{acc.recipes[k]=acc.recipes[k].filter(r=>r.mid!==id);if(!acc.recipes[k].length)delete acc.recipes[k];});
@@ -2117,16 +2138,17 @@ function tabRec(){
      return `<div class="ac-line"><span>${esc(r.n)}${r.has?'':' <span class="ac-bd low">بدون تكلفة</span>'}</span><span><b>${fmt(Math.round(r.price-r.cost))}</b> <span class="ac-sub">(${toA(mg2)}٪)</span></span></div>`;}).join('')}</div>`;
 }
 window.recPick=val=>{const [a,b]=val.split('-').map(Number);acRec={ci:a,pi:b,vi:0};renderAcc();};
-window.recAdd=()=>{if(!acc.materials.length){toast('⚠️ أضف مواد أولاً من تبويب المخزون');return;}
+window.recAdd=()=>{if(!ownerOnly())return;if(!acc.materials.length){toast('⚠️ أضف مواد أولاً من تبويب المخزون');return;}
   const k=curKey();(acc.recipes[k]=acc.recipes[k]||[]).push({mid:acc.materials[0].id,q:0});saveAcc();renderAcc();};
-window.recSet=(i,f,val)=>{const r=acc.recipes[curKey()];if(!r||!r[i])return;if(f==='q')r[i].q=r3(val);else r[i].mid=val;saveAcc();renderAcc();};
-window.recDel=i=>{const k=curKey(),r=acc.recipes[k];if(!r)return;r.splice(i,1);if(!r.length)delete acc.recipes[k];saveAcc();renderAcc();};
+window.recSet=(i,f,val)=>{if(!ownerOnly())return;const r=acc.recipes[curKey()];if(!r||!r[i])return;if(f==='q')r[i].q=r3(val);else r[i].mid=val;saveAcc();renderAcc();};
+window.recDel=i=>{if(!ownerOnly())return;const k=curKey(),r=acc.recipes[k];if(!r)return;r.splice(i,1);if(!r.length)delete acc.recipes[k];saveAcc();renderAcc();};
 window.recCost=val=>{const k=curKey();if(val===''||!(Number(val)>0))delete acc.costs[k];else acc.costs[k]=r2(val);saveAcc();renderAcc();};
 
 // ---- المصروفات التشغيلية ----
 function tabExp(){
   const{start,end}=rangeMs();
-  const list=acc.expenses.filter(e=>e.ts>=start&&e.ts<end).sort((a,b)=>b.ts-a.ts);
+  const list=allExp().filter(e=>e.ts>=start&&e.ts<end).sort((a,b)=>b.ts-a.ts);
+  const own=isOwnerPOS();
   const tot=list.reduce((s,e)=>s+e.amount,0),byCat={};list.forEach(e=>{byCat[e.cat]=(byCat[e.cat]||0)+e.amount;});
   return rangeBar()+`<div class="rcard"><div class="rtitle">➕ تسجيل مصروف تشغيلي</div>
    <select class="fsel" id="exCat">${EXP_CATS.map(c=>`<option>${c}</option>`).join('')}</select>
@@ -2136,16 +2158,24 @@ function tabExp(){
    <button class="sivbtn" onclick="expAdd()">✅ حفظ المصروف</button></div>
    <div class="rcard"><div class="rtitle">💸 مصروفات الفترة: <span class="ac-neg">${fmt(tot)} د.ع</span></div>
    ${Object.keys(byCat).map(k=>`<div class="ac-line"><span>${esc(k)}</span><b>${fmt(byCat[k])}</b></div>`).join('')||'<div class="ac-empty">لا توجد مصروفات بهذي الفترة</div>'}</div>
-   ${list.map(e=>`<div class="ac-row"><div class="ac-top"><div><div class="ac-name">${esc(e.cat)}</div><div class="ac-sub">${esc(e.note||'')} ${new Date(e.ts).toLocaleDateString('ar-IQ-u-nu-latn')}</div></div><div class="ac-qty ac-neg">${fmt(e.amount)}</div></div><div class="ac-btns"><button class="ac-b del" onclick="expDel('${e.id}')">✖ حذف</button></div></div>`).join('')}`;
+   ${list.map(e=>`<div class="ac-row"><div class="ac-top"><div><div class="ac-name">${esc(e.cat)}</div><div class="ac-sub">${esc(e.note||'')} • ${new Date(e.ts).toLocaleDateString('ar-IQ-u-nu-latn')}${e.by?' • 👤 '+esc(e.by):''}</div></div><div class="ac-qty ac-neg">${fmt(e.amount)}</div></div>${own?`<div class="ac-btns"><button class="ac-b del" onclick="expDel('${esc(e.id)}')">✖ حذف</button></div>`:''}</div>`).join('')}
+   ${own?'':'<div class="ac-sub" style="text-align:center;margin-top:8px">🔒 تعديل أو حذف المصروفات من صلاحية الإدارة فقط</div>'}`;
 }
 window.expAdd=()=>{
   const cat=document.getElementById('exCat').value,amt=r2(document.getElementById('exAmt').value);
   const note=document.getElementById('exNote').value.trim(),d=document.getElementById('exDate').value||ymd(new Date());
   if(!(amt>0)){toast('⚠️ أدخل المبلغ');return;}
-  acc.expenses.push({id:uid('e'),cat,amount:amt,note,ts:new Date(d+'T12:00:00').getTime()});
-  saveAcc();renderAcc();toast('✅ تم تسجيل المصروف');
+  const id=uid('e'),fb=window._fb;
+  const e={cat,amount:amt,note:note.slice(0,300),ts:new Date(d+'T12:00:00').getTime(),by:whoAmI().slice(0,60),byUid:(window.posUser&&window.posUser.uid)||'',createdAtMs:Date.now()};
+  accExp=accExp.concat([{id,...e}]);
+  fb.setDoc(fb.doc(fb.db,'accounting',restData.id,'expenses',id),e).catch(err=>toast('❌ تعذّر حفظ المصروف: '+(err.code||err.message)));
+  renderAcc();toast('✅ تم تسجيل المصروف');
 };
-window.expDel=id=>{if(!confirm('حذف هذا المصروف؟'))return;acc.expenses=acc.expenses.filter(e=>e.id!==id);saveAcc();renderAcc();};
+window.expDel=id=>{if(!ownerOnly())return;if(!confirm('حذف هذا المصروف؟'))return;
+  const fb=window._fb;
+  if(accExp.some(e=>e.id===id)){accExp=accExp.filter(e=>e.id!==id);fb.deleteDoc(fb.doc(fb.db,'accounting',restData.id,'expenses',id)).catch(err=>toast('❌ '+(err.code||err.message)));}
+  else{acc.expenses=acc.expenses.filter(e=>e.id!==id);saveAcc();}
+  renderAcc();};
 
 // ---- الحسابات: قائمة الدخل ----
 function finCalc(os,start,end){
@@ -2163,7 +2193,7 @@ function finCalc(os,start,end){
   });
   const reasons={};canc.forEach(o=>{const k=o.cancelReason||'بدون سبب';const r=reasons[k]||(reasons[k]={n:0,v:0});r.n++;r.v+=o.value||0;});
   const mvIn=acc.moves.filter(x=>x.ts>=start&&x.ts<end),sv=t=>mvIn.filter(e=>e.type===t).reduce((s,e)=>s+e.value,0);
-  const exp=acc.expenses.filter(x=>x.ts>=start&&x.ts<end).reduce((s,e)=>s+e.amount,0);
+  const exp=allExp().filter(x=>x.ts>=start&&x.ts<end).reduce((s,e)=>s+e.amount,0);
   const soldList=Object.values(sold).sort((a,b)=>b.qty-a.qty);
   return{orders:done.length,activeN,sales,cogs,gross:sales-cogs,exp,waste:-sv('waste'),count:sv('count'),purch:sv('purchase'),pret:-sv('purchase_return'),
     byType,soldList,noCost:soldList.filter(s=>s.cost===0).length,cancelled:{n:canc.length,v:canc.reduce((s,o)=>s+(o.value||0),0),reasons}};
@@ -2598,9 +2628,9 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=12"></script>
+<script src="pos-pro.js?v=13"></script>
 <script>
-// تحديث تلقائي صامت: كل ٥ ثواني نتأكد هل نزل إصدار جديد للتطبيق، ونحدّث فقط لما الشاشة فاضية
+// البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
   var KEY='au_state_'+location.pathname, base=null, cand=null, pending=false, busy=false;
   function sig(r){var e=(r.headers.get('etag')||'').replace(/^W\//,'').replace(/-gzip"?$/,'"');return r.headers.get('last-modified')||e;}
@@ -2612,6 +2642,8 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch
       return !/checkbox|radio|date|time|hidden|file|range|color/.test(i.type)&&i.offsetParent&&i.value!==i.defaultValue;});
   }
   function tryReload(){
+    // ما نحدّث والشاشة أمامك أبداً: الإصدار الجديد ينطبق لما يكون التطبيق بالخلفية
+    if(!document.hidden)return;
     var idle=true;try{idle=!window.auIdle||window.auIdle();}catch(e){}
     if(!idle||dirty())return;
     try{sessionStorage.setItem(KEY,JSON.stringify(window.auSave?window.auSave():{}));}catch(e){}
@@ -2630,7 +2662,7 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch
   }
   window.auRestore=function(){try{var s=sessionStorage.getItem(KEY);sessionStorage.removeItem(KEY);return s?JSON.parse(s):null;}catch(e){return null;}};
   setInterval(check,5000);setTimeout(check,1500);
-  document.addEventListener('visibilitychange',function(){if(!document.hidden)check();});
+  document.addEventListener('visibilitychange',function(){if(document.hidden){if(pending)tryReload();}else check();});
 })();
 </script>
 </body>
