@@ -28,6 +28,10 @@
     receiptTitle: '', receiptSub: '', receiptPhone: '', receiptFooter: 'شكراً لزيارتكم ❤️',
     defaultFee: 5000, feePresets: [3000, 5000, 7000], taxPct: 0, servicePct: 0, tables: 0, pagers: 10,
     printKitchen: false, quickAdd: true, paper: 80,
+    // أقسام المطبخ: كل قسم يستلم أصنافه فقط، ورقم الطلب يوحّدها
+    kSecOn: false, catSection: {},
+    sections: [{ id: 'k1', name: 'الشاورما', emoji: '🌯' }, { id: 'k2', name: 'الكنتاكي', emoji: '🍗' }, { id: 'k3', name: 'البرغر', emoji: '🍔' },
+      { id: 'k4', name: 'البيتزا', emoji: '🍕' }, { id: 'k5', name: '', emoji: '🍽️' }, { id: 'k6', name: '', emoji: '🥗' }],
     quickNotes: ['بدون بصل', 'بدون صوص', 'حار', 'زيادة جبن', 'بدون مخلل'],
   };
   let settings = { ...DEFAULTS };
@@ -319,6 +323,7 @@
       inv: true, kitchen: 'new', createdAt: now, createdAtMs: Date.now(), shiftId: shift ? shift.id : null, device: deviceId,
     };
     if (t.disc) o.discountInfo = { type: disc.type, value: disc.value, reason: disc.reason || '' };
+    applySections(o);
     return o;
   }
 
@@ -347,7 +352,7 @@
     if (type === 'delivery') { syncTracking(ref.id, { ...o, captainName: '' }); saveCustomer(o); }
     curCust = null;
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
-    printHTML(receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen));
+    printOrderAll({ id: ref.id, ...o }, receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen && !o.kSec));
     const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: '🏍️ دلفري — ' + (captain ? captain.name : '') };
     toast('✅ تم — ' + names[type] + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : '') + (pay && pay.payment.change ? ' • الباقي ' + money(pay.payment.change) : ''));
     cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
@@ -366,7 +371,8 @@
     if (info.phone) saveCustomer({ ...o, customer: info.name || '' });
     curCust = null;
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
-    printSlip('🍳 تذكرة مطبخ #' + num_, { customer: o.customer, phone: o.phone }, items.map((i) => ({ ...i, name: i.name + (i.note ? ' [' + i.note + ']' : '') })), t.total, 'المجموع', o.note);
+    if (o.kSec) printOrderAll({ id: ref.id, ...o }, null);
+    else printSlip('🍳 تذكرة مطبخ #' + num_, { customer: o.customer, phone: o.phone }, items.map((i) => ({ ...i, name: i.name + (i.note ? ' [' + i.note + ']' : '') })), t.total, 'المجموع', o.note);
     toast('🍳 حُفظ الطلب #' + num_ + ' — قيد التحضير' + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : ''));
     cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
   };
@@ -375,7 +381,7 @@
   window.ordHandover = async (id) => {
     const o = orders.find((x) => x.id === id); if (!o) return;
     if (o.payment && o.payment.method !== 'later') {
-      await orderUpdate(id, { status: 'delivered', deliveredAt: Date.now(), kitchen: 'ready', ...(o.pager ? { pagerDone: true } : {}) }, 'سُلّم للزبون', 'delivered');
+      await orderUpdate(id, { status: 'delivered', deliveredAt: Date.now(), servedAtMs: Date.now(), kitchen: 'ready', ...(o.pager ? { pagerDone: true } : {}) }, 'سُلّم للزبون', 'delivered');
       printOrderReceipt(o, 'takeaway', null); toast('🤝 تم التسليم للزبون'); return;
     }
     openPay({ kind: 'collect', order: o, handover: true });
@@ -470,7 +476,7 @@
     try {
       const fields = { payment };
       let text = 'تم تحصيل ' + money(o.value);
-      if (c.handover) { Object.assign(fields, { status: 'delivered', deliveredAt: Date.now(), kitchen: 'ready', ...(o.pager ? { pagerDone: true } : {}) }); text = 'سُلّم للزبون — ' + text; }
+      if (c.handover) { Object.assign(fields, { status: 'delivered', deliveredAt: Date.now(), servedAtMs: Date.now(), kitchen: 'ready', ...(o.pager ? { pagerDone: true } : {}) }); text = 'سُلّم للزبون — ' + text; }
       await orderUpdate(o.id, fields, text, c.handover ? 'delivered' : o.status);
       printHTML(receiptHTML({ ...o, ...fields }, null, { payment }, false));
       toast(c.handover ? '🤝 تم التسليم والتحصيل' : '💵 تم التحصيل' + (payment.change ? ' • الباقي ' + money(payment.change) : ''));
@@ -679,7 +685,9 @@
   }
 
   // ══════════ شاشة المطبخ ══════════
-  const kdsList = () => orders.filter((o) => o.kitchen === 'new' && o.status !== 'cancelled' && (Date.now() - (o.createdAtMs || 0)) < 86400000)
+  let kdsSec = lsGet('pos_kds_sec', '');
+  const kdsList = () => orders.filter((o) => o.kitchen === 'new' && o.status !== 'cancelled' && (Date.now() - (o.createdAtMs || 0)) < 86400000
+      && (!kdsSec || (o.kSec && o.kSec[kdsSec] && !o.kSec[kdsSec].readyAt)))
     .sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
   function kdsBeep() {
     if (!kdsSound) return;
@@ -699,20 +707,27 @@
     ['kdsPillD', 'kdsPillM'].forEach((id) => { const p = $(id); if (p) { p.textContent = list.length; p.classList.toggle('on', list.length > 0); } });
     if (!$('kitchenScreen').classList.contains('on')) return;
     $('kdsSub').textContent = list.length ? toA(list.length) + ' طلب قيد التحضير' : '';
+    renderKdsFilter();
     $('kdsGrid').innerHTML = list.length ? list.map((o) => {
       const m = Math.floor((Date.now() - (o.createdAtMs || Date.now())) / 60000), t = getOrderType(o);
       const cls = m >= 20 ? 'late' : m >= 10 ? 'warn' : '';
-      const label = t === 'salon' ? '🪑 ' + (o.tableNo ? 'طاولة ' + o.tableNo : 'صالة #' + (o.salonNum || '')) : t === 'takeaway' ? '🥡 ' + (o.holdNum ? 'سفري #' + o.holdNum : 'سفري') : '🏍️ دلفري';
-      return `<div class="kds-card ${cls}"><div class="kds-top"><div><div class="kds-num">${esc(label)}</div><div class="kds-type">#${esc(o.id.substring(0, 6).toUpperCase())} • ${esc(o.createdAt || '')}${o.pager ? ` • <b class="kds-pager">📟 ${toA(o.pager)}</b>` : ''}</div></div>
-        <div class="kds-time">⏱ ${toA(m)} د</div></div>
-        <div class="kds-items">${orderItemsFull(o).map((i, k) => { const n = (o.items && o.items[k] && o.items[k].note) || ''; return `<div class="kds-it"><span class="q">${toA(i.qty)}×</span><span>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${n ? `<span class="n">📝 ${esc(n)}</span>` : ''}</span></div>`; }).join('')}</div>
+      const label = t === 'salon' ? '🪑 ' + (o.tableNo ? 'طاولة ' + o.tableNo : 'صالة') : t === 'takeaway' ? '🥡 سفري' : '🏍️ دلفري';
+      // شرائح الأقسام: الضغط يعلّم القسم جاهزاً، واكتمال كل الأقسام = الطلب جاهز
+      const chips = o.kSec ? `<div class="kds-secs">${Object.entries(o.kSec).map(([sid, v]) => { const sc = secById(sid) || { name: sid, emoji: '🍽️' };
+        return `<button type="button" class="kds-sec ${v.readyAt ? 'done' : ''}" onclick="kSecDone('${esc(o.id)}','${esc(sid)}')">${v.readyAt ? '✅' : '⏳'} ${esc(sc.emoji || '')} ${esc(sc.name)} <small>${toA(v.n || 0)}</small></button>`; }).join('')}</div>` : '';
+      const items = (o.items || []).map((it, k) => ({ ...orderItemsFull(o)[k], note: it.note, sec: it.sec })).filter((i) => !kdsSec || i.sec === kdsSec);
+      return `<div class="kds-card ${cls}"><div class="kds-top"><div><div class="kds-num">#${esc(kNum(o))} <span class="kds-lbl">${esc(label)}</span></div><div class="kds-type">${esc(o.createdAt || '')}${o.pager ? ` • <b class="kds-pager">📟 ${toA(o.pager)}</b>` : ''}</div></div>
+        <div class="kds-time">⏱ ${toA(m)} د</div></div>${kdsSec ? '' : chips}
+        <div class="kds-items">${items.map((i) => `<div class="kds-it"><span class="q">${toA(i.qty)}×</span><span>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${!kdsSec && i.sec && secById(i.sec) ? ` <small class="kds-isec">${esc(secById(i.sec).emoji || '')}</small>` : ''}${i.note ? `<span class="n">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('')}</div>
         ${o.note ? `<div class="kds-note">📝 ${esc(o.note)}</div>` : ''}
-        <button class="kds-done" onclick="kdsDone('${esc(o.id)}')">✅ جاهز</button></div>`;
+        ${kdsSec ? `<button class="kds-done" onclick="kSecDone('${esc(o.id)}','${esc(kdsSec)}')">✅ ${esc((secById(kdsSec) || {}).name || '')} جاهز</button>`
+          : `<button class="kds-done" onclick="kdsDone('${esc(o.id)}')">✅ اكتمل الطلب — نادِ الزبون</button>`}</div>`;
     }).join('') : '<div class="kds-empty"><div class="i">👨‍🍳</div><b>لا توجد طلبات قيد التحضير</b><br><small>الطلبات الجديدة تظهر هنا تلقائياً</small></div>';
   }
   window.kdsDone = async (id) => {
     const o = orders.find((x) => x.id === id); if (!o) return;
     const fields = { kitchen: 'ready', kitchenReadyAt: Date.now() };
+    if (o.kSec) fields.kSec = Object.fromEntries(Object.entries(o.kSec).map(([k, v]) => [k, { ...v, readyAt: v.readyAt || Date.now() }]));
     try {
       if (o.status === 'preparing') await orderUpdate(id, { ...fields, status: 'ready', readyAt: Date.now() }, 'الطلب جاهز للاستلام', 'ready');
       else await fb().updateDoc(fb().doc(fb().db, 'orders', id), fields);
@@ -754,6 +769,25 @@
         <div class="flbl">نص أسفل الفاتورة</div><input class="finp" id="stFooter" maxlength="120" value="${esc(s.receiptFooter)}">
         <label class="set-check"><input type="checkbox" id="stKitchen" ${s.printKitchen ? 'checked' : ''}> طباعة تذكرة مطبخ مع كل فاتورة</label>
       </div>
+      <div class="sh-card"><div class="sh-title">👨‍🍳 أقسام المطبخ والطابعات</div>
+        <label class="set-check"><input type="checkbox" id="stSecOn" ${s.kSecOn ? 'checked' : ''}> تقسيم الطلب على أقسام المطبخ — كل قسم يطبع أصنافه فقط، ورقم الطلب يوحّدها</label>
+        <div class="flbl">الأقسام (اترك الاسم فارغاً لإلغاء القسم)</div>
+        ${(s.sections || DEFAULTS.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join('')}
+        <div class="flbl" style="margin-top:10px">كل فئة بالمنيو تابعة لأي قسم؟</div>
+        ${menu.filter((c) => c && c.cat).map((c, i) => `<div class="set-row"><div class="sec-cat">${esc(c.emoji || '')} ${esc(c.cat)}</div><div><select class="fsel" id="stCat${i}" data-cat="${esc(c.cat)}"><option value="">— بدون قسم (لا تُطبع بالمطبخ) —</option>${(s.sections || []).filter((x) => x.name).map((x) => `<option value="${esc(x.id)}" ${(s.catSection || {})[c.cat] === x.id ? 'selected' : ''}>${esc(x.emoji || '')} ${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<div class="ac-sub">أضف فئات للمنيو أولاً</div>'}
+        <div class="flbl" style="margin-top:12px">🖨️ الطباعة على هذا الجهاز</div>
+        <select class="fsel" id="stQzOn"><option value="0" ${qzCfgGet().on ? '' : 'selected'}>طابعة واحدة — كل قسم تذكرته بورقة منفصلة</option><option value="1" ${qzCfgGet().on ? 'selected' : ''}>طابعة لكل قسم — عبر برنامج QZ Tray</option></select>
+        <div id="qzBox" style="display:${qzCfgGet().on ? 'block' : 'none'}">
+          <div class="ac-sub" style="margin:8px 0;line-height:1.8">١) نزّل وثبّت <a href="https://qz.io/download/" target="_blank" rel="noopener">QZ Tray</a> على هذه الحاسبة وشغّله. ٢) اضغط «جلب الطابعات» واختر طابعة كل قسم. ٣) جرّب كل طابعة.</div>
+          <button type="button" class="btn-soft" style="width:100%" onclick="qzFind()">🔍 جلب الطابعات من الحاسبة</button>
+          ${(s.sections || []).filter((x) => x.name).map((x) => `<div class="set-row" style="margin-top:8px"><div class="sec-cat">${esc(x.emoji || '')} ${esc(x.name)}</div><div style="display:flex;gap:6px"><select class="fsel" id="qzP_${esc(x.id)}" style="flex:1"><option value="">— نفس الطابعة الافتراضية —</option>${(qzCfgGet().printers || {})[x.id] ? `<option selected>${esc(qzCfgGet().printers[x.id])}</option>` : ''}</select><button type="button" class="btn-soft" style="padding:8px 10px" onclick="qzTest('${esc(x.id)}')">🧪</button></div></div>`).join('')}
+          <details style="margin-top:10px"><summary class="ac-sub" style="cursor:pointer">⚙️ متقدم: شهادة الطباعة الصامتة (حتى لا يسأل البرنامج كل مرة)</summary>
+            <div class="ac-sub" style="margin:6px 0;line-height:1.8">من QZ Tray: Advanced ← Site Manager ← + ← Create New، ثم الصق الشهادة والمفتاح هنا. يُحفظان على هذا الجهاز فقط.</div>
+            <textarea class="finp" id="qzCert" rows="3" dir="ltr" placeholder="-----BEGIN CERTIFICATE-----">${esc(qzCfgGet().cert || '')}</textarea>
+            <textarea class="finp" id="qzKey" rows="3" dir="ltr" placeholder="-----BEGIN PRIVATE KEY-----" style="margin-top:6px">${esc(qzCfgGet().key || '')}</textarea>
+          </details>
+        </div>
+      </div>
       <div class="sh-card"><div class="sh-title">💰 الأسعار والضرائب</div>
         <div class="set-row"><div><div class="flbl">ضريبة ٪ (0 = بدون)</div><input class="finp" id="stTax" type="number" min="0" max="50" value="${s.taxPct || 0}"></div>
           <div><div class="flbl">خدمة الصالة ٪</div><input class="finp" id="stSvc" type="number" min="0" max="50" value="${s.servicePct || 0}"></div></div>
@@ -781,10 +815,18 @@
       paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked,
       taxPct: clamp($('stTax').value, 0, 50), servicePct: clamp($('stSvc').value, 0, 50), defaultFee: clamp($('stFee').value, 0, 1e6),
       feePresets: list($('stFees').value).map(num).filter((x) => x > 0).slice(0, 4), tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
+      kSecOn: $('stSecOn').checked,
+      sections: (settings.sections || DEFAULTS.sections).map((x, i) => ({ id: x.id, emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
+      catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
       quickAdd: $('stQuick').checked, quickNotes: list($('stNotes').value).slice(0, 10).map((x) => x.slice(0, 30)),
     };
     settings = { ...DEFAULTS, ...next };
     lsSet(setKey(), settings);
+    // إعدادات الطابعات خاصة بهذا الجهاز (لا تُرفع للسحابة)
+    const qc = qzCfgGet();
+    qzCfgSet({ on: $('stQzOn').value === '1',
+      printers: Object.fromEntries(secList().map((x) => [x.id, ($('qzP_' + x.id) || {}).value || (qc.printers || {})[x.id] || '']).filter(([, v]) => v)),
+      cert: (($('qzCert') || {}).value || '').trim(), key: (($('qzKey') || {}).value || '').trim() });
     try { await fb().setDoc(sub('settings', 'main'), { ...settings, updatedAtMs: Date.now() }); toast('✅ تم حفظ الإعدادات لكل أجهزة المطعم'); }
     catch (e) { toast('⚠️ حُفظت على هذا الجهاز فقط — تحقق من الإنترنت'); }
     renderCart();
@@ -883,6 +925,154 @@
       if (before !== JSON.stringify(u.perms)) { applyPerms(); toast('🔄 تم تحديث صلاحياتك'); }
     }, () => {}));
   }
+
+  // ══════════ أقسام المطبخ (شاورما، كنتاكي، برغر، بيتزا...) ══════════
+  // كل صنف يتبع قسم فئته بالمنيو. الطلب يتقسم: كل قسم يطبع أصنافه فقط، ورقم الطلب يوحّد الكل.
+  const secList = () => (settings.sections || []).filter((x) => x && x.name);
+  function secById(id) { return secList().find((x) => x.id === id); }
+  const secOn = () => !!settings.kSecOn && secList().length > 0;
+  function secOfItem(name) {
+    const c = menu.find((c) => (c.items || []).some((i) => i.name === name));
+    const sid = c ? (settings.catSection || {})[c.cat] : '';
+    return sid && secById(sid) ? sid : '';
+  }
+  // رقم يومي يتسلسل لكل الطلبات (يظهر كبيراً على تذاكر الأقسام والبيجر)
+  function nextTicket() {
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    let m = 0;
+    orders.forEach((o) => { if ((o.createdAtMs || 0) >= d0.getTime() && (o.ticketNo || 0) > m) m = o.ticketNo; });
+    const k = 'pos_ticket_' + rid(), last = lsGet(k, { d: 0, n: 0 });
+    if (last.d === d0.getTime() && last.n > m) m = last.n;
+    lsSet(k, { d: d0.getTime(), n: m + 1 });
+    return m + 1;
+  }
+  const kNum = (o) => o.ticketNo || o.salonNum || o.holdNum || String(o.id || '').slice(0, 4).toUpperCase();
+  window.kNum = kNum;
+  function applySections(o) {
+    o.ticketNo = nextTicket();
+    if (!secOn()) return;
+    const ks = {};
+    (o.items || []).forEach((it) => { const sid = secOfItem(it.name); if (sid) { it.sec = sid; (ks[sid] = ks[sid] || { n: 0, readyAt: 0 }).n += it.qty; } });
+    if (Object.keys(ks).length) o.kSec = ks;
+  }
+  window.kSecDone = async (id, sid) => {
+    const o = orders.find((x) => x.id === id); if (!o || !o.kSec || !o.kSec[sid]) return;
+    const ks = { ...o.kSec, [sid]: { ...o.kSec[sid], readyAt: o.kSec[sid].readyAt ? 0 : Date.now() } };
+    try {
+      if (Object.values(ks).every((v) => v.readyAt)) { o.kSec = ks; await kdsDone(id); return; }
+      await fb().updateDoc(fb().doc(fb().db, 'orders', id), { kSec: ks });
+      const sc = secById(sid); toast((ks[sid].readyAt ? '✅ ' : '↩️ ') + (sc ? sc.name : '') + (ks[sid].readyAt ? ' جاهز' : ' رجع قيد التحضير'));
+    } catch (e) { toast('❌ تعذّر التحديث'); }
+  };
+  function renderKdsFilter() {
+    const head = document.querySelector('#kitchenScreen .kds-head'); if (!head) return;
+    let sel = $('kdsSecSel');
+    if (!secOn()) { if (sel) sel.remove(); if (kdsSec) { kdsSec = ''; lsSet('pos_kds_sec', ''); } return; }
+    if (!sel) { sel = document.createElement('select'); sel.id = 'kdsSecSel'; sel.className = 'kds-secsel'; head.insertBefore(sel, head.lastElementChild);
+      sel.addEventListener('change', () => { kdsSec = sel.value; lsSet('pos_kds_sec', kdsSec); renderKds(); }); }
+    const html = `<option value="">👨‍🍳 كل الأقسام</option>` + secList().map((x) => `<option value="${esc(x.id)}">${esc(x.emoji || '')} قسم ${esc(x.name)} فقط</option>`).join('');
+    if (sel.dataset.h !== html) { sel.innerHTML = html; sel.dataset.h = html; }
+    sel.value = kdsSec;
+  }
+
+  // ── تذكرة القسم: رقم الطلب كبير + أصناف القسم فقط
+  function secTicketBody(o, sid) {
+    const sc = secById(sid) || { name: sid, emoji: '' };
+    const t = getOrderType(o), W = settings.paper === 58 ? 210 : 300;
+    const label = t === 'salon' ? '🪑 صالة' + (o.tableNo ? ' — طاولة ' + o.tableNo : '') : t === 'takeaway' ? '🥡 سفري' : '🏍️ دلفري';
+    const items = (o.items || []).filter((i) => i.sec === sid);
+    const others = Object.keys(o.kSec || {}).filter((x) => x !== sid).map((x) => (secById(x) || {}).name).filter(Boolean);
+    return `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;width:${W}px;padding:8px;color:#000">
+      <div style="text-align:center;font-size:20px;font-weight:900;background:#000;color:#fff;padding:4px">${esc(sc.emoji || '')} قسم ${esc(sc.name)}</div>
+      <div style="text-align:center;font-size:56px;font-weight:900;line-height:1.1;margin-top:4px">#${esc(kNum(o))}</div>
+      <div style="text-align:center;font-size:14px;font-weight:700">${esc(label)}${o.pager ? ' • 📟 بيجر ' + esc(o.pager) : ''} • ${esc(o.createdAt || '')}</div>
+      <div style="border-top:2px dashed #000;margin:6px 0"></div>
+      ${items.map((i) => `<div style="font-size:20px;font-weight:900;margin:4px 0">${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<div style="font-size:15px;font-weight:700">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}
+      ${o.note ? `<div style="border-top:1px dashed #000;margin-top:6px;padding-top:4px;font-size:15px;font-weight:700">📝 ${esc(o.note)}</div>` : ''}
+      ${others.length ? `<div style="border-top:1px dashed #000;margin-top:6px;padding-top:4px;font-size:13px">يكتمل مع: ${esc(others.join('، '))}</div>` : ''}
+    </div>`;
+  }
+  const docOf = (body) => `<html><head><meta charset="UTF-8"></head><body style="margin:0">${body}</body></html>`;
+  window.secTicketBody = secTicketBody;
+
+  // ── الطباعة: QZ Tray يرسل كل تذكرة لطابعة قسمها، وإلا كل التذاكر بنفس الطابعة (كل تذكرة بورقة)
+  const QZ_SRC = 'https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js';
+  const QZ_SRI = 'sha384-eMCJjoa43DLpNZRyAjocYkZuahMjTlfLpm5i5MD/QGBM8dBbMG0xtjp50LA4vyhe';
+  const qzKey = () => 'pos_qz_' + rid();
+  const qzCfg = () => lsGet(qzKey(), { on: false, printers: {}, cert: '', key: '' });
+  let qzLoading = null, qzSecSet = false;
+  function qzLoad() {
+    if (window.qz) return Promise.resolve();
+    if (qzLoading) return qzLoading;
+    qzLoading = new Promise((res, rej) => {
+      const sc = document.createElement('script'); sc.src = QZ_SRC; sc.integrity = QZ_SRI; sc.crossOrigin = 'anonymous';
+      sc.onload = res; sc.onerror = () => { qzLoading = null; rej(new Error('qz-load')); };
+      document.head.appendChild(sc);
+    });
+    return qzLoading;
+  }
+  const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  function derLen(n) { if (n < 128) return [n]; const b = []; while (n) { b.unshift(n & 255); n >>= 8; } return [0x80 | b.length, ...b]; }
+  function pkcs1to8(der) {
+    const alg = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00];
+    const oct = [0x04, ...derLen(der.length), ...der];
+    const body = [0x02, 0x01, 0x00, ...alg, ...oct];
+    return new Uint8Array([0x30, ...derLen(body.length), ...body]);
+  }
+  async function qzSign(pem, data) {
+    let der = Uint8Array.from(atob(pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), (c) => c.charCodeAt(0));
+    if (/BEGIN RSA PRIVATE KEY/.test(pem)) der = pkcs1to8(der);
+    const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' }, false, ['sign']);
+    return b64(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(data)));
+  }
+  async function qzReady() {
+    await qzLoad();
+    if (!qzSecSet) {
+      qz.security.setCertificatePromise((res) => res(qzCfg().cert || ''));
+      qz.security.setSignatureAlgorithm('SHA512');
+      qz.security.setSignaturePromise((toSign) => (res, rej) => { const k = qzCfg().key; if (!k) return res(''); qzSign(k, toSign).then(res, rej); });
+      qzSecSet = true;
+    }
+    if (!qz.websocket.isActive()) await qz.websocket.connect({ retries: 1, delay: 1 });
+  }
+  async function qzPrintHtml(printer, html) {
+    const cfg = qz.configs.create(printer, { units: 'mm', size: { width: settings.paper === 58 ? 58 : 80 }, margins: 0, scaleContent: true });
+    await qz.print(cfg, [{ type: 'pixel', format: 'html', flavor: 'plain', data: html }]);
+  }
+  async function printOrderAll(o, receipt) {
+    const secs = o.kSec ? Object.keys(o.kSec) : [];
+    const c = qzCfg();
+    let left = secs;
+    if (c.on && secs.length) {
+      left = [];
+      try {
+        await qzReady();
+        for (const sid of secs) { const pr = (c.printers || {})[sid]; if (pr) await qzPrintHtml(pr, docOf(secTicketBody(o, sid))); else left.push(sid); }
+      } catch (e) { console.warn('qz', e); left = secs; toast('⚠️ برنامج الطابعات (QZ Tray) غير متصل — التذاكر انطبعت على الطابعة الافتراضية'); }
+    }
+    const pages = left.map((sid) => `<div style="page-break-before:always">${secTicketBody(o, sid)}</div>`).join('');
+    if (receipt) printHTML(pages ? receipt.replace('</body>', pages + '</body>') : receipt);
+    else if (pages) printHTML(docOf(pages.replace('page-break-before:always', 'page-break-before:auto')));
+  }
+  window.printOrderAll = printOrderAll;
+  window.qzFind = async () => {
+    try { await qzReady(); const list = await qz.printers.find(); renderQzPrinters(list); toast('🖨️ وُجدت ' + toA(list.length) + ' طابعة'); }
+    catch (e) { toast('❌ ما اتصل ببرنامج QZ Tray — تأكد أنه مثبت وشغّال'); }
+  };
+  window.qzTest = async (sid) => {
+    const pr = ($('qzP_' + sid) || {}).value; if (!pr) { toast('⚠️ اختر الطابعة أولاً'); return; }
+    const sc = secById(sid) || { name: sid };
+    try { await qzReady(); await qzPrintHtml(pr, docOf(`<div style="font-family:Arial;direction:rtl;text-align:center;font-size:22px;font-weight:900;padding:10px">🖨️ تجربة طابعة<br>قسم ${esc(sc.name)}</div>`)); toast('✅ أُرسلت تجربة إلى ' + pr); }
+    catch (e) { toast('❌ فشلت الطباعة: ' + (e.message || e)); }
+  };
+  function renderQzPrinters(list) {
+    secList().forEach((x) => { const sel = $('qzP_' + x.id); if (!sel) return; const cur = sel.value || (qzCfg().printers || {})[x.id] || '';
+      sel.innerHTML = '<option value="">— نفس الطابعة الافتراضية —</option>' + [...new Set([...list, cur].filter(Boolean))].map((n) => `<option value="${esc(n)}" ${n === cur ? 'selected' : ''}>${esc(n)}</option>`).join(''); });
+  }
+  window.renderQzPrinters = renderQzPrinters;
+  window.qzCfgGet = qzCfg;
+  window.qzCfgSet = (c) => { lsSet(qzKey(), c); };
+  document.addEventListener('change', (e) => { if (e.target && e.target.id === 'stQzOn') { const b = $('qzBox'); if (b) b.style.display = e.target.value === '1' ? 'block' : 'none'; } });
 
   // ══════════ خدمات المطعم (يفتحها المدير الأعلى من لوحة الإدارة) ══════════
   function feat(k) { return !restData || !restData.features || restData.features[k] !== false; }
@@ -1020,7 +1210,7 @@
   async function pagerFree(o) {
     try {
       if (o.held && o.status !== 'delivered') { ordHandover(o.id); return; }
-      else { await fb().updateDoc(fb().doc(fb().db, 'orders', o.id), { pagerDone: true }); toast('✅ تحرر البيجر ' + toA(o.pager)); }
+      else { await fb().updateDoc(fb().doc(fb().db, 'orders', o.id), { pagerDone: true, servedAtMs: Date.now() }); toast('✅ تحرر البيجر ' + toA(o.pager)); }
     } catch (e) { toast('❌ تعذّر التحديث'); }
   }
 
