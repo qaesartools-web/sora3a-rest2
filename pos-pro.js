@@ -269,7 +269,7 @@
       { id: 'r', label: 'السبب', type: 'select', value: disc.reason, options: ['', 'زبون دائم', 'عرض', 'تعويض عن خطأ', 'موظف', 'أخرى'].map((x) => ({ v: x, t: x || '— بدون —' })) },
     ], (v) => {
       const val = num(v.v);
-      if (v.t === 'pct' && val > 100) { toast('⚠️ النسبة لا تتجاوز ١٠٠٪'); return false; }
+      if (v.t === 'pct' && val > 100) { toast('⚠️ النسبة لا تتجاوز 100٪'); return false; }
       disc = { type: v.t, value: val, reason: val ? v.r : '' };
       renderCart();
     }, '✅ تطبيق');
@@ -511,7 +511,7 @@
     const rcpt = `<div class="logo">${esc(title)}</div>${subL ? `<div class="sub">${esc(subL)}</div>` : ''}${phone ? `<div class="sub">📞 ${esc(phone)}</div>` : ''}
       <div class="div"></div>${head}${pg}<div class="div"></div>
       <div class="row"><span>رقم الطلب</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div>
-      <div class="row"><span>التاريخ</span><span>${esc(d.toLocaleDateString('ar-IQ'))} ${esc(o.createdAt || '')}</span></div>
+      <div class="row"><span>التاريخ</span><span>${esc(d.toLocaleDateString('ar-IQ-u-nu-latn'))} ${esc(o.createdAt || '')}</span></div>
       ${o.customer && type === 'delivery' ? `<div class="row"><span>الزبون</span><span>${esc(o.customer)}</span></div>` : ''}
       ${o.phone ? `<div class="row"><span>الهاتف</span><span>${esc(o.phone)}</span></div>` : ''}
       ${o.address && type === 'delivery' ? `<div class="row"><span>العنوان</span><span>${esc(o.address)}</span></div>` : ''}
@@ -595,7 +595,7 @@
     const ln = (a, b, c) => `<div class="sh-line"><span>${a}</span><b class="${c || ''}">${b}</b></div>`;
     el.innerHTML = `<div class="sh-card">
       <div class="sh-title">🧮 الوردية الحالية <span class="sh-status open">● مفتوحة</span></div>
-      <div class="ac-sub" style="margin-bottom:10px">منذ ${esc(new Date(shift.openedAtMs).toLocaleString('ar-IQ'))} (${toA(Math.floor(mins / 60))} س ${toA(mins % 60)} د)${shift.cashier ? ' • 👤 ' + esc(shift.cashier) : ''}</div>
+      <div class="ac-sub" style="margin-bottom:10px">منذ ${esc(new Date(shift.openedAtMs).toLocaleString('ar-IQ-u-nu-latn'))} (${toA(Math.floor(mins / 60))} س ${toA(mins % 60)} د)${shift.cashier ? ' • 👤 ' + esc(shift.cashier) : ''}</div>
       <div class="sh-grid">
         <div class="sh-stat"><b>${fmt(r.sales)}</b><span>صافي المبيعات</span></div>
         <div class="sh-stat"><b>${toA(r.orders)}</b><span>طلب</span></div>
@@ -621,7 +621,7 @@
   function closedHTML() {
     if (!closedShifts.length) return '';
     return `<div class="sh-card"><div class="sh-title">📜 الورديات السابقة</div>${closedShifts.map((s) => `
-      <div class="sh-line"><span>${esc(new Date(s.closedAtMs).toLocaleString('ar-IQ'))}${s.cashier ? ' • ' + esc(s.cashier) : ''}<div class="ac-sub">مبيعات ${money(s.report && s.report.sales)} • فرق ${money(s.diff)}</div></span>
+      <div class="sh-line"><span>${esc(new Date(s.closedAtMs).toLocaleString('ar-IQ-u-nu-latn'))}${s.cashier ? ' • ' + esc(s.cashier) : ''}<div class="ac-sub">مبيعات ${money(s.report && s.report.sales)} • فرق ${money(s.diff)}</div></span>
       <button class="ac-b" style="flex:0 0 auto" onclick="shiftReprint('${esc(s.id)}')">🖨️</button></div>`).join('')}</div>`;
   }
   window.shiftOpen = async () => {
@@ -670,7 +670,7 @@
     printHTML(`<html><head><meta charset="UTF-8"><style>body{font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:12px;width:${settings.paper === 58 ? 210 : 300}px}
       h2{text-align:center;font-size:16px}.sub{text-align:center;font-size:11px;margin-bottom:6px}.row{display:flex;justify-content:space-between;font-size:12px;margin:3px 0}.div{border-top:1px dashed #000;margin:6px 0}</style></head><body>
       <h2>${kind === 'z' ? '🔒 تقرير إغلاق الوردية (Z)' : '🧾 تقرير مؤقت (X)'}</h2>
-      <div class="sub">${esc(settings.receiptTitle || restData.name || '')}<br>${esc(new Date(sh.openedAtMs).toLocaleString('ar-IQ'))} ← ${esc(new Date(sh.closedAtMs || Date.now()).toLocaleString('ar-IQ'))}${sh.cashier ? '<br>👤 ' + esc(sh.cashier) : ''}</div><div class="div"></div>
+      <div class="sub">${esc(settings.receiptTitle || restData.name || '')}<br>${esc(new Date(sh.openedAtMs).toLocaleString('ar-IQ-u-nu-latn'))} ← ${esc(new Date(sh.closedAtMs || Date.now()).toLocaleString('ar-IQ-u-nu-latn'))}${sh.cashier ? '<br>👤 ' + esc(sh.cashier) : ''}</div><div class="div"></div>
       ${row('عدد الطلبات', r.orders)}${row('المجموع قبل الخصم', fmt(r.sub))}${r.disc ? row('الخصومات', '-' + fmt(r.disc)) : ''}${r.service ? row('الخدمة', fmt(r.service)) : ''}${r.tax ? row('الضريبة', fmt(r.tax)) : ''}
       ${row('صافي المبيعات', fmt(r.sales), true)}<div class="div"></div>
       ${row('🪑 صالة (' + r.byType.salon.n + ')', fmt(r.byType.salon.v))}${row('🥡 سفري (' + r.byType.takeaway.n + ')', fmt(r.byType.takeaway.v))}${row('🏍️ دلفري (' + r.byType.delivery.n + ')', fmt(r.byType.delivery.v))}
@@ -778,7 +778,7 @@
         <div class="flbl" style="margin-top:12px">🖨️ الطباعة على هذا الجهاز</div>
         <select class="fsel" id="stQzOn"><option value="0" ${qzCfgGet().on ? '' : 'selected'}>طابعة واحدة — كل قسم تذكرته بورقة منفصلة</option><option value="1" ${qzCfgGet().on ? 'selected' : ''}>طابعة لكل قسم — عبر برنامج QZ Tray</option></select>
         <div id="qzBox" style="display:${qzCfgGet().on ? 'block' : 'none'}">
-          <div class="ac-sub" style="margin:8px 0;line-height:1.8">١) نزّل وثبّت <a href="https://qz.io/download/" target="_blank" rel="noopener">QZ Tray</a> على هذه الحاسبة وشغّله. ٢) اضغط «جلب الطابعات» واختر طابعة كل قسم. ٣) جرّب كل طابعة.</div>
+          <div class="ac-sub" style="margin:8px 0;line-height:1.8">1) نزّل وثبّت <a href="https://qz.io/download/" target="_blank" rel="noopener">QZ Tray</a> على هذه الحاسبة وشغّله. 2) اضغط «جلب الطابعات» واختر طابعة كل قسم. 3) جرّب كل طابعة.</div>
           <button type="button" class="btn-soft" style="width:100%" onclick="qzFind()">🔍 جلب الطابعات من الحاسبة</button>
           ${(s.sections || []).filter((x) => x.name).map((x) => `<div class="set-row" style="margin-top:8px"><div class="sec-cat">${esc(x.emoji || '')} ${esc(x.name)}</div><div style="display:flex;gap:6px"><select class="fsel" id="qzP_${esc(x.id)}" style="flex:1"><option value="">— نفس الطابعة الافتراضية —</option>${(qzCfgGet().printers || {})[x.id] ? `<option selected>${esc(qzCfgGet().printers[x.id])}</option>` : ''}</select><button type="button" class="btn-soft" style="padding:8px 10px" onclick="qzTest('${esc(x.id)}')">🧪</button></div></div>`).join('')}
           <details style="margin-top:10px"><summary class="ac-sub" style="cursor:pointer">⚙️ متقدم: شهادة الطباعة الصامتة (حتى لا يسأل البرنامج كل مرة)</summary>

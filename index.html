@@ -397,7 +397,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s;white-space:nowrap;}
 .toast.on{transform:translateX(-50%) translateY(0);}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=6">
+<link rel="stylesheet" href="pos-pro.css?v=7">
 </head>
 <body>
 
@@ -485,7 +485,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
         </div>
         <div class="cside">
           <div class="chead" id="cartHead">
-            <div><div class="ctitle">🛒 السلة</div><div class="ccnt" id="cartCnt">٠ عنصر</div></div>
+            <div><div class="ctitle">🛒 السلة</div><div class="ccnt" id="cartCnt">0 عنصر</div></div>
             <div class="cmini" id="cartMini"></div>
             <div class="cexp">▲</div>
           </div>
@@ -494,7 +494,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
           <div class="clist" id="cartList"><div class="cempty">السلة فارغة</div></div>
           <div class="cfoot">
             <div id="cartBreak"></div>
-            <div class="trow ttotal"><span>الإجمالي</span><span class="tval" id="cartTotal">٠ د.ع</span></div>
+            <div class="trow ttotal"><span>الإجمالي</span><span class="tval" id="cartTotal">0 د.ع</span></div>
             <div class="cact">
               <button class="cact-b" id="discBtn" onclick="openDiscount()">٪ خصم</button>
               <button class="cact-b" onclick="clearCart()">🗑️ تفريغ</button>
@@ -652,7 +652,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <div class="vars" id="varsGrid"></div>
     <div class="qrow">
       <button class="qb" onclick="chQ(-1)">−</button>
-      <div class="qv" id="qVal">١</div>
+      <div class="qv" id="qVal">1</div>
       <button class="qb" onclick="chQ(1)">+</button>
       <span style="font-size:11px;color:var(--muted);margin-right:auto;">الكمية</span>
     </div>
@@ -703,7 +703,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
         <div class="fee-row">
           <input class="dinp" id="dFee" type="number" placeholder="5000" value="5000">
           <div class="fee-presets">
-            <span id="feePresets"><button class="fee-p" onclick="setFee(3000)">٣</button><button class="fee-p" onclick="setFee(5000)">٥</button><button class="fee-p" onclick="setFee(7000)">٧</button></span>
+            <span id="feePresets"><button class="fee-p" onclick="setFee(3000)">3</button><button class="fee-p" onclick="setFee(5000)">5</button><button class="fee-p" onclick="setFee(7000)">7</button></span>
           </div>
         </div>
       </div>
@@ -836,8 +836,8 @@ const defaultMenu=[
     {name:"كوردن بلو",img:"",variants:[{name:"وجبة",price:4000}]},
   ]},
   {cat:"كنتاكي",emoji:"🪣",items:[
-    {name:"كنتاكي",img:"",variants:[{name:"٣ قطعة",price:7000},{name:"٥ قطعة",price:12000},{name:"٨ قطعة",price:17000},{name:"١٢ قطعة",price:25000}]},
-    {name:"ستريبس",img:"",variants:[{name:"٣ قطعة",price:7000},{name:"٥ قطعة",price:12000},{name:"٨ قطعة",price:17000},{name:"١٢ قطعة",price:25000}]},
+    {name:"كنتاكي",img:"",variants:[{name:"3 قطعة",price:7000},{name:"5 قطعة",price:12000},{name:"8 قطعة",price:17000},{name:"12 قطعة",price:25000}]},
+    {name:"ستريبس",img:"",variants:[{name:"3 قطعة",price:7000},{name:"5 قطعة",price:12000},{name:"8 قطعة",price:17000},{name:"12 قطعة",price:25000}]},
   ]},
   {cat:"ريزو",emoji:"🍚",items:[
     {name:"ريزو مڤش",img:"",variants:[{name:"وحدة",price:5000}]},
@@ -881,8 +881,8 @@ function getNextSalonNum(){
 }
 
 const safeImg=u=>typeof u==='string'&&/^(data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+|https:\/\/[^"'<>\s]+)$/.test(u);
-const toA=n=>n.toString().replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
-const fmt=n=>Number(n||0).toLocaleString('ar-IQ');
+const toA=n=>String(n);
+const fmt=n=>Number(n||0).toLocaleString('ar-IQ-u-nu-latn');
 const nowT=()=>{const d=new Date();return`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;};
 function toast(msg){
   const t=document.getElementById('toast');
@@ -1247,7 +1247,7 @@ function buildReceipt(type,custInfo,captain,salonNum,rItems,rTotal){
   ${custInfo?.phone?`<div class="row"><span>الهاتف:</span><span>${esc(custInfo.phone)}</span></div>`:''}
   ${custInfo?.addr&&type==='delivery'?`<div class="row"><span>العنوان:</span><span>${esc(custInfo.addr)}</span></div>`:''}
   ${custInfo?.fee&&type==='delivery'?`<div class="row"><span>أجور التوصيل:</span><span>${fmt(custInfo.fee)} د.ع</span></div>`:''}
-  <div class="row"><span>الوقت:</span><span>${t} ${d.toLocaleDateString('ar-IQ')}</span></div>
+  <div class="row"><span>الوقت:</span><span>${t} ${d.toLocaleDateString('ar-IQ-u-nu-latn')}</span></div>
   <div class="div"></div>
   ${_its.map(c=>`<div class="item"><span>${esc(c.name)}(${esc(c.variant)})</span><span>×${c.qty} — ${fmt(c.price*c.qty)}</span></div>`).join('')}
   <div class="total"><span>المجموع</span><span>${fmt(total)} د.ع</span></div>
@@ -2016,7 +2016,7 @@ window.matCard=id=>{
   const inQ=list.filter(e=>e.qty>0).reduce((s,e)=>s+e.qty,0),outQ=list.filter(e=>e.qty<0).reduce((s,e)=>s-e.qty,0);
   viewOpen('📇 كارت الصنف: '+name,
    `<div class="ac-sum"><div class="st"><div class="sv" style="font-size:15px">${fmtQ(inQ)}</div><div class="sl">إجمالي الوارد</div></div><div class="st"><div class="sv" style="font-size:15px">${fmtQ(outQ)}</div><div class="sl">إجمالي الصادر</div></div><div class="st"><div class="sv" style="font-size:15px">${fmtQ(bq)}</div><div class="sl">الرصيد (${esc(unit)})</div></div></div>`+
-   (rows.length?rows.map(({e,bq})=>`<div class="ac-line"><span>${MV[e.type]||e.type}<div class="ac-sub">${new Date(e.ts).toLocaleDateString('ar-IQ')}${e.note?' • '+esc(e.note):''}</div></span><span style="text-align:left"><b class="${e.qty>0?'ac-pos':'ac-neg'}">${e.qty>0?'+':'−'}${fmtQ(Math.abs(e.qty))}</b><div class="ac-sub">الرصيد ${fmtQ(bq)}</div></span></div>`).join(''):'<div class="ac-empty">لا توجد حركات</div>'));
+   (rows.length?rows.map(({e,bq})=>`<div class="ac-line"><span>${MV[e.type]||e.type}<div class="ac-sub">${new Date(e.ts).toLocaleDateString('ar-IQ-u-nu-latn')}${e.note?' • '+esc(e.note):''}</div></span><span style="text-align:left"><b class="${e.qty>0?'ac-pos':'ac-neg'}">${e.qty>0?'+':'−'}${fmtQ(Math.abs(e.qty))}</b><div class="ac-sub">الرصيد ${fmtQ(bq)}</div></span></div>`).join(''):'<div class="ac-empty">لا توجد حركات</div>'));
 };
 
 // ---- حركة المخزون (كشف الأرصدة + أكبر العمليات) ----
@@ -2035,7 +2035,7 @@ function tabMov(){
   const salesAgg={};inP.filter(e=>e.type==='sale'||e.type==='sale_return').forEach(e=>{const a=salesAgg[e.mid]||(salesAgg[e.mid]={name:e.name,unit:e.unit,q:0,v:0});a.q-=e.qty;a.v-=e.value;});
   const topSale=Object.values(salesAgg).filter(a=>a.q>0).sort((a,b)=>b.v-a.v).slice(0,5);
   const ln=(t,v,c)=>`<div class="ac-line"><span>${t}</span><b class="${c||''}">${v}</b></div>`;
-  const opLine=(e,cls)=>`<div class="ac-line"><span>${esc(e.name)}<div class="ac-sub">${fmtQ(Math.abs(e.qty))} ${esc(e.unit)} • ${new Date(e.ts).toLocaleDateString('ar-IQ')}${e.note?' • '+esc(e.note):''}</div></span><b class="${cls}">${fmt(Math.round(Math.abs(e.value)))}</b></div>`;
+  const opLine=(e,cls)=>`<div class="ac-line"><span>${esc(e.name)}<div class="ac-sub">${fmtQ(Math.abs(e.qty))} ${esc(e.unit)} • ${new Date(e.ts).toLocaleDateString('ar-IQ-u-nu-latn')}${e.note?' • '+esc(e.note):''}</div></span><b class="${cls}">${fmt(Math.round(Math.abs(e.value)))}</b></div>`;
   const list=Object.keys(rows).map(k=>({k,...rows[k],cQ:r3(rows[k].oQ+rows[k].iQ-rows[k].xQ)})).filter(r=>r.oQ||r.iQ||r.xQ).sort((a,b)=>(b.xQ+b.iQ)-(a.xQ+a.iQ));
   return rangeBar()+`
   <div class="rcard"><div class="rtitle">🧮 معادلة المخزون (بالقيمة د.ع)</div>
@@ -2057,7 +2057,7 @@ function tabMov(){
    ${list.length?list.map(r=>`<div class="ac-row" style="margin-bottom:6px"><div class="ac-name">${esc(r.name)} <span class="ac-sub">(${esc(r.unit)})</span></div>
      <div class="ac-sum" style="margin:6px 0 0"><div class="st"><div class="sv" style="font-size:13px">${fmtQ(r.oQ)}</div><div class="sl">أول المدة</div></div><div class="st"><div class="sv ac-pos" style="font-size:13px">${fmtQ(r.iQ)}</div><div class="sl">وارد</div></div><div class="st"><div class="sv ac-neg" style="font-size:13px">${fmtQ(r.xQ)}</div><div class="sl">صادر</div></div></div>
      <div class="ac-line" style="border:none;padding-bottom:0"><span>رصيد آخر المدة</span><b>${fmtQ(r.cQ)}</b></div></div>`).join(''):'<div class="ac-empty">لا توجد حركات بهذي الفترة</div>'}</div>
-  <div class="rcard"><div class="rtitle">🕘 سجل العمليات</div>${inP.filter(e=>e.type!=='sale'&&e.type!=='sale_return').sort((a,b)=>b.ts-a.ts).slice(0,60).map(e=>`<div class="ac-line"><span>${esc(e.name)}<div class="ac-sub">${MV[e.type]||e.type} • ${fmtQ(Math.abs(e.qty))} ${esc(e.unit)} • ${new Date(e.ts).toLocaleString('ar-IQ')}${e.note?' • '+esc(e.note):''}</div></span><b class="${e.qty>0?'ac-pos':'ac-neg'}">${e.qty>0?'+':'−'}${fmt(Math.round(Math.abs(e.value)))}</b></div>`).join('')||'<div class="ac-empty">لا توجد عمليات</div>'}</div>`;
+  <div class="rcard"><div class="rtitle">🕘 سجل العمليات</div>${inP.filter(e=>e.type!=='sale'&&e.type!=='sale_return').sort((a,b)=>b.ts-a.ts).slice(0,60).map(e=>`<div class="ac-line"><span>${esc(e.name)}<div class="ac-sub">${MV[e.type]||e.type} • ${fmtQ(Math.abs(e.qty))} ${esc(e.unit)} • ${new Date(e.ts).toLocaleString('ar-IQ-u-nu-latn')}${e.note?' • '+esc(e.note):''}</div></span><b class="${e.qty>0?'ac-pos':'ac-neg'}">${e.qty>0?'+':'−'}${fmt(Math.round(Math.abs(e.value)))}</b></div>`).join('')||'<div class="ac-empty">لا توجد عمليات</div>'}</div>`;
 }
 
 // ---- الوصفات والتكلفة ----
@@ -2108,7 +2108,7 @@ function tabExp(){
    <button class="sivbtn" onclick="expAdd()">✅ حفظ المصروف</button></div>
    <div class="rcard"><div class="rtitle">💸 مصروفات الفترة: <span class="ac-neg">${fmt(tot)} د.ع</span></div>
    ${Object.keys(byCat).map(k=>`<div class="ac-line"><span>${esc(k)}</span><b>${fmt(byCat[k])}</b></div>`).join('')||'<div class="ac-empty">لا توجد مصروفات بهذي الفترة</div>'}</div>
-   ${list.map(e=>`<div class="ac-row"><div class="ac-top"><div><div class="ac-name">${esc(e.cat)}</div><div class="ac-sub">${esc(e.note||'')} ${new Date(e.ts).toLocaleDateString('ar-IQ')}</div></div><div class="ac-qty ac-neg">${fmt(e.amount)}</div></div><div class="ac-btns"><button class="ac-b del" onclick="expDel('${e.id}')">✖ حذف</button></div></div>`).join('')}`;
+   ${list.map(e=>`<div class="ac-row"><div class="ac-top"><div><div class="ac-name">${esc(e.cat)}</div><div class="ac-sub">${esc(e.note||'')} ${new Date(e.ts).toLocaleDateString('ar-IQ-u-nu-latn')}</div></div><div class="ac-qty ac-neg">${fmt(e.amount)}</div></div><div class="ac-btns"><button class="ac-b del" onclick="expDel('${e.id}')">✖ حذف</button></div></div>`).join('')}`;
 }
 window.expAdd=()=>{
   const cat=document.getElementById('exCat').value,amt=r2(document.getElementById('exAmt').value);
@@ -2245,7 +2245,7 @@ window.bkImport=input=>{
   };
   r.readAsText(f);input.value='';
 };
-window.mvCSV=()=>dlCSV('حركات-المخزون-'+ymd(new Date())+'.csv',[['التاريخ','المادة','العملية','الكمية','الوحدة','القيمة','ملاحظة']].concat(acc.moves.slice().sort((a,b)=>a.ts-b.ts).map(e=>[new Date(e.ts).toLocaleString('ar-IQ'),e.name,MV[e.type]||e.type,e.qty,e.unit,e.value,e.note||''])));
+window.mvCSV=()=>dlCSV('حركات-المخزون-'+ymd(new Date())+'.csv',[['التاريخ','المادة','العملية','الكمية','الوحدة','القيمة','ملاحظة']].concat(acc.moves.slice().sort((a,b)=>a.ts-b.ts).map(e=>[new Date(e.ts).toLocaleString('ar-IQ-u-nu-latn'),e.name,MV[e.type]||e.type,e.qty,e.unit,e.value,e.note||''])));
 
 // ── صور المنتجات ──
 function imgToCard(img){
@@ -2570,6 +2570,6 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=9"></script>
+<script src="pos-pro.js?v=10"></script>
 </body>
 </html>

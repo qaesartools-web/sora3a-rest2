@@ -1,8 +1,8 @@
 // سرعة — كاشير المطعم: Service Worker (يعمل بدون إنترنت + إشعارات الخلفية)
-const CACHE_VERSION = 'rest2-v11';
+const CACHE_VERSION = 'rest2-v12';
 const CACHE_NAME = `app-cache-${CACHE_VERSION}`;
 const SCOPE = '/sora3a-rest2/';
-const PRECACHE = [SCOPE, SCOPE + 'index.html', SCOPE + 'pos-pro.js?v=9', SCOPE + 'pos-pro.css?v=6', SCOPE + 'manifest.json'];
+const PRECACHE = [SCOPE, SCOPE + 'index.html', SCOPE + 'pos-pro.js?v=10', SCOPE + 'pos-pro.css?v=7', SCOPE + 'manifest.json'];
 
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
