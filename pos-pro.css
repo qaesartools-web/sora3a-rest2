@@ -236,3 +236,6 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 .ip-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;font-size:12px;padding:5px 0;border-top:1px dashed var(--line);}
 .ip-row:first-of-type{border-top:none;}
 .ip-ok{color:#16a34a;font-weight:900;}.ip-bad{color:#e11d48;font-weight:900;}.ip-warn{color:#d97706;font-weight:800;}
+
+/* الشاشات اللي تمرّر نفسها: محتواها ما ينضغط أبداً (كان شريط فلاتر الطلبات يختفي لما القائمة تطول) */
+#ordersScreen>*,#accScreen>*,#reportsScreen>*,#menuScreen>*,#kitchenScreen>*,#shiftScreen>*{flex-shrink:0;}
