@@ -294,6 +294,7 @@
     if (curCust) {
       $('dPhone').value = curCust.phone;
       if (curCust.data) { $('dName').value = curCust.data.name || ''; $('dAddr').value = curCust.data.address || ''; }
+      else if (curCust.label) $('dName').value = curCust.label;
       showCustHint(curCust.data);
     }
   };
@@ -938,7 +939,7 @@
     const el = $('curCust'); if (!el) return;
     if (!curCust) { el.classList.remove('on'); el.innerHTML = ''; return; }
     el.classList.add('on');
-    el.innerHTML = `<div style="flex:1;min-width:0">📞 <b dir="ltr">${esc(curCust.phone)}</b> — ${curCust.data ? esc(curCust.data.name || 'زبون') + ' • ' + toA(curCust.data.orders || 0) + ' طلب' : 'زبون جديد'}</div><button type="button" title="إلغاء" onclick="clearCurCust()">✕</button>`;
+    el.innerHTML = `<div style="flex:1;min-width:0">📞 <b dir="auto">${esc(curCust.phone || curCust.label || '')}</b> — ${curCust.data ? esc(curCust.data.name || 'زبون') + ' • ' + toA(curCust.data.orders || 0) + ' طلب' : 'زبون جديد'}</div><button type="button" title="إلغاء" onclick="clearCurCust()">✕</button>`;
   }
   window.clearCurCust = () => { curCust = null; renderCart(); };
   // سفري قيد التحضير: نفس التعبئة التلقائية
@@ -946,7 +947,7 @@
     if (!cart.length) return;
     const d = curCust && curCust.data;
     acDialog('🍳 حفظ الطلب قيد التحضير', 'يبقى بالكاشير لحد ما تحوله للكابتن أو يستلمه الزبون', [
-      { id: 'name', label: 'اسم الزبون (اختياري)', ph: 'مثال: أبو علي', value: (d && d.name) || '' },
+      { id: 'name', label: 'اسم الزبون (اختياري)', ph: 'مثال: أبو علي', value: (d && d.name) || (curCust && curCust.label) || '' },
       { id: 'phone', label: 'رقم الهاتف (اختياري)', type: 'tel', ph: '07xxxxxxxxx', value: curCust ? curCust.phone : '' },
       { id: 'note', label: 'ملاحظة للمطبخ (اختياري)', ph: 'بدون بصل...' },
     ], (v) => { holdOrder({ name: v.name.trim(), phone: v.phone.trim(), note: v.note.trim() }); }, '🍳 حفظ وطباعة تذكرة المطبخ');
@@ -989,6 +990,9 @@
       navigator.serviceWorker && navigator.serviceWorker.getRegistration().then((r) => r && r.showNotification('📞 مكالمة واردة — خط ' + (c.line || ''), { body: c.number, tag: 'call-' + c.id, dir: 'rtl', lang: 'ar', requireInteraction: true }));
     }
   }
+  // واتساب يرسل أحياناً اسم جهة الاتصال بدل الرقم: نعرض النص كما هو إذا لم يكن رقماً
+  const callPhone = (c) => { const k = phoneKey(c.number); return k.length >= 7 ? k : ''; };
+  const callLabel = (c) => callPhone(c) || String(c.number || '').trim() || '—';
   function renderCalls() {
     const el = $('callsBox'); if (!el) return;
     // تختفي تلقائياً بعد دقيقتين
@@ -997,7 +1001,7 @@
       <div class="call-card">
         <div class="call-top"><span class="call-pulse">📞</span> مكالمة واردة <span class="call-line">خط ${esc(c.line || '—')}</span>
           <button type="button" class="call-x" title="إخفاء" onclick="callHide('${esc(c.id)}')">✕</button></div>
-        <button type="button" class="call-num" onclick="callTake('${esc(c.id)}')" dir="ltr">${esc(phoneKey(c.number) || c.number)}</button>
+        <button type="button" class="call-num" onclick="callTake('${esc(c.id)}')" dir="auto">${esc(callLabel(c))}</button>
         <div class="call-info">${c.data === undefined ? '⏳ جاري البحث عن الزبون…' : custSummary(c.data)}</div>
         <div class="call-btns">
           <button type="button" class="call-go" onclick="callTake('${esc(c.id)}')">✅ استلام وتعبئة</button>
@@ -1012,7 +1016,7 @@
     calls.delete(id); clearInterval(callRingT); renderCalls();
     fb().updateDoc(fb().doc(fb().db, 'incomingCalls', id), { status: 'taken', takenBy: deviceId, takenAtMs: Date.now() }).catch(() => {});
     const d = c.data === undefined ? await getCustomer(c.number) : c.data;
-    curCust = { phone: phoneKey(c.number) || c.number, data: d };
+    curCust = { phone: callPhone(c), label: callPhone(c) ? '' : callLabel(c), data: d };
     goTab('cashier');
     if (repeat) repeatLast();
     renderCart();
