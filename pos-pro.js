@@ -916,6 +916,7 @@
   function listenMe() {
     const u = window.posUser; if (!u || u.role !== 'cashier') return;
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'users', u.uid), (s) => {
+      if (!s.exists() && s.metadata.fromCache) return;   // بدون إنترنت والكاش فارغ: لا نخرج الكاشير
       const d = s.exists() ? s.data() : null;
       if (!d || d.disabled || d.role !== 'cashier') { toast('⛔ تم إيقاف حسابك'); setTimeout(() => fb().signOut(fb().auth), 1500); return; }
       const before = JSON.stringify(u.perms || {});

@@ -223,3 +223,9 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 .kds-secsel{padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-weight:800;font-family:inherit;}
 .sec-row{grid-template-columns:72px 1fr!important;}
 .sec-cat{display:flex;align-items:center;font-weight:800;font-size:13px;}
+
+/* شريط أقسام المخزون: لا ينضغط ويبقى ظاهراً بأعلى الشاشة */
+.actabs,.mtabs{flex-shrink:0;}
+#accScreen .actabs{position:sticky;top:-10px;z-index:6;background:var(--bg);padding:8px 0;margin-top:-8px;}
+.actabs .mtab{flex-shrink:0;white-space:nowrap;}
+.ac-back{background:var(--panel2)!important;border-style:dashed!important;}
