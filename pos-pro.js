@@ -872,6 +872,9 @@
   const TABS = ['cashier', 'orders', 'kitchen', 'shift', 'reports', 'menu', 'acc'];
   const TAB_PERM = { reports: 'reports', acc: 'inventory' };
   const tabAllowed = (t) => t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
+  // التحديث التلقائي ينتظر لحد ما الكاشير يكون فاضي: سلة فارغة، لا نافذة مفتوحة، لا مكالمة
+  window.auIdle = () => !restData || (!cart.length && !document.querySelector('[id$="Ov"].on, .duty-lock.on, .call-card'));
+  window.auSave = () => ({ tab: TABS.find((t) => { const e = $(t + 'Screen'); return e && e.classList.contains('on'); }) || 'cashier' });
   window.goTab = (tab) => {
     if (!TABS.includes(tab)) tab = 'cashier';
     if (!tabAllowed(tab)) { deny(); return; }
@@ -1399,6 +1402,9 @@
     listenMe();
     listenRest();
     applyFeatures();
+    // بعد التحديث التلقائي: نرجع لنفس التبويب
+    const au = window.auRestore && window.auRestore();
+    if (au && au.tab && au.tab !== 'cashier') setTimeout(() => { try { goTab(au.tab); } catch (e) {} }, 300);
     curCust = null; custCache.clear();
     applyPerms();
     $('kdsSoundBtn').textContent = kdsSound ? '🔔 الصوت: يعمل' : '🔕 الصوت: مطفأ';

@@ -1,8 +1,8 @@
 // سرعة — كاشير المطعم: Service Worker (يعمل بدون إنترنت + إشعارات الخلفية)
-const CACHE_VERSION = 'rest2-v13';
+const CACHE_VERSION = 'rest2-v14';
 const CACHE_NAME = `app-cache-${CACHE_VERSION}`;
 const SCOPE = '/sora3a-rest2/';
-const PRECACHE = [SCOPE, SCOPE + 'index.html', SCOPE + 'pos-pro.js?v=11', SCOPE + 'pos-pro.css?v=8', SCOPE + 'manifest.json',
+const PRECACHE = [SCOPE, SCOPE + 'index.html', SCOPE + 'pos-pro.js?v=12', SCOPE + 'pos-pro.css?v=8', SCOPE + 'manifest.json',
   SCOPE + 'logo.svg', SCOPE + 'icon-192.png', SCOPE + 'icon-512.png'];
 // مكتبات Firebase تُخزَّن مسبقاً حتى يفتح الكاشير بدون إنترنت حتى لو أول مرة بعد التحديث
 const PRECACHE_CDN = ['app', 'auth', 'firestore'].map((m) => `https://www.gstatic.com/firebasejs/10.7.1/firebase-${m}.js`);
@@ -55,7 +55,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(new Promise((resolve) => {
       let settled = false;
       const t = setTimeout(() => cached().then((r) => { if (r && !settled) { settled = true; resolve(r); } }), 3000);
-      fetch(req).then((r) => { put(req, r); if (!settled) { settled = true; clearTimeout(t); resolve(r); } })
+      // الصفحة الرئيسية: نتأكد دائماً من السيرفر (حتى يوصل التحديث فوراً)
+      fetch(req.mode === 'navigate' ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : req).then((r) => { put(req, r); if (!settled) { settled = true; clearTimeout(t); resolve(r); } })
         .catch(() => cached().then((r) => { if (!settled) { settled = true; clearTimeout(t); resolve(r || Response.error()); } }));
     }));
     return;
