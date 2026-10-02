@@ -212,3 +212,14 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 .pg.ready{background:#16a34a;border-color:#15803d;color:#fff;animation:pgPulse 1s infinite;}
 @keyframes pgPulse{0%,100%{box-shadow:0 0 0 0 rgba(22,163,74,.6);}50%{box-shadow:0 0 0 6px rgba(22,163,74,0);}}
 .kds-pager{background:#1d4ed8;color:#fff;border-radius:6px;padding:0 6px;}
+
+/* أقسام المطبخ */
+.kds-secs{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 8px;}
+.kds-sec{border:1.5px solid #f59e0b;background:#fff7ea;color:#92400e;border-radius:20px;padding:5px 10px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;}
+.kds-sec small{opacity:.75;}
+.kds-sec.done{border-color:#16a34a;background:#e8f6ee;color:#15803d;}
+.kds-lbl{font-size:13px;font-weight:700;opacity:.75;}
+.kds-isec{opacity:.8;}
+.kds-secsel{padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-weight:800;font-family:inherit;}
+.sec-row{grid-template-columns:72px 1fr!important;}
+.sec-cat{display:flex;align-items:center;font-weight:800;font-size:13px;}
