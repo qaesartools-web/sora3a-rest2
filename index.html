@@ -397,7 +397,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s;white-space:nowrap;}
 .toast.on{transform:translateX(-50%) translateY(0);}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=8">
+<link rel="stylesheet" href="pos-pro.css?v=9">
 </head>
 <body>
 
@@ -1669,7 +1669,7 @@ window.renderMList=()=>{
   document.getElementById('mItemsList').innerHTML=all.map(p=>`
     <div class="micard">
       <div class="miimg">${p.img?`<img src="${p.img}">`:`<span>${p.emoji}</span>`}</div>
-      <div class="miinfo"><div class="miname">${p.name}</div><div class="micat">${p.emoji} ${p.catName}</div><div class="miprice">${p.variants.map(v=>fmt(v.price)+' د.ع').join(' / ')}</div>${typeof p.stock==='number'?`<div class="micat">📦 المخزون: ${toA(p.stock)}</div>`:''}${(()=>{const parts=p.variants.map(v=>{const cs=unitCost(p.name,v.name);return cs>0&&v.price>0?(v.name!=='وحدة'?v.name+': ':'')+'تكلفة '+fmt(Math.round(cs))+' • ربح '+toA(Math.round((v.price-cs)/v.price*100))+'٪':null;}).filter(Boolean);return parts.length?`<div class="micat" style="color:#16a34a">💰 ${parts.join(' | ')}</div>`:`<div class="micat" style="color:#d97706">⚠️ بدون تكلفة</div>`;})()}</div>
+      <div class="miinfo"><div class="miname">${p.name}</div><div class="micat">${p.emoji} ${p.catName}</div><div class="miprice">${p.variants.map(v=>fmt(v.price)+' د.ع').join(' / ')}</div>${typeof p.stock==='number'?`<div class="micat">📦 المخزون: ${toA(p.stock)}</div>`:''}${!isOwnerPOS()?'':(()=>{const parts=p.variants.map(v=>{const cs=unitCost(p.name,v.name);return cs>0&&v.price>0?(v.name!=='وحدة'?v.name+': ':'')+'تكلفة '+fmt(Math.round(cs))+' • ربح '+toA(Math.round((v.price-cs)/v.price*100))+'٪':null;}).filter(Boolean);return parts.length?`<div class="micat" style="color:#16a34a">💰 ${parts.join(' | ')}</div>`:`<div class="micat" style="color:#d97706">⚠️ بدون تكلفة</div>`;})()}</div>
       <div class="miacts">
         <button class="mibtn" style="background:var(--orange);" onclick="editItem(${p.ci},${p.pi})">✏️</button>
         <button class="mibtn" style="background:var(--green);" onclick="setItemStock(${p.ci},${p.pi})">📦</button>
@@ -1746,13 +1746,56 @@ window.delCat=(ci)=>{
 };
 
 // ── EDIT ITEM ──
+// تعديل الصنف: الاسم، الفرع، الأحجام والأسعار، والتكلفة والربح (للمالك فقط)
 window.editItem=(ci,pi)=>{
-  const item=menu[ci].items[pi];
-  const newName=prompt('اسم الصنف:',item.name);
-  if(!newName)return;
-  const oldName=item.name;menu[ci].items[pi].name=newName;
-  ['recipes','costs'].forEach(t=>{Object.keys(acc[t]).forEach(k=>{if(k.startsWith(oldName+'|')){acc[t][newName+k.slice(oldName.length)]=acc[t][k];delete acc[t][k];}});});saveAcc();
-  saveMenu();renderMList();if(activeCat===ci)renderMenu();toast('✅ تم تعديل الاسم');
+  const item=menu[ci].items[pi];if(!item)return;
+  const own=isOwnerPOS();
+  const hasRec=vn=>{const r=acc.recipes[item.name+'|'+vn];return !!(r&&r.length);};
+  const F=[{id:'name',label:'اسم الصنف',value:item.name},
+    {id:'cat',label:'الفرع',type:'select',value:String(ci),options:menu.map((c,i)=>({v:String(i),t:c.emoji+' '+c.cat}))}];
+  item.variants.forEach((v,i)=>{
+    F.push({id:'vn'+i,label:'📏 الحجم '+(i+1)+' — الاسم',value:v.name});
+    F.push({id:'vp'+i,label:'💵 سعر البيع (د.ع) — صفر = حذف الحجم',type:'number',value:v.price});
+    if(own)F.push({id:'vc'+i,label:hasRec(v.name)?'🧾 التكلفة (محسوبة من الوصفة)':'🧮 تكلفة الإنتاج (د.ع)',type:'number',value:Math.round(unitCost(item.name,v.name))||''});
+  });
+  F.push({id:'vnX',label:'➕ حجم جديد (اختياري)',value:'',ph:'مثال: كبير'},{id:'vpX',label:'سعر الحجم الجديد',type:'number',value:''});
+  if(own)F.push({id:'vcX',label:'تكلفة الحجم الجديد',type:'number',value:''});
+  F.push({id:'stock',label:'📦 المخزون الجاهز (فاضي = غير محدود)',type:'number',value:typeof item.stock==='number'?item.stock:''});
+  acDialog('✏️ تعديل الصنف',own?'التكلفة والربح يظهرون لك فقط، والكاشير ما يشوفهم':'',F,v=>{
+    const name=v.name.trim();if(!name){toast('⚠️ أدخل اسم الصنف');return false;}
+    const oldName=item.name;
+    if(!own&&name!==oldName&&Object.keys(acc.recipes).concat(Object.keys(acc.costs)).some(k=>k.startsWith(oldName+'|'))){toast('🔒 تغيير اسم صنف له تكلفة من صلاحية الإدارة');return false;}
+    const vars=[],costs={};
+    item.variants.forEach((old,i)=>{const vn=(v['vn'+i]||'').trim()||old.name,vp=Math.round(Number(v['vp'+i])||0);if(vp<=0)return;
+      vars.push({...old,name:vn,price:vp});
+      if(own&&!hasRec(old.name))costs[vn]=Math.max(0,Number(v['vc'+i])||0);
+      else if(own&&hasRec(old.name)&&vn!==old.name){acc.recipes[name+'|'+vn]=acc.recipes[oldName+'|'+old.name];delete acc.recipes[oldName+'|'+old.name];}});
+    const nx=(v.vnX||'').trim(),px=Math.round(Number(v.vpX)||0);
+    if(nx&&px>0){if(vars.some(x=>x.name===nx)){toast('⚠️ الحجم موجود');return false;}vars.push({name:nx,price:px});if(own)costs[nx]=Math.max(0,Number(v.vcX)||0);}
+    if(!vars.length){toast('⚠️ لازم يبقى حجم واحد على الأقل بسعر');return false;}
+    // نقل التكاليف والوصفات للاسم الجديد
+    if(name!==oldName&&own)['recipes','costs'].forEach(t=>{Object.keys(acc[t]).forEach(k=>{if(k.startsWith(oldName+'|')){acc[t][name+k.slice(oldName.length)]=acc[t][k];delete acc[t][k];}});});
+    if(own){Object.keys(acc.costs).forEach(k=>{if(k.startsWith(name+'|'))delete acc.costs[k];});
+      Object.entries(costs).forEach(([vn,c])=>{if(c>0)acc.costs[name+'|'+vn]=Math.round(c);});saveAcc();}
+    item.name=name;item.variants=vars;
+    if(v.stock==='')delete item.stock;else item.stock=Math.max(0,parseInt(v.stock)||0);
+    const nci=parseInt(v.cat);
+    if(nci!==ci&&menu[nci]){menu[ci].items.splice(pi,1);menu[nci].items.push(item);}
+    saveMenu();renderMList();renderMenu();toast('✅ تم حفظ الصنف');
+  },'💾 حفظ الصنف');
+  // التكلفة المحسوبة من الوصفة تُعدّل من تبويب الوصفات
+  item.variants.forEach((vv,i)=>{if(own&&hasRec(vv.name)){const el=document.getElementById('acf_vc'+i);if(el)el.disabled=true;}});
+  if(own){
+    const box=document.createElement('div');box.className='item-profit';document.getElementById('acDlgFields').appendChild(box);
+    const val=id=>Number((document.getElementById('acf_'+id)||{}).value)||0;
+    const upd=()=>{
+      const rows=item.variants.map((vv,i)=>({n:(document.getElementById('acf_vn'+i)||{}).value||vv.name,p:val('vp'+i),c:val('vc'+i)}));
+      if((document.getElementById('acf_vnX')||{}).value&&val('vpX'))rows.push({n:document.getElementById('acf_vnX').value,p:val('vpX'),c:val('vcX')});
+      box.innerHTML='<div class="ip-title">💰 الربح لكل حجم</div>'+rows.filter(x=>x.p>0).map(x=>{const pr=x.p-x.c,m=x.p?Math.round(pr*100/x.p):0;
+        return `<div class="ip-row"><b>${esc(x.n)}</b><span>بيع ${fmt(x.p)} • كلفة ${x.c?fmt(x.c):'—'}</span><span class="${!x.c?'ip-warn':pr>=0?'ip-ok':'ip-bad'}">${x.c?'ربح '+fmt(pr)+' ('+m+'%)':'أدخل التكلفة'}</span></div>`;}).join('');
+    };
+    document.getElementById('acDlgFields').addEventListener('input',upd);upd();
+  }
 };
 
 
@@ -1947,8 +1990,9 @@ window.acTab=t=>{if(t!==acCur){acHist.push(acCur);if(acHist.length>20)acHist.shi
 window.acBack=()=>{if(!acHist.length)return;acCur=acHist.pop();renderAcc();const sc=document.getElementById('accScreen');if(sc)sc.scrollTop=0;};
 function renderAcc(){
   const tabs=document.getElementById('acTabs');
-  if(!isOwnerPOS()&&acCur==='tools')acCur='mat';
-  if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+AC_TABS.filter(([k])=>k!=='tools'||isOwnerPOS()).map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('');
+  const CASHIER_TABS=['mat','exp'];
+  if(!isOwnerPOS()&&!CASHIER_TABS.includes(acCur))acCur='mat';
+  if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+AC_TABS.filter(([k])=>isOwnerPOS()||CASHIER_TABS.includes(k)).map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('');
   const body=document.getElementById('acBody');if(!body)return;
   const fn={mat:tabMat,mov:tabMov,rec:tabRec,exp:tabExp,fin:tabFin,tools:tabTools}[acCur]||tabMat;
   body.innerHTML=fn();
@@ -1965,7 +2009,7 @@ function tabMat(){
   return `<div class="ac-sum">
     <div class="st"><div class="sv">${toA(mats.length)}</div><div class="sl">مادة بالمخزن</div></div>
     <div class="st"><div class="sv" style="color:${low?'#e11d48':'#16a34a'}">${toA(low)}</div><div class="sl">تحتاج شراء</div></div>
-    <div class="st"><div class="sv" style="font-size:14px">${fmt(Math.round(val))}</div><div class="sl">قيمة المخزون د.ع</div></div></div>
+    ${isOwnerPOS()?`<div class="st"><div class="sv" style="font-size:14px">${fmt(Math.round(val))}</div><div class="sl">قيمة المخزون د.ع</div></div>`:''}</div>
   <button class="sivbtn" style="margin-bottom:8px" onclick="matNew()">➕ إضافة مادة جديدة</button>
   <input class="finp" id="acMatQ" placeholder="🔍 بحث عن مادة..." value="${esc(acMatQ)}" oninput="acMatQ=this.value;renderMatList()">
   <div id="acMatList"></div>`;
@@ -1976,9 +2020,9 @@ function renderMatList(){
   const list=acc.materials.filter(m=>!q||m.name.toLowerCase().includes(q)).sort((a,b)=>ord[matStatus(a)]-ord[matStatus(b)]||a.name.localeCompare(b.name,'ar'));
   el.innerHTML=list.length?list.map(m=>{const s=matStatus(m);
     return `<div class="ac-row"><div class="ac-top"><div><div class="ac-name">${esc(m.name)}<span class="ac-bd ${s}">${s==='out'?'نفذ':s==='low'?'منخفض':'متوفر'}</span></div>
-    <div class="ac-sub">الحد الأدنى ${fmtQ(m.min)} ${esc(m.unit)} • تكلفة الوحدة ${fmt(Math.round(m.cost))} د.ع (متوسط مرجّح)</div></div>
+    <div class="ac-sub">الحد الأدنى ${fmtQ(m.min)} ${esc(m.unit)}${isOwnerPOS()?` • تكلفة الوحدة ${fmt(Math.round(m.cost))} د.ع (متوسط مرجّح)`:''}</div></div>
     <div class="ac-qty">${fmtQ(m.qty)} <span style="font-size:11px;font-weight:600;color:var(--muted)">${esc(m.unit)}</span></div></div>
-    <div class="ac-btns"><button class="ac-b" onclick="matBuy('${m.id}')">➕ وارد</button><button class="ac-b" onclick="matWaste('${m.id}')">🗑️ تالف</button><button class="ac-b" onclick="matCount('${m.id}')">📋 جرد</button><button class="ac-b" onclick="matReturn('${m.id}')">↩️ مرتجع</button><button class="ac-b" onclick="matCard('${m.id}')">📇 كارت</button>${isOwnerPOS()?`<button class="ac-b" onclick="matEdit('${m.id}')">✏️</button><button class="ac-b del" onclick="matDel('${m.id}')">✖</button>`:''}</div></div>`;}).join('')
+    <div class="ac-btns"><button class="ac-b" onclick="matBuy('${m.id}')">➕ وارد</button><button class="ac-b" onclick="matWaste('${m.id}')">🗑️ تالف</button><button class="ac-b" onclick="matCount('${m.id}')">📋 جرد</button><button class="ac-b" onclick="matReturn('${m.id}')">↩️ مرتجع</button>${isOwnerPOS()?`<button class="ac-b" onclick="matCard('${m.id}')">📇 كارت</button>`:''}${isOwnerPOS()?`<button class="ac-b" onclick="matEdit('${m.id}')">✏️</button><button class="ac-b del" onclick="matDel('${m.id}')">✖</button>`:''}</div></div>`;}).join('')
     :`<div class="ac-empty">${acc.materials.length?'لا توجد نتائج':'لا توجد مواد بعد — أضف موادك الخام (لحم، خبز، جبن، صوص، زيت...)'}</div>`;
 }
 window.matNew=()=>acDialog('➕ مادة جديدة','مادة خام تدخل بالوصفات',[
@@ -2145,18 +2189,22 @@ window.recDel=i=>{if(!ownerOnly())return;const k=curKey(),r=acc.recipes[k];if(!r
 window.recCost=val=>{const k=curKey();if(val===''||!(Number(val)>0))delete acc.costs[k];else acc.costs[k]=r2(val);saveAcc();renderAcc();};
 
 // ---- المصروفات التشغيلية ----
+let acExpDay=ymd(new Date());
+window.acSetExpDay=v=>{acExpDay=v||ymd(new Date());renderAcc();};
 function tabExp(){
-  const{start,end}=rangeMs();
+  const cashier=!isOwnerPOS();
+  const{start,end}=cashier?(()=>{const s=new Date(acExpDay+'T00:00:00').getTime();return{start:s,end:s+86400000};})():rangeMs();
   const list=allExp().filter(e=>e.ts>=start&&e.ts<end).sort((a,b)=>b.ts-a.ts);
   const own=isOwnerPOS();
   const tot=list.reduce((s,e)=>s+e.amount,0),byCat={};list.forEach(e=>{byCat[e.cat]=(byCat[e.cat]||0)+e.amount;});
-  return rangeBar()+`<div class="rcard"><div class="rtitle">➕ تسجيل مصروف تشغيلي</div>
+  const dayBar=`<div class="rcard"><div class="rtitle">📅 اليوم</div><input type="date" class="dinput" value="${acExpDay}" max="${ymd(new Date())}" onchange="acSetExpDay(this.value)" style="width:100%"></div>`;
+  return (cashier?dayBar:rangeBar())+`<div class="rcard"><div class="rtitle">➕ تسجيل مصروف تشغيلي</div>
    <select class="fsel" id="exCat">${EXP_CATS.map(c=>`<option>${c}</option>`).join('')}</select>
    <input class="finp" id="exAmt" type="number" min="0" placeholder="المبلغ (د.ع)">
    <input class="finp" id="exNote" placeholder="ملاحظة (اختياري)">
    <input class="finp" id="exDate" type="date" value="${ymd(new Date())}">
    <button class="sivbtn" onclick="expAdd()">✅ حفظ المصروف</button></div>
-   <div class="rcard"><div class="rtitle">💸 مصروفات الفترة: <span class="ac-neg">${fmt(tot)} د.ع</span></div>
+   <div class="rcard"><div class="rtitle">💸 ${cashier?(acExpDay===ymd(new Date())?'مصروفات اليوم':'مصروفات '+acExpDay):'مصروفات الفترة'}: <span class="ac-neg">${fmt(tot)} د.ع</span></div>
    ${Object.keys(byCat).map(k=>`<div class="ac-line"><span>${esc(k)}</span><b>${fmt(byCat[k])}</b></div>`).join('')||'<div class="ac-empty">لا توجد مصروفات بهذي الفترة</div>'}</div>
    ${list.map(e=>`<div class="ac-row"><div class="ac-top"><div><div class="ac-name">${esc(e.cat)}</div><div class="ac-sub">${esc(e.note||'')} • ${new Date(e.ts).toLocaleDateString('ar-IQ-u-nu-latn')}${e.by?' • 👤 '+esc(e.by):''}</div></div><div class="ac-qty ac-neg">${fmt(e.amount)}</div></div>${own?`<div class="ac-btns"><button class="ac-b del" onclick="expDel('${esc(e.id)}')">✖ حذف</button></div>`:''}</div>`).join('')}
    ${own?'':'<div class="ac-sub" style="text-align:center;margin-top:8px">🔒 تعديل أو حذف المصروفات من صلاحية الإدارة فقط</div>'}`;
@@ -2628,7 +2676,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=13"></script>
+<script src="pos-pro.js?v=14"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
