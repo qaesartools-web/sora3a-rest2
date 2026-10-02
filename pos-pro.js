@@ -743,6 +743,10 @@
     _renderOrders();
     renderKds();
     renderPagers();
+    // الشاشات المفتوحة تتحدث مباشرة مع كل طلب (بدون ما نلمس خانة يكتب بيها المستخدم)
+    const typing = /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '');
+    if (!typing && $('reportsScreen') && $('reportsScreen').classList.contains('on') && typeof renderRep === 'function') renderRep();
+    if (!typing && $('accScreen') && $('accScreen').classList.contains('on') && typeof acCur !== 'undefined' && acCur === 'fin' && !$('acOv').classList.contains('on')) renderAcc();
     if (shift && $('shiftScreen').classList.contains('on')) renderShift();
   };
 
