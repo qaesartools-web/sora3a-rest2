@@ -963,6 +963,9 @@
       s.docChanges().forEach((ch) => {
         if (ch.type === 'added') {
           const c = { id: ch.doc.id, ...ch.doc.data(), at: Date.now(), data: undefined };
+          // واتساب يحدّث إشعار المكالمة أكثر من مرة: نفس الرقم ونفس الخط خلال دقيقة = بطاقة واحدة
+          const dup = [...calls.values()].find((x) => x.number === c.number && x.line === c.line && c.at - x.at < 60000);
+          if (dup) { dup.at = c.at; return; }
           calls.set(c.id, c);
           getCustomer(c.number).then((d) => { const x = calls.get(c.id); if (x) { x.data = d; renderCalls(); } });
           notifyCall(c);
