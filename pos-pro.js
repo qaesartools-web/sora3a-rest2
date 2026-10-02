@@ -280,6 +280,7 @@
     $('typeOv').classList.add('on');
   };
   window.pickType = (type) => {
+    if (type === 'delivery' && !feat('captain')) { toast('⛔ خدمة الدلفري غير مفعّلة لهذا المطعم'); return; }
     $('typeOv').classList.remove('on');
     if (type === 'salon') openPay({ kind: 'new', type: 'salon' });
     else if (type === 'quick') openPay({ kind: 'new', type: 'takeaway' });
@@ -340,7 +341,7 @@
       if (type === 'salon') { o.salonNum = salonNum; o.customer = tbl ? 'طاولة ' + tbl : 'صالة #' + salonNum; if (tbl) o.tableNo = tbl; }
       else o.customer = 'سفري';
     }
-    if (type !== 'delivery' && pagerSel) { o.pager = pagerSel; pagerSel = 0; }
+    if (type !== 'delivery' && pagerSel && feat('pager')) { o.pager = pagerSel; pagerSel = 0; }
     o.timeline = [{ status: o.status, time: now, text: 'تم إنشاء الطلب' }];
     f.setDoc(ref, o).catch((e) => toast('❌ تعذّر حفظ الطلب: ' + (e.code || e.message)));
     if (type === 'delivery') { syncTracking(ref.id, { ...o, captainName: '' }); saveCustomer(o); }
@@ -360,7 +361,7 @@
     const o = baseOrder('takeaway', t, items);
     Object.assign(o, { held: true, holdNum: num_, customer: info.name || ('سفري #' + num_), phone: info.phone || '', note: info.note || '',
       status: 'preparing', timeline: [{ status: 'preparing', time: now, text: 'تم إنشاء الطلب — قيد التحضير' }] });
-    if (pagerSel) { o.pager = pagerSel; pagerSel = 0; }
+    if (pagerSel && feat('pager')) { o.pager = pagerSel; pagerSel = 0; }
     f.setDoc(ref, o).catch((e) => toast('❌ تعذر حفظ الطلب: ' + (e.code || e.message)));
     if (info.phone) saveCustomer({ ...o, customer: info.name || '' });
     curCust = null;
@@ -883,6 +884,22 @@
     }, () => {}));
   }
 
+  // ══════════ خدمات المطعم (يفتحها المدير الأعلى من لوحة الإدارة) ══════════
+  function feat(k) { return !restData || !restData.features || restData.features[k] !== false; }
+  window.posFeat = feat;
+  function applyFeatures() {
+    document.querySelectorAll('.otype[onclick*="delivery"]').forEach((b) => { b.style.display = feat('captain') ? '' : 'none'; });
+    renderPagers();
+  }
+  function listenRest() {
+    unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', rid()), (s) => {
+      if (!s.exists() || !restData) return;
+      const before = JSON.stringify(restData.features || {});
+      restData.features = s.data().features || null;
+      if (before !== JSON.stringify(restData.features || {})) { applyFeatures(); toast('🔄 تم تحديث خدمات المطعم'); }
+    }, () => {}));
+  }
+
   // ══════════ دوام الكاشير (يحدده صاحب المطعم من لوحة الإدارة) ══════════
   // الوقت بتوقيت بغداد، والقواعد على السيرفر تمنع الكاشير خارج دوامه أيضاً
   let dutyLocked = false, dutyWarned = 0, dutyClosing = false;
@@ -972,7 +989,7 @@
       anchor.parentNode.insertBefore(el, anchor);
       el.addEventListener('click', (e) => { const b = e.target.closest('[data-pg]'); if (b) pagerClick(+b.dataset.pg); });
     }
-    if (!n || !restData) { el.style.display = 'none'; return; }
+    if (!n || !restData || !feat('pager')) { el.style.display = 'none'; pagerSel = 0; return; }
     el.style.display = '';
     const busy = pagerOrders();
     // تنبيه عند صيرورة طلب جاهزاً
@@ -1096,6 +1113,7 @@
       s.docChanges().forEach((ch) => {
         if (ch.type === 'added') {
           const c = { id: ch.doc.id, ...ch.doc.data(), at: Date.now(), data: undefined };
+          if (!feat(/(واتس|whats)/i.test(c.line || '') ? 'whatsapp' : 'calls')) return;
           // واتساب يحدّث إشعار المكالمة أكثر من مرة: نفس الرقم ونفس الخط خلال دقيقة = بطاقة واحدة
           const dup = [...calls.values()].find((x) => x.number === c.number && x.line === c.line && c.at - x.at < 60000);
           if (dup) { dup.at = c.at; return; }
@@ -1188,6 +1206,8 @@
     listenShifts();
     listenCalls();
     listenMe();
+    listenRest();
+    applyFeatures();
     curCust = null; custCache.clear();
     applyPerms();
     $('kdsSoundBtn').textContent = kdsSound ? '🔔 الصوت: يعمل' : '🔕 الصوت: مطفأ';
