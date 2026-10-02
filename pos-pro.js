@@ -586,7 +586,8 @@
         <div class="ac-sub" style="margin-bottom:10px">الوردية تجمع مبيعات الكاشير والنقد بالدرج من الفتح للإغلاق، وتطلع لك تقرير نهاية الوردية.</div>
         <div class="dfield"><div class="dlbl">💵 النقد الموجود بالدرج عند الفتح</div><input class="dinp big-inp" id="shOpenCash" inputmode="numeric" placeholder="0"></div>
         <div class="dfield"><div class="dlbl">👤 اسم الكاشير (اختياري)</div><input class="dinp" id="shCashier" maxlength="40" value="${esc(lsGet('pos_cashier_name', ''))}"></div>
-        <button class="btn-main" style="width:100%" onclick="shiftOpen()">🔓 فتح الوردية</button></div><div id="shClosedWrap">${closedHTML()}</div>`;
+        <button class="btn-main" style="width:100%" onclick="shiftOpen()">🔓 فتح الوردية</button>
+        <button class="btn-soft" style="width:100%;margin-top:8px" onclick="printDaily()">🧾 طباعة تقرير اليوم</button></div><div id="shClosedWrap">${closedHTML()}</div>`;
       restore();
       return;
     }
@@ -615,12 +616,15 @@
         <button class="btn-soft" onclick="shiftMove('in')">➕ إيداع نقدي</button>
         <button class="btn-soft" onclick="shiftMove('out')">➖ سحب نقدي</button>
         <button class="btn-soft" onclick="shiftPrint('x')">🖨️ تقرير مؤقت (X)</button>
+        <button class="btn-soft" onclick="printDaily()">🧾 تقرير اليوم</button>
         <button class="btn-danger" onclick="shiftClose()">🔒 إغلاق الوردية</button>
       </div></div>` + closedHTML();
   }
   function closedHTML() {
-    if (!closedShifts.length) return '';
-    return `<div class="sh-card"><div class="sh-title">📜 الورديات السابقة</div>${closedShifts.map((s) => `
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const list = isCashierRole() ? closedShifts.filter((x) => (x.closedAtMs || 0) >= d0.getTime()) : closedShifts;
+    if (!list.length) return '';
+    return `<div class="sh-card"><div class="sh-title">📜 ${isCashierRole() ? 'ورديات اليوم' : 'الورديات السابقة'}</div>${list.map((s) => `
       <div class="sh-line"><span>${esc(new Date(s.closedAtMs).toLocaleString('ar-IQ-u-nu-latn'))}${s.cashier ? ' • ' + esc(s.cashier) : ''}<div class="ac-sub">مبيعات ${money(s.report && s.report.sales)} • فرق ${money(s.diff)}</div></span>
       <button class="ac-b" style="flex:0 0 auto" onclick="shiftReprint('${esc(s.id)}')">🖨️</button></div>`).join('')}</div>`;
   }
@@ -664,6 +668,43 @@
   };
   window.shiftPrint = () => { if (shift) printShift({ ...shift, report: shiftCalc(shift) }, 'x'); };
   window.shiftReprint = (id) => { const s = closedShifts.find((x) => x.id === id); if (s) printShift(s, 'z'); };
+  // ── التقرير اليومي: وصل بالأرقام فقط (بدون أسماء زبائن) — اليوم الحالي فقط من الكاشير
+  function dailyCalc(from, to) {
+    const os = orders.filter((o) => (o.createdAtMs || 0) >= from && (o.createdAtMs || 0) < to);
+    const live = os.filter((o) => o.status !== 'cancelled'), canc = os.filter((o) => o.status === 'cancelled');
+    const r = { n: live.length, sales: 0, disc: 0, fees: 0, byType: { salon: { n: 0, v: 0 }, takeaway: { n: 0, v: 0 }, delivery: { n: 0, v: 0 } },
+      cash: 0, card: 0, later: 0, cod: 0, cancN: canc.length, cancV: canc.reduce((s, o) => s + (o.value || 0), 0), items: 0 };
+    live.forEach((o) => {
+      const t = getOrderType(o), v = o.value || 0;
+      r.sales += v; r.disc += o.discount || 0; r.byType[t].n++; r.byType[t].v += v;
+      (o.items || []).forEach((i) => { r.items += i.qty || 1; });
+      if (t === 'delivery') { r.fees += o.fee || 0; r.cod += v + (o.fee || 0); return; }
+      const p = o.payment || {};
+      if (p.method === 'later') r.later += v; else { r.cash += p.cash != null ? p.cash : (p.method === 'card' ? 0 : v); r.card += p.card || 0; }
+    });
+    r.exp = (typeof allExp === 'function' ? allExp() : []).filter((e) => (e.ts || 0) >= from && (e.ts || 0) < to).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    return r;
+  }
+  function dailyReceipt(r, title, sub) {
+    const row = (a, b, bold) => `<div class="row" style="${bold ? 'font-weight:900;font-size:13px' : ''}"><span>${a}</span><span>${b}</span></div>`;
+    return `<html><head><meta charset="UTF-8"><style>body{font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:12px;width:${settings.paper === 58 ? 210 : 300}px;color:#000}
+      h2{text-align:center;font-size:16px;margin:0 0 4px}.sub{text-align:center;font-size:11px;margin-bottom:6px}.row{display:flex;justify-content:space-between;font-size:12px;margin:3px 0}.div{border-top:1px dashed #000;margin:6px 0}</style></head><body>
+      <h2>${esc(title)}</h2><div class="sub">${esc(settings.receiptTitle || restData.name || '')}<br>${sub}</div><div class="div"></div>
+      ${row('عدد الطلبات', r.n)}${row('عدد الأصناف المباعة', r.items)}<div class="div"></div>
+      ${row('🪑 صالة (' + r.byType.salon.n + ')', fmt(r.byType.salon.v))}${row('🥡 سفري (' + r.byType.takeaway.n + ')', fmt(r.byType.takeaway.v))}${row('🏍️ دلفري (' + r.byType.delivery.n + ')', fmt(r.byType.delivery.v))}
+      ${r.fees ? row('أجور التوصيل', fmt(r.fees)) : ''}<div class="div"></div>
+      ${row('💵 نقداً', fmt(r.cash))}${row('💳 بطاقة', fmt(r.card))}${r.later ? row('⏳ آجل غير محصّل', fmt(r.later)) : ''}${r.cod ? row('🏍️ عند الكباتن', fmt(r.cod)) : ''}
+      ${r.disc ? row('٪ الخصومات', '-' + fmt(r.disc)) : ''}${r.cancN ? row('❌ ملغي (' + r.cancN + ')', fmt(r.cancV)) : ''}<div class="div"></div>
+      ${row('مجموع المبيعات', fmt(r.sales) + ' د.ع', true)}${r.exp ? row('💸 المصروفات', '-' + fmt(r.exp)) : ''}
+      <div class="div"></div><div style="text-align:center;font-size:10px">طُبع ${esc(new Date().toLocaleString('ar-IQ-u-nu-latn'))}${window.posUser && window.posUser.name ? ' • ' + esc(window.posUser.name) : ''}</div></body></html>`;
+  }
+  window.printDaily = () => {
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const r = dailyCalc(d0.getTime(), d0.getTime() + 86400000);
+    printHTML(dailyReceipt(r, '🧾 التقرير اليومي', esc(d0.toLocaleDateString('ar-IQ-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' }))));
+    toast('🖨️ طباعة تقرير اليوم');
+  };
+  window.dailyCalc = dailyCalc;
   function printShift(sh, kind) {
     const r = sh.report || shiftCalc(sh);
     const row = (a, b, bold) => `<div class="row" style="${bold ? 'font-weight:900;font-size:13px' : ''}"><span>${a}</span><span>${b}</span></div>`;
@@ -875,7 +916,9 @@
   // ══════════ التنقل ══════════
   const TABS = ['cashier', 'orders', 'kitchen', 'shift', 'reports', 'menu', 'acc'];
   const TAB_PERM = { reports: 'reports', acc: 'inventory' };
-  const tabAllowed = (t) => t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
+  const isCashierRole = () => !!(window.posUser && window.posUser.role === 'cashier');
+  // التقارير والأرباح والمبيعات الشهرية: للمالك فقط (الكاشير يطبع تقرير اليوم من الوردية)
+  const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
   // التحديث التلقائي ينتظر لحد ما الكاشير يكون فاضي: سلة فارغة، لا نافذة مفتوحة، لا مكالمة
   window.auIdle = () => !restData || (!cart.length && !document.querySelector('[id$="Ov"].on, .duty-lock.on, .call-card'));
   window.auSave = () => ({ tab: TABS.find((t) => { const e = $(t + 'Screen'); return e && e.classList.contains('on'); }) || 'cashier' });
@@ -910,7 +953,7 @@
     document.querySelectorAll('[data-tab]').forEach((b) => { b.style.display = tabAllowed(b.dataset.tab) ? '' : 'none'; });
     $('mt1').style.display = $('mt2').style.display = $('mt3').style.display = can('menu') ? '' : 'none';
     $('mt4').style.display = can('settings') ? '' : 'none';
-    const os = $('ordSum'); if (os) os.style.display = can('reports') ? '' : 'none';
+    const os = $('ordSum'); if (os) os.style.display = isCashierRole() ? 'none' : '';
     const rn = $('restName');
     if (rn) rn.textContent = (restData.name || 'المطعم') + (u.role === 'cashier' ? ' • 👤 ' + (u.name || 'كاشير') : '');
     const ts = $('themeSwitcher'); if (ts && u.role === 'cashier' && !can('settings')) ts.style.display = 'none';
