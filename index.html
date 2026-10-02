@@ -9,7 +9,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="كاشير سرعة">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>سرعة — كاشير</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -165,7 +166,8 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
              radial-gradient(ellipse at 80% 50%,rgba(255,170,61,.1),transparent 60%);
 }
 .lbox{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:32px 24px;width:100%;max-width:380px;box-shadow:0 30px 80px rgba(0,0,0,.5);}
-.licon{width:64px;height:64px;background:linear-gradient(135deg,var(--orange),var(--orange2));border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 16px;box-shadow:0 8px 30px rgba(255,107,61,.4);}
+.brand-ic{width:26px;height:26px;border-radius:7px;vertical-align:middle;margin-left:4px;}
+.licon{display:block;width:64px;height:64px;background:linear-gradient(135deg,var(--orange),var(--orange2));border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 16px;box-shadow:0 8px 30px rgba(255,107,61,.4);}
 .ltitle{text-align:center;font-size:22px;font-weight:900;margin-bottom:4px;}
 .lsub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:22px;}
 .inp{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:14px;outline:none;transition:border-color .2s;margin-bottom:10px;}
@@ -401,7 +403,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 
 <!-- SPLASH -->
 <div id="splash">
-  <div class="splash-logo">🍽️</div>
+  <img class="splash-logo" src="logo.svg" alt="" style="display:block">
   <div class="splash-title">سرعة</div>
   <div class="splash-sub">نظام إدارة المطعم</div>
   <div class="splash-dots">
@@ -441,7 +443,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 <!-- LOGIN -->
 <div id="loginPage" style="display:none;">
   <div class="lbox">
-    <div class="licon">🍽️</div>
+    <img class="licon" src="logo.svg" alt="شعار سرعة">
     <div class="ltitle">منصة سرعة</div>
     <div class="lsub">نظام كاشير المطعم</div>
     <div class="lerr" id="errBox"></div>
@@ -456,7 +458,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 <div id="appPage">
   <div class="topbar">
     <div>
-      <div class="tlogo">🚀 سرعة <span class="cdot" id="cdot"></span></div>
+      <div class="tlogo"><img src="logo.svg" alt="" class="brand-ic"> سرعة <span class="cdot" id="cdot"></span></div>
       <div class="trest" id="restName">المطعم</div>
     </div>
     <button class="lout" onclick="doLogout()">خروج</button>

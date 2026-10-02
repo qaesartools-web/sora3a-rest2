@@ -1,5 +1,5 @@
 // سرعة — كاشير المطعم: Service Worker (يعمل بدون إنترنت + إشعارات الخلفية)
-const CACHE_VERSION = 'rest2-v10';
+const CACHE_VERSION = 'rest2-v11';
 const CACHE_NAME = `app-cache-${CACHE_VERSION}`;
 const SCOPE = '/sora3a-rest2/';
 const PRECACHE = [SCOPE, SCOPE + 'index.html', SCOPE + 'pos-pro.js?v=9', SCOPE + 'pos-pro.css?v=6', SCOPE + 'manifest.json'];
