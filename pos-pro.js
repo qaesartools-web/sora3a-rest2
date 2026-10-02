@@ -144,7 +144,7 @@
     menuUnsub = fb().onSnapshot(sub('menu', 'main'), onMenuSnap, (e) => {
       // خطأ عابر (مثلاً مباشرة بعد الدخول): نعيد الاشتراك بدل أن يبقى المنيو فارغاً
       console.warn('menu listen', e.code);
-      setTimeout(() => { if (rid() === myRid) listenMenu(); }, 2000);
+      setTimeout(() => { if (rid() === myRid && !dutyLocked) listenMenu(); }, 2000);
     });
     unsubs.push(() => { if (menuUnsub) { menuUnsub(); menuUnsub = null; } });
     // ضمان إضافي: إذا بقي المنيو فارغاً نجلبه مباشرة من السحابة
@@ -619,7 +619,7 @@
     const f = fb();
     try {
       const ref = f.doc(subCol('shifts'));
-      shift = { id: ref.id, status: 'open', openedAtMs: Date.now(), openingCash: cash, cashier, cashMoves: [], device: deviceId };
+      shift = { id: ref.id, status: 'open', openedAtMs: Date.now(), openingCash: cash, cashier, cashMoves: [], device: deviceId, uid: (window.posUser && window.posUser.uid) || '' };
       const { id, ...data } = shift;
       f.setDoc(ref, data).catch((e) => toast('❌ ' + (e.code || e.message)));
       $('shiftWarn').classList.remove('on');
@@ -871,9 +871,69 @@
       if (!d || d.disabled || d.role !== 'cashier') { toast('⛔ تم إيقاف حسابك'); setTimeout(() => fb().signOut(fb().auth), 1500); return; }
       const before = JSON.stringify(u.perms || {});
       u.perms = d.perms || {}; u.name = d.name || u.name;
+      u.hours = d.hours && typeof d.hours.from === 'number' ? d.hours : null;
+      dutyCheck();
       if (before !== JSON.stringify(u.perms)) { applyPerms(); toast('🔄 تم تحديث صلاحياتك'); }
     }, () => {}));
   }
+
+  // ══════════ دوام الكاشير (يحدده صاحب المطعم من لوحة الإدارة) ══════════
+  // الوقت بتوقيت بغداد، والقواعد على السيرفر تمنع الكاشير خارج دوامه أيضاً
+  let dutyLocked = false, dutyWarned = 0, dutyClosing = false;
+  const bagNow = () => (Math.floor(Date.now() / 60000) + 180) % 1440;
+  const hm = (n) => { const h = Math.floor(n / 60), m = n % 60; return toA((h % 12) || 12) + ':' + toA(String(m).padStart(2, '0')) + (h < 12 ? ' صباحاً' : ' مساءً'); };
+  function onDutyNow(h) {
+    if (!h) return true;
+    const n = bagNow();
+    return h.from < h.to ? (n >= h.from && n < h.to) : (n >= h.from || n < h.to);
+  }
+  const minsLeft = (h) => ((h.to - bagNow()) + 1440) % 1440;
+  function dutyCheck() {
+    const u = window.posUser; if (!u || u.role !== 'cashier' || !restData) return;
+    const h = u.hours;
+    if (onDutyNow(h)) {
+      if (dutyLocked) { location.reload(); return; }       // بداية الدوام: تشغيل كامل من جديد
+      if (h) {
+        const left = minsLeft(h);
+        if (left <= 10 && dutyWarned !== 10 && left > 5) { dutyWarned = 10; toast('⏰ باقي ' + toA(left) + ' دقائق على نهاية دوامك — كمّل الطلبات المفتوحة'); }
+        if (left <= 5 && dutyWarned !== 5) { dutyWarned = 5; toast('⏰ باقي ' + toA(left) + ' دقائق — الوردية تُغلق وتنطبع تلقائياً'); }
+      }
+      return;
+    }
+    if (dutyLocked) return;
+    dutyLocked = true;
+    dutyEndShift().finally(showDutyLock);
+  }
+  // نهاية الدوام: إغلاق وردية هذا الكاشير وطباعة فاتورة المبلغ الكلي
+  async function dutyEndShift() {
+    const u = window.posUser;
+    if (!shift || dutyClosing || !(shift.uid === u.uid || shift.device === deviceId)) return;
+    dutyClosing = true;
+    const report = shiftCalc(shift);
+    const done = { status: 'closed', closedAtMs: Date.now(), countedCash: report.expected, expectedCash: report.expected, diff: 0,
+      note: 'إغلاق تلقائي عند نهاية الدوام — يُرجى عدّ الدرج وتسليمه', autoClosed: true, report };
+    try {
+      await fb().updateDoc(sub('shifts', shift.id), done);
+      const closed = { ...shift, ...done };
+      printShift(closed, 'z');
+      closedShifts = [closed, ...closedShifts].slice(0, 15);
+      shift = null;
+      toast('🔒 انتهى الدوام — أُغلقت الوردية وانطبع التقرير');
+    } catch (e) { toast('⚠️ تعذّر إغلاق الوردية تلقائياً — صاحب المطعم يغلقها'); }
+  }
+  function showDutyLock() {
+    const h = window.posUser.hours;
+    let el = $('dutyLock');
+    if (!el) { el = document.createElement('div'); el.id = 'dutyLock'; el.className = 'duty-lock'; document.body.appendChild(el); }
+    el.innerHTML = `<div class="duty-box"><div class="duty-i">⏰</div><b>خارج وقت الدوام</b>
+      <div class="duty-t">دوامك من ${hm(h.from)} إلى ${hm(h.to)}</div>
+      <div class="duty-s">النظام يفتح تلقائياً عند بداية دوامك</div>
+      ${closedShifts[0] && closedShifts[0].autoClosed && Date.now() - closedShifts[0].closedAtMs < 3600000 ? `<button type="button" class="btn-soft" onclick="shiftReprint('${esc(closedShifts[0].id)}')">🖨️ إعادة طباعة تقرير الوردية</button>` : ''}
+      <button type="button" class="btn-main" onclick="dutyLogout()">🚪 تسجيل خروج</button></div>`;
+    el.classList.add('on');
+  }
+  window.dutyLogout = async () => { try { await fb().signOut(fb().auth); } catch (e) {} location.reload(); };
+  setInterval(dutyCheck, 20000);
 
   // ══════════ سجل الزبائن ══════════
   let curCust = null;            // الزبون الحالي (من مكالمة أو بحث)
