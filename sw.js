@@ -1,5 +1,5 @@
 // سرعة — كاشير المطعم: Service Worker (يعمل بدون إنترنت + إشعارات الخلفية)
-const CACHE_VERSION = 'rest2-v18';
+const CACHE_VERSION = 'rest2-v19';
 const CACHE_NAME = `app-cache-${CACHE_VERSION}`;
 const SCOPE = '/sora3a-rest2/';
 const PRECACHE = [SCOPE, SCOPE + 'index.html', SCOPE + 'pos-pro.js?v=14', SCOPE + 'pos-pro.css?v=11', SCOPE + 'manifest.json',
@@ -56,7 +56,7 @@ self.addEventListener('fetch', (event) => {
       let settled = false;
       const t = setTimeout(() => cached().then((r) => { if (r && !settled) { settled = true; resolve(r); } }), 3000);
       // الصفحة الرئيسية: نتأكد دائماً من السيرفر (حتى يوصل التحديث فوراً)
-      fetch(req.mode === 'navigate' ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : req).then((r) => { put(req, r); if (!settled) { settled = true; clearTimeout(t); resolve(r); } })
+      fetch(req.mode === 'navigate' ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : req).then((r) => { if (r.redirected && req.mode === 'navigate') r = Response.redirect(r.url, 302); else put(req, r); if (!settled) { settled = true; clearTimeout(t); resolve(r); } })
         .catch(() => cached().then((r) => { if (!settled) { settled = true; clearTimeout(t); resolve(r || Response.error()); } }));
     }));
     return;
