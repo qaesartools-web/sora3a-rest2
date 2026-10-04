@@ -1238,8 +1238,9 @@ window.confirmDelivery=async()=>{
     try{
       await window._fb.updateDoc(window._fb.doc(window._fb.db,'orders',changingOrderId),{
         captainId:cap.id,captainName:cap.name,status:'pending',rejectedBy:[],
-        customer:name,phone,address:addr,fee
+        customer:name,phone,address:addr,fee:fee??((orders.find(x=>x.id===changingOrderId)||{}).fee??5000)
       });
+      if(window.notifyCaptain)notifyCaptain(changingOrderId);
       const _o=orders.find(x=>x.id===changingOrderId)||{};
       syncTracking(changingOrderId,{status:'pending',value:_o.value,fee,captainId:cap.id,captainName:''});
       toast('✅ تم تحويل الطلب إلى '+cap.name);
@@ -2595,6 +2596,7 @@ async function doTransfer(id,cap,info){
     await orderUpdate(id,{orderType:'delivery',status:'pending',held:false,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee??5000,
       captainId:cap.id,captainName:cap.name,commission:Math.round((o.value||0)*.1),deliveryProof:null,rejectedBy:[],transferredAt:Date.now()},
       'حُوّل الطلب إلى الكابتن '+cap.name,'pending');
+    if(window.notifyCaptain)notifyCaptain(id);
     syncTracking(id,{status:'pending',value:o.value,fee:info.fee??5000,captainId:cap.id,captainName:''});
     printOrderReceipt({...o,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee??5000},'delivery',cap);
     toast('🏍️ تم تحويل الطلب إلى '+cap.name);
@@ -2677,7 +2679,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=15"></script>
+<script src="pos-pro.js?v=16"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
