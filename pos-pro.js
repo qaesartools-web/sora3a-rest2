@@ -356,7 +356,7 @@
     }
     if (type !== 'delivery' && pagerSel && feat('pager')) { o.pager = pagerSel; pagerSel = 0; }
     o.timeline = [{ status: o.status, time: now, text: 'تم إنشاء الطلب' }];
-    f.setDoc(ref, o).catch((e) => toast('❌ تعذّر حفظ الطلب: ' + (e.code || e.message)));
+    f.setDoc(ref, o).then(() => { if (type === 'delivery') notifyCaptain(ref.id); }).catch((e) => toast('❌ تعذّر حفظ الطلب: ' + (e.code || e.message)));
     if (type === 'delivery') { syncTracking(ref.id, { ...o, captainName: '' }); saveCustomer(o); }
     curCust = null;
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
@@ -1276,6 +1276,27 @@
     } catch (e) { toast('❌ تعذّر التحديث'); }
   }
 
+  // ══════════ إشعار الكابتن حتى والتطبيق مسكّر (سيرفر إشعارات مجاني) ══════════
+  // عنوان السيرفر يحطه المدير الأعلى من لوحة الإدارة (config/push). بدونه كلشي يشتغل عادي بدون هذا الإشعار.
+  let pushUrl = null;
+  const pushQueue = new Set();
+  async function loadPushUrl() {
+    try { const s = await fb().getDoc(fb().doc(fb().db, 'config', 'push')); const u = s.exists() ? String(s.data().url || '') : ''; pushUrl = /^https?:\/\//.test(u) ? u : null; } catch (e) { pushUrl = null; }
+  }
+  window.notifyCaptain = notifyCaptain;
+  async function notifyCaptain(orderId, tries) {
+    tries = tries || 0;
+    if (!pushUrl || !orderId) return;
+    if (!navigator.onLine) { pushQueue.add(orderId); return; }
+    const retry = () => { if (tries < 2) setTimeout(() => notifyCaptain(orderId, tries + 1), 3000 * (tries + 1)); else pushQueue.add(orderId); };
+    try {
+      const u = fb().auth.currentUser; if (!u) return;
+      const r = await fetch(pushUrl, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + (await u.getIdToken()) }, body: JSON.stringify({ orderId }) });
+      if (r.status === 404 || r.status >= 500) retry();
+    } catch (e) { retry(); }
+  }
+  addEventListener('online', () => { const l = [...pushQueue]; pushQueue.clear(); l.forEach((id) => notifyCaptain(id)); });
+
   // ══════════ خصم الزبون الدائم (الدلفري) ══════════
   // صاحب المطعم يحدده من تطبيق الإدارة: كل N طلبات دلفري ← خصم. الكاشير يبلّغ الزبون ثم يطبّقه بضغطة.
   let loyalty = { on: false };
@@ -1509,6 +1530,7 @@
     if ($('prodSearch')) $('prodSearch').value = '';
     listenSettings();
     listenLoyalty();
+    loadPushUrl();
     _enterApp();
     listenMenu();
     listenShifts();
