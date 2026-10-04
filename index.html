@@ -397,7 +397,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s;white-space:nowrap;}
 .toast.on{transform:translateX(-50%) translateY(0);}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=11">
+<link rel="stylesheet" href="pos-pro.css?v=12">
 </head>
 <body>
 
@@ -697,6 +697,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
       <div class="dfield"><div class="dlbl">اسم الزبون *</div><input class="dinp" id="dName" placeholder="الاسم الكامل"></div>
       <div class="dfield"><div class="dlbl">رقم الهاتف *</div><input class="dinp" id="dPhone" placeholder="07xxxxxxxxx" type="tel"></div>
       <div id="custHint"></div>
+      <div id="loyHint"></div>
       <div class="dfield"><div class="dlbl">المنطقة / العنوان *</div><input class="dinp" id="dAddr" placeholder="الحي والشارع"></div>
       <div class="dfield">
         <div class="dlbl">أجور التوصيل (د.ع)</div>
@@ -1225,7 +1226,7 @@ window.confirmDelivery=async()=>{
   const name=document.getElementById('dName').value.trim();
   const phone=document.getElementById('dPhone').value.trim();
   const addr=document.getElementById('dAddr').value.trim();
-  const fee=parseInt(document.getElementById('dFee').value)||5000;
+  const feeV=parseInt(document.getElementById('dFee').value);const fee=isNaN(feeV)?null:Math.max(0,feeV);
   if(!name){toast('⚠️ أدخل اسم الزبون');return;}
   if(!phone){toast('⚠️ أدخل رقم الهاتف');return;}
   if(!selCapId){toast('⚠️ اختر كابتن');return;}
@@ -1324,7 +1325,7 @@ async function finalOrder(type,captain,custInfo){
         orderData.customer=custInfo.name;
         orderData.phone=custInfo.phone;
         orderData.address=custInfo.addr;
-        orderData.fee=custInfo.fee||5000;
+        orderData.fee=custInfo.fee??5000;
         orderData.captainId=captain.id;
         orderData.captainName=captain.name;
         orderData.commission=Math.round(total*.1);
@@ -1463,7 +1464,7 @@ window.openChangeCapForOrder=orderId=>{
     document.getElementById('dName').value=o.customer||'';
     document.getElementById('dPhone').value=o.phone||'';
     document.getElementById('dAddr').value=o.address||'';
-    document.getElementById('dFee').value=o.fee||5000;
+    document.getElementById('dFee').value=o.fee??5000;
   }
   renderCapList();
   document.getElementById('delivOv').classList.add('on');
@@ -2584,18 +2585,18 @@ window.holdTransfer=id=>{
   document.getElementById('dName').value=(o.customer&&!/^سفري #/.test(o.customer))?o.customer:'';
   document.getElementById('dPhone').value=o.phone||'';
   document.getElementById('dAddr').value=o.address||'';
-  document.getElementById('dFee').value=o.fee||5000;
+  document.getElementById('dFee').value=o.fee??5000;
   renderCapList();
   document.getElementById('delivOv').classList.add('on');
 };
 async function doTransfer(id,cap,info){
   const o=orders.find(x=>x.id===id);if(!o)return;
   try{
-    await orderUpdate(id,{orderType:'delivery',status:'pending',held:false,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee||5000,
+    await orderUpdate(id,{orderType:'delivery',status:'pending',held:false,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee??5000,
       captainId:cap.id,captainName:cap.name,commission:Math.round((o.value||0)*.1),deliveryProof:null,rejectedBy:[],transferredAt:Date.now()},
       'حُوّل الطلب إلى الكابتن '+cap.name,'pending');
-    syncTracking(id,{status:'pending',value:o.value,fee:info.fee||5000,captainId:cap.id,captainName:''});
-    printOrderReceipt({...o,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee||5000},'delivery',cap);
+    syncTracking(id,{status:'pending',value:o.value,fee:info.fee??5000,captainId:cap.id,captainName:''});
+    printOrderReceipt({...o,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee??5000},'delivery',cap);
     toast('🏍️ تم تحويل الطلب إلى '+cap.name);
   }catch(e){toast('❌ '+e.message);}
 }
@@ -2676,7 +2677,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=14"></script>
+<script src="pos-pro.js?v=15"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){

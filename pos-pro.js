@@ -26,7 +26,7 @@
   // ══════════ الإعدادات ══════════
   const DEFAULTS = {
     receiptTitle: '', receiptSub: '', receiptPhone: '', receiptFooter: 'شكراً لزيارتكم ❤️',
-    defaultFee: 5000, feePresets: [3000, 5000, 7000], taxPct: 0, servicePct: 0, tables: 0, pagers: 10,
+    defaultFee: 5000, feePresets: [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000], taxPct: 0, servicePct: 0, tables: 0, pagers: 10,
     printKitchen: false, quickAdd: true, paper: 80,
     // أقسام المطبخ: كل قسم يستلم أصنافه فقط، ورقم الطلب يوحّدها
     kSecOn: false, catSection: {},
@@ -294,8 +294,9 @@
   const _openDeliv = openDelivModal;
   window.openDelivModal = openDelivModal = function () {
     _openDeliv();
-    $('dFee').value = settings.defaultFee || 5000;
+    $('dFee').value = settings.defaultFee ?? 5000;
     renderFeePresets();
+    $('loyHint').innerHTML = '';
     $('custHint').innerHTML = '';
     if (curCust) {
       $('dPhone').value = curCust.phone;
@@ -303,10 +304,11 @@
       else if (curCust.label) $('dName').value = curCust.label;
       showCustHint(curCust.data);
     }
+    renderLoyalty();
   };
   function renderFeePresets() {
     const el = $('feePresets'); if (!el) return;
-    el.innerHTML = (settings.feePresets || []).slice(0, 4).map((f) => `<button class="fee-p" onclick="setFee(${Number(f) || 0})">${toA(Math.round((Number(f) || 0) / 1000))}</button>`).join('');
+    el.innerHTML = (settings.feePresets || []).slice(0, 10).map((f) => { const v = Number(f) || 0; return `<button class="fee-p${v ? '' : ' free'}" onclick="setFee(${v})">${v ? v.toLocaleString('en-US') : 'مجاني'}</button>`; }).join('');
   }
 
   // عناصر الطلب مع الملاحظات والتكلفة
@@ -322,7 +324,7 @@
       subtotal: t.sub, discount: t.disc, service: t.service, tax: t.tax, value: t.total,
       inv: true, kitchen: 'new', createdAt: now, createdAtMs: Date.now(), shiftId: shift ? shift.id : null, device: deviceId,
     };
-    if (t.disc) o.discountInfo = { type: disc.type, value: disc.value, reason: disc.reason || '' };
+    if (t.disc) { o.discountInfo = { type: disc.type, value: disc.value, reason: disc.reason || '' }; if (disc.loyalty) o.discountInfo.loyalty = true; }
     applySections(o);
     return o;
   }
@@ -330,15 +332,21 @@
   // استبدال finalOrder: يحفظ فوراً (يعمل بدون إنترنت) ويطبع فاتورة كاملة
   window.finalOrder = finalOrder = async function (type, captain, custInfo, pay) {
     if (!restData || !cart.length) return;
+    // خصم الزبون الدائم: للدلفري فقط، ولنفس الزبون، وما دام مفعّل من الإدارة
+    if (disc.loyalty && (type !== 'delivery' || !loyaltyOn() || disc.loyalty.phone !== phoneKey(custInfo && custInfo.phone))) {
+      disc = { type: 'amt', value: 0, reason: '' };
+      if (type === 'delivery') toast('⚠️ أُزيل خصم الزبون الدائم (الخدمة موقوفة أو الرقم تغيّر)');
+    }
     const t = totals(type), items = cartItemsForOrder(), now = nowT();
     const f = fb(), ref = f.doc(f.collection(f.db, 'orders'));
     const o = baseOrder(type, t, items);
     if (type === 'delivery') {
       Object.assign(o, {
         status: 'pending', customer: custInfo.name, phone: custInfo.phone, address: custInfo.addr,
-        fee: custInfo.fee || settings.defaultFee || 0, captainId: captain.id, captainName: captain.name,
+        fee: custInfo.fee ?? settings.defaultFee ?? 0, captainId: captain.id, captainName: captain.name,
         commission: Math.round(t.total * .1), deliveryProof: null, rejectedBy: [], payment: { method: 'cod' },
       });
+      if (disc.loyalty && t.disc) o.loyalty = { n: disc.loyalty.n, amount: t.disc };
     } else {
       const tbl = pay && pay.table ? Number(pay.table) : 0;
       const salonNum = type === 'salon' ? (tbl || getNextSalonNum()) : null;
@@ -523,6 +531,7 @@
       ${o.tax ? `<div class="row"><span>ضريبة</span><span>${fmt(o.tax)}</span></div>` : ''}
       <div class="total"><span>الإجمالي</span><span>${fmt(o.value)} د.ع</span></div>
       ${type === 'delivery' && o.fee ? `<div class="row"><span>أجور التوصيل</span><span>${fmt(o.fee)}</span></div><div class="row" style="font-weight:900;font-size:13px"><span>المطلوب من الزبون</span><span>${fmt((o.value || 0) + (o.fee || 0))} د.ع</span></div>` : ''}
+      ${type === 'delivery' && o.fee === 0 ? `<div class="row" style="font-weight:900"><span>🎁 التوصيل مجاني</span><span>0</span></div><div class="row" style="font-weight:900;font-size:13px"><span>المطلوب من الزبون</span><span>${fmt(o.value || 0)} د.ع</span></div>` : ''}
       ${p.method ? `<div class="div"></div><div class="row"><span>طريقة الدفع</span><span>${esc(PAY_AR[p.method] || p.method)}</span></div>` : ''}
       ${p.card && p.method === 'mixed' ? `<div class="row"><span>بطاقة</span><span>${fmt(p.card)}</span></div>` : ''}
       ${p.received && (p.method === 'cash' || p.method === 'mixed') ? `<div class="row"><span>المستلم نقداً</span><span>${fmt(p.received)}</span></div><div class="row"><span>الباقي</span><span>${fmt(p.change || 0)}</span></div>` : ''}
@@ -859,7 +868,7 @@
       receiptTitle: $('stTitle').value.trim(), receiptSub: $('stSub').value.trim(), receiptPhone: $('stPhone').value.trim(), receiptFooter: $('stFooter').value.trim(),
       paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked,
       taxPct: clamp($('stTax').value, 0, 50), servicePct: clamp($('stSvc').value, 0, 50), defaultFee: clamp($('stFee').value, 0, 1e6),
-      feePresets: list($('stFees').value).map(num).filter((x) => x > 0).slice(0, 4), tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
+      feePresets: [...new Set(list($('stFees').value).filter((x) => String(x).trim() !== '').map(num))].filter((x) => x >= 0).slice(0, 10), tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
       kSecOn: $('stSecOn').checked,
       sections: (settings.sections || DEFAULTS.sections).map((x, i) => ({ id: x.id, emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
       catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
@@ -882,6 +891,8 @@
       if (!s.exists()) return;
       const { updatedAtMs, ...d } = s.data();
       settings = { ...DEFAULTS, ...d };
+      // أزرار الأجرة القديمة الافتراضية ← القائمة الجديدة (مجاني لحد 4000)
+      if (JSON.stringify(settings.feePresets) === '[3000,5000,7000]') settings.feePresets = DEFAULTS.feePresets;
       lsSet(setKey(), settings);
       renderCart();
     }, () => {}));
@@ -1265,6 +1276,56 @@
     } catch (e) { toast('❌ تعذّر التحديث'); }
   }
 
+  // ══════════ خصم الزبون الدائم (الدلفري) ══════════
+  // صاحب المطعم يحدده من تطبيق الإدارة: كل N طلبات دلفري ← خصم. الكاشير يبلّغ الزبون ثم يطبّقه بضغطة.
+  let loyalty = { on: false };
+  const loyaltyOn = () => !!(loyalty.on && loyalty.every >= 2 && loyalty.value > 0);
+  const loyaltyLabel = () => loyalty.type === 'amt' ? money(loyalty.value) : toA(loyalty.value) + '٪' + (loyalty.cap ? ' (بحد أقصى ' + money(loyalty.cap) + ')' : '');
+  const dCount = (d) => (d && (d.dOrders ?? d.orders)) || 0;
+  function loyaltyDue(d) { if (!loyaltyOn() || !d) return 0; const next = dCount(d) + 1; return next % loyalty.every === 0 ? next : 0; }
+  function listenLoyalty() {
+    loyalty = { on: false };
+    unsubs.push(fb().onSnapshot(sub('loyalty', 'main'), (s) => {
+      loyalty = s.exists() ? s.data() : { on: false };
+      if (!loyaltyOn() && disc.loyalty) { disc = { type: 'amt', value: 0, reason: '' }; toast('⏸️ أوقفت الإدارة خصم الزبائن الدائمين — أُزيل من السلة'); renderCart(); }
+      renderLoyalty(); renderCurCust();
+    }, () => {}));
+  }
+  function loyCustomer() {
+    const k = phoneKey($('dPhone') && $('dPhone').value);
+    if (k.length < 7) return null;
+    const data = curCust && curCust.phone === k && curCust.data ? curCust.data : custCache.get(k);
+    return data ? { k, data } : null;
+  }
+  window.renderLoyalty = renderLoyalty;
+  function renderLoyalty() {
+    const el = $('loyHint'); if (!el) return;
+    const busy = (typeof transferOrderId !== 'undefined' && transferOrderId) || (typeof changingOrderId !== 'undefined' && changingOrderId);
+    const c = !busy && $('delivOv') && $('delivOv').classList.contains('on') ? loyCustomer() : null;
+    const due = c ? loyaltyDue(c.data) : 0;
+    if (disc.loyalty && (!c || disc.loyalty.phone !== c.k || !loyaltyOn())) { disc = { type: 'amt', value: 0, reason: '' }; renderCart(); }
+    if (!due) { el.innerHTML = ''; return; }
+    if (disc.loyalty) {
+      el.innerHTML = `<div class="loy-hint done">✅ <b>تم تطبيق خصم الزبون الدائم</b> — ${loyaltyLabel()}<small>الخصم -${money(totals('delivery').disc)} ينطبع بالفاتورة</small><button type="button" onclick="removeLoyalty()">✕ إلغاء الخصم</button></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="loy-hint">🎉 <b>هذا الزبون يستحق خصم ${loyaltyLabel()}</b><br>هذا طلب الدلفري رقم ${toA(due)} له — زبون دائم 🌟<small>📢 بلّغ الزبون بالخصم بالتلفون، وبعدها اضغط الزر</small><button type="button" onclick="applyLoyalty()">✅ بلّغت الزبون — طبّق الخصم</button></div>`;
+  };
+  window.applyLoyalty = () => {
+    const c = loyCustomer(); const due = c ? loyaltyDue(c.data) : 0;
+    if (!due) { toast('⚠️ الزبون ما يستحق الخصم حالياً'); renderLoyalty(); return; }
+    const sub_ = totals(null).sub;
+    if (loyalty.type === 'amt') disc = { type: 'amt', value: Math.min(loyalty.value, sub_), reason: 'خصم الزبون الدائم' };
+    else {
+      const pct = Math.min(100, loyalty.value), amt = Math.round(sub_ * pct / 100);
+      disc = loyalty.cap && amt > loyalty.cap ? { type: 'amt', value: loyalty.cap, reason: 'خصم الزبون الدائم' } : { type: 'pct', value: pct, reason: 'خصم الزبون الدائم' };
+    }
+    disc.loyalty = { phone: c.k, n: due };
+    renderCart(); renderLoyalty();
+    toast('🎁 تم تطبيق خصم الزبون الدائم');
+  };
+  window.removeLoyalty = () => { disc = { type: 'amt', value: 0, reason: '' }; renderCart(); renderLoyalty(); };
+
   // ══════════ سجل الزبائن ══════════
   let curCust = null;            // الزبون الحالي (من مكالمة أو بحث)
   const custCache = new Map();
@@ -1284,10 +1345,14 @@
     const k = phoneKey(o.phone); if (k.length < 7 || !rid()) return;
     const f = fb(), counts = {};
     (o.items || []).forEach((i) => { const n = String(i.name || '').slice(0, 60); if (n) counts[n] = f.increment(i.qty || 1); });
+    const cached = custCache.get(k);
     const d = { phone: k, orders: f.increment(1), spent: f.increment(o.value || 0), lastOrderAt: Date.now(),
       lastItems: (o.items || []).slice(0, 15).map((i) => { const x = { name: i.name, variant: i.variant, qty: i.qty }; if (i.note) x.note = i.note; return x; }), itemCounts: counts };
     if (o.customer && !/^(سفري|صالة|طاولة)/.test(o.customer)) d.name = String(o.customer).slice(0, 60);
     if (o.address) d.address = String(o.address).slice(0, 200);
+    // عدّاد طلبات الدلفري (أساس خصم الزبون الدائم) — الزبائن القدامى يبدأ عدّادهم من عدد طلباتهم
+    if (o.orderType === 'delivery') d.dOrders = cached && cached.dOrders == null ? (cached.orders || 0) + 1 : f.increment(1);
+    if (o.loyalty) { d.loyaltyGiven = f.increment(1); d.lastLoyaltyAt = Date.now(); }
     f.setDoc(sub('customers', k), d, { merge: true }).catch(() => {});
     custCache.delete(k);
   }
@@ -1297,11 +1362,12 @@
     if (!d) return '<span class="cs-new">🆕 زبون جديد</span>';
     const f = favs(d, 3);
     return `<b>${esc(d.name || 'بدون اسم')}</b>${d.address ? ' • 📍 ' + esc(d.address) : ''}<br>
-      ⭐ ${toA(d.orders || 0)} طلب${d.spent ? ' • ' + money(d.spent) : ''}${d.lastOrderAt ? ' • آخر طلب ' + ago(d.lastOrderAt) : ''}
+      ⭐ ${toA(d.orders || 0)} طلب${loyaltyDue(d) ? '<span class="loy-badge">🎁 يستحق خصم بالدلفري</span>' : ''}${d.spent ? ' • ' + money(d.spent) : ''}${d.lastOrderAt ? ' • آخر طلب ' + ago(d.lastOrderAt) : ''}
       ${f.length ? '<br>❤️ ' + f.map(([n, q]) => esc(n) + ' ×' + toA(q)).join('، ') : ''}`;
   }
   function showCustHint(d) {
     const el = $('custHint'); if (!el) return;
+    renderLoyalty();
     el.innerHTML = d ? `<div class="cust-hint">${custSummary(d)}${(d.lastItems || []).length ? `<button type="button" onclick="repeatLast()">🔁 أضف آخر طلب للسلة</button>` : ''}</div>` : '';
   }
   // كتابة الرقم بنموذج الدلفري تملأ الاسم والعنوان تلقائياً
@@ -1329,7 +1395,7 @@
     const el = $('curCust'); if (!el) return;
     if (!curCust) { el.classList.remove('on'); el.innerHTML = ''; return; }
     el.classList.add('on');
-    el.innerHTML = `<div style="flex:1;min-width:0">📞 <b dir="auto">${esc(curCust.phone || curCust.label || '')}</b> — ${curCust.data ? esc(curCust.data.name || 'زبون') + ' • ' + toA(curCust.data.orders || 0) + ' طلب' : 'زبون جديد'}</div><button type="button" title="إلغاء" onclick="clearCurCust()">✕</button>`;
+    el.innerHTML = `<div style="flex:1;min-width:0">📞 <b dir="auto">${esc(curCust.phone || curCust.label || '')}</b> — ${curCust.data ? esc(curCust.data.name || 'زبون') + ' • ' + toA(curCust.data.orders || 0) + ' طلب' + (loyaltyDue(curCust.data) ? '<span class="loy-badge">🎁 يستحق خصم بالدلفري</span>' : '') : 'زبون جديد'}</div><button type="button" title="إلغاء" onclick="clearCurCust()">✕</button>`;
   }
   window.clearCurCust = () => { curCust = null; renderCart(); };
   // سفري قيد التحضير: نفس التعبئة التلقائية
@@ -1442,6 +1508,7 @@
     disc = { type: 'amt', value: 0, reason: '' }; prodQuery = ''; shift = null; kdsSeen.clear(); kdsReady = false;
     if ($('prodSearch')) $('prodSearch').value = '';
     listenSettings();
+    listenLoyalty();
     _enterApp();
     listenMenu();
     listenShifts();

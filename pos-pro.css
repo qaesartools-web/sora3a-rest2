@@ -244,3 +244,19 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 .kds-head{flex-wrap:wrap;}
 .kds-head>div:first-child b{white-space:nowrap;}
 .kds-head .kds-sub{white-space:nowrap;}
+
+/* خصم الزبون الدائم (الدلفري) */
+.loy-hint{background:linear-gradient(135deg,rgba(245,158,11,.16),rgba(34,197,94,.12));border:2px solid #F59E0B;border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:13px;line-height:1.7;}
+.loy-hint b{font-size:15px;}
+.loy-hint small{display:block;color:var(--muted);font-weight:700;}
+.loy-hint button{display:block;width:100%;margin-top:8px;padding:10px;border-radius:10px;border:0;background:#16A34A;color:#fff;font-weight:900;font-size:14px;cursor:pointer;}
+.loy-hint.done{border-color:#16A34A;background:rgba(34,197,94,.10);}
+.loy-hint.done button{background:var(--panel);color:var(--red);border:1px solid var(--line);font-weight:800;}
+.loy-badge{display:inline-block;background:#F59E0B;color:#1C1205;font-weight:900;font-size:11px;border-radius:999px;padding:1px 8px;margin-inline-start:4px;}
+.fee-p.free{color:#16A34A;font-weight:900;}
+/* أزرار أجرة التوصيل: تنزل لسطر ثاني بدل ما تطلع برا النافذة */
+.fee-row{flex-wrap:wrap;}
+.fee-row .dinp{flex:1 1 100%;}
+.fee-row .fee-presets{flex:1 1 100%;}
+#feePresets{display:flex;flex-wrap:wrap;gap:6px;}
+#feePresets .fee-p{flex:1 0 auto;min-width:56px;padding:8px 6px;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;}
