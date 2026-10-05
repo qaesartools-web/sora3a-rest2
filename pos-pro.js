@@ -1279,23 +1279,24 @@
   // ══════════ إشعار الكابتن حتى والتطبيق مسكّر (سيرفر إشعارات مجاني) ══════════
   // عنوان السيرفر يحطه المدير الأعلى من لوحة الإدارة (config/push). بدونه كلشي يشتغل عادي بدون هذا الإشعار.
   let pushUrl = null;
-  const pushQueue = new Set();
+  const pushQueue = new Map(); // orderId → وقت التخصيص
   async function loadPushUrl() {
     try { const s = await fb().getDoc(fb().doc(fb().db, 'config', 'push')); const u = s.exists() ? String(s.data().url || '') : ''; pushUrl = /^https?:\/\//.test(u) ? u : null; } catch (e) { pushUrl = null; }
   }
   window.notifyCaptain = notifyCaptain;
-  async function notifyCaptain(orderId, tries) {
-    tries = tries || 0;
+  // n = وقت هذا التخصيص: إعادة المحاولة ترسل نفس n (ما يتكرر الإشعار)، وإعادة تخصيص نفس الكابتن ترسل n جديد (يرن من جديد)
+  async function notifyCaptain(orderId, tries, n) {
+    tries = tries || 0; n = n || Date.now();
     if (!pushUrl || !orderId) return;
-    if (!navigator.onLine) { pushQueue.add(orderId); return; }
-    const retry = () => { if (tries < 2) setTimeout(() => notifyCaptain(orderId, tries + 1), 3000 * (tries + 1)); else pushQueue.add(orderId); };
+    if (!navigator.onLine) { pushQueue.set(orderId, n); return; }
+    const retry = () => { if (tries < 2) setTimeout(() => notifyCaptain(orderId, tries + 1, n), 3000 * (tries + 1)); else pushQueue.set(orderId, n); };
     try {
       const u = fb().auth.currentUser; if (!u) return;
-      const r = await fetch(pushUrl, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + (await u.getIdToken()) }, body: JSON.stringify({ orderId }) });
+      const r = await fetch(pushUrl, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + (await u.getIdToken()) }, body: JSON.stringify({ orderId, n }) });
       if (r.status === 404 || r.status >= 500) retry();
     } catch (e) { retry(); }
   }
-  addEventListener('online', () => { const l = [...pushQueue]; pushQueue.clear(); l.forEach((id) => notifyCaptain(id)); });
+  addEventListener('online', () => { const l = [...pushQueue]; pushQueue.clear(); l.forEach(([id, n]) => notifyCaptain(id, 0, n)); });
 
   // ══════════ خصم الزبون الدائم (الدلفري) ══════════
   // صاحب المطعم يحدده من تطبيق الإدارة: كل N طلبات دلفري ← خصم. الكاشير يبلّغ الزبون ثم يطبّقه بضغطة.
