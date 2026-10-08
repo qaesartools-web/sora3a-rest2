@@ -830,7 +830,7 @@
         <div class="flbl" style="margin-top:10px">كل فئة بالمنيو تابعة لأي قسم؟</div>
         ${menu.filter((c) => c && c.cat).map((c, i) => `<div class="set-row"><div class="sec-cat">${esc(c.emoji || '')} ${esc(c.cat)}</div><div><select class="fsel" id="stCat${i}" data-cat="${esc(c.cat)}"><option value="">— بدون قسم (لا تُطبع بالمطبخ) —</option>${(s.sections || []).filter((x) => x.name).map((x) => `<option value="${esc(x.id)}" ${(s.catSection || {})[c.cat] === x.id ? 'selected' : ''}>${esc(x.emoji || '')} ${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<div class="ac-sub">أضف فئات للمنيو أولاً</div>'}
         <div id="secHealth" class="sec-health"></div>
-        ${window.SoraDesktop ? dpSettingsHtml(s) : `${/Windows/i.test(navigator.userAgent) ? `<div class="dp-promo"><b>💻 برنامج الكاشير للويندوز</b> — يطبع كل قسم على طابعته مباشرة، بدون QZ Tray وبدون نافذة طباعة. <a href="${WIN_APP_URL}">⬇️ تنزيل</a></div>` : ''}
+        ${window.SoraDesktop ? dpSettingsHtml(s) : `${appOffer() ? `<div class="dp-promo"><b>${appOffer().label}</b> — ${appOffer().text} <a href="${appOffer().url}">⬇️ تنزيل</a></div>` : ''}
         <div class="flbl" style="margin-top:12px">🖨️ الطباعة على هذا الجهاز</div>
         <select class="fsel" id="stQzOn"><option value="0" ${qzCfgGet().on ? '' : 'selected'}>طابعة واحدة — كل قسم تذكرته بورقة منفصلة</option><option value="1" ${qzCfgGet().on ? 'selected' : ''}>طابعة لكل قسم — عبر برنامج QZ Tray</option></select>
         <div id="qzBox" style="display:${qzCfgGet().on ? 'block' : 'none'}">
@@ -1138,6 +1138,17 @@
   // وإذا طابعة قسم ما اشتغلت تنطبع تذكرته على الرئيسية حتى ما تضيع. الإعداد خاص بهالحاسبة.
   const DESK = window.SoraDesktop || null;
   const WIN_APP_URL = 'https://github.com/qaesartools-web/sora3a-rest2/releases/latest/download/sora3a-cashier-setup.exe';
+  const REL = 'https://github.com/qaesartools-web/sora3a-rest2/releases';
+  // تطبيق الكاشير لكل نظام: ويندوز، ماك، لينكس، أندرويد (أجهزة الكاشير والتابلت)
+  function appOffer() {
+    const ua = navigator.userAgent;
+    const print = 'يطبع كل قسم على طابعته مباشرة، بدون أي برنامج ثاني وبدون نافذة طباعة.';
+    if (/Android/i.test(ua)) return { label: '📱 تطبيق الكاشير للأندرويد', text: 'يطبع على الطابعة المدمجة بجهاز الكاشير، وطابعات الشبكة والبلوتوث مباشرة.', url: REL + '/download/cashier-android/sora3a-cashier.apk' };
+    if (/Windows/i.test(ua)) return { label: '💻 برنامج الكاشير للويندوز', text: print, url: WIN_APP_URL };
+    if (/Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad/i.test(ua) && !('ontouchend' in document)) return { label: '💻 برنامج الكاشير للماك', text: print, url: REL + '/latest/download/sora3a-cashier-mac.dmg' };
+    if (/Linux/i.test(ua) && !/CrOS/i.test(ua)) return { label: '💻 برنامج الكاشير للينكس', text: print, url: REL + '/latest/download/sora3a-cashier-linux.AppImage' };
+    return null;
+  }
   const dpKey = () => 'pos_dp_' + rid();
   const dpCfg = () => ({ main: '', printers: {}, copies: {}, receiptCopies: 1, fallback: true, ...lsGet(dpKey(), {}) });
   window.dpCfgGet = dpCfg;
@@ -1172,8 +1183,22 @@
     const m = $('dpMain'); if (m) m.innerHTML = dpOpt(list, m.value || c.main, '— الطابعة الافتراضية للويندوز —');
     secList().forEach((x) => { const sel = $('dpP_' + x.id); if (sel) sel.innerHTML = dpOpt(list, sel.value || (c.printers || {})[x.id] || '', '— نفس الطابعة الرئيسية —'); });
     const st = $('dpStatus');
-    if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}</span>`).join('') : '<span class="ac-sub">ما لكينا طابعات — عرّف الطابعة بالويندوز أولاً</span>';
+    if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}${p.kind === 'lan' && DESK.removePrinter ? ` <button type="button" class="dp-x" title="شيل الطابعة" onclick="dpRemoveNet(this.dataset.n)" data-n="${esc(p.name)}">✕</button>` : ''}</span>`).join('')
+      : `<span class="ac-sub">${DESK.platform === 'android' ? 'ما لكينا طابعات — أضف طابعة شبكة تحت، أو اقرن طابعة البلوتوث من إعدادات الجهاز' : 'ما لكينا طابعات — عرّف الطابعة بالجهاز أولاً'}</span>`;
     if (!quiet) toast('🖨️ ' + toA(list.length) + ' طابعة بالحاسبة');
+  };
+  window.dpAddNet = async () => {
+    const ip = (($('dpNetIp') || {}).value || '').trim();
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) { toast('⚠️ اكتب IP الطابعة صحيح (مثال: 192.168.1.50)'); return; }
+    const r = await DESK.addNetworkPrinter((($('dpNetName') || {}).value || '').trim(), ip, Number(($('dpNetPort') || {}).value) || 9100).catch((e) => ({ ok: false, error: String(e) }));
+    if (!r || !r.ok) { toast('❌ ' + ((r && r.error) || 'ما انضافت')); return; }
+    toast('✅ انضافت ' + r.name + ' — اختارها لقسمها وجرّبها بـ 🧪');
+    ['dpNetName', 'dpNetIp'].forEach((id) => { const el = $(id); if (el) el.value = ''; });
+    dpFind(true);
+  };
+  window.dpRemoveNet = async (name) => {
+    if (!confirm('تشيل الطابعة «' + name + '»؟')) return;
+    await DESK.removePrinter(name); toast('🗑️ انشالت الطابعة'); dpFind(true);
   };
   window.dpTest = async (sid) => {
     const pr = sid === 'main' ? ($('dpMain') || {}).value : ($('dpP_' + sid) || {}).value || ($('dpMain') || {}).value;
@@ -1196,7 +1221,7 @@
     const c = dpCfg(), secs = (s.sections || []).filter((x) => x.name);
     const cp = (id, v) => `<input class="finp" type="number" min="1" max="5" id="${id}" value="${v || 1}" title="عدد النسخ" style="width:64px;text-align:center">`;
     return `<div class="flbl" style="margin-top:12px">🖨️ الطباعة — مدمجة ببرنامج الكاشير (بدون QZ)</div>
-      <div class="ac-sub" style="margin:4px 0 8px;line-height:1.8">كل طابعة معرّفة بالويندوز تطلع هنا. اختر طابعة الفاتورة وطابعة كل قسم، وجرّبها بـ 🧪. الطباعة مباشرة بدون أي نافذة.</div>
+      <div class="ac-sub" style="margin:4px 0 8px;line-height:1.8">${DESK.platform === 'android' ? 'الطابعة المدمجة بالجهاز وطابعات البلوتوث المقترنة تطلع هنا وحدها، وطابعات الشبكة تضيفها بالـ IP تحت.' : DESK.platform === 'darwin' || DESK.platform === 'linux' ? 'كل طابعة معرّفة بالجهاز تطلع هنا.' : 'كل طابعة معرّفة بالويندوز تطلع هنا.'} اختر طابعة الفاتورة وطابعة كل قسم، وجرّبها بـ 🧪. الطباعة مباشرة بدون أي نافذة.</div>
       ${featOn('printTest') ? `<div class="dp-test">
         <label class="set-check" style="margin:0"><input type="checkbox" id="dpTestChk" onchange="dpTestMode(this.checked)"> 🧪 <b>وضع تجربة الطابعات</b> — طابعات وهمية، والورق يطلع على شاشة «محاكي الطابعات» بدون أي طابعة حقيقية</label>
         <div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="btn-soft" style="flex:1" onclick="dpSample()">🧾 طلب تجريبي</button><button type="button" class="btn-soft" style="flex:1" onclick="SoraDesktop.openSimulator()">🖥️ فتح المحاكي</button></div>
@@ -1206,7 +1231,13 @@
       <div class="set-row" style="margin-top:8px"><div class="sec-cat">🧾 الفاتورة (الطابعة الرئيسية)</div><div style="display:flex;gap:6px"><select class="fsel" id="dpMain" style="flex:1"><option value="${esc(c.main)}" selected>${esc(c.main || '— الطابعة الافتراضية للويندوز —')}</option></select>${cp('dpRc', c.receiptCopies)}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('main')">🧪</button></div></div>
       ${secs.map((x) => `<div class="set-row" style="margin-top:8px"><div class="sec-cat">${esc(x.emoji || '')} ${esc(x.name)}</div><div style="display:flex;gap:6px"><select class="fsel" id="dpP_${esc(x.id)}" style="flex:1"><option value="${esc((c.printers || {})[x.id] || '')}" selected>${esc((c.printers || {})[x.id] || '— نفس الطابعة الرئيسية —')}</option></select>${cp('dpC_' + esc(x.id), (c.copies || {})[x.id])}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('${esc(x.id)}')">🧪</button></div></div>`).join('')}
       <label class="set-check" style="margin-top:8px"><input type="checkbox" id="dpFb" ${c.fallback !== false ? 'checked' : ''}> إذا طابعة قسم ما اشتغلت (مطفية / خلص الورق)، اطبع تذكرتها على الطابعة الرئيسية حتى ما تضيع</label>
-      <label class="set-check"><input type="checkbox" id="dpAutoChk" onchange="dpAuto(this.checked)"> شغّل برنامج الكاشير وحده مع تشغيل الحاسبة</label>
+      ${DESK.canAddNetwork ? `<div class="dp-net"><div class="flbl">➕ إضافة طابعة شبكة (LAN / Wi-Fi)</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><input class="finp" id="dpNetName" placeholder="الاسم (مثلاً: مطبخ الشاورما)" style="flex:2;min-width:140px">
+        <input class="finp" id="dpNetIp" dir="ltr" inputmode="decimal" placeholder="192.168.1.50" style="flex:1.4;min-width:120px">
+        <input class="finp" id="dpNetPort" dir="ltr" type="number" value="9100" style="width:80px">
+        <button type="button" class="btn-soft" onclick="dpAddNet()">➕ إضافة</button></div>
+        <div class="ac-sub" style="margin-top:4px">الـ IP يطلع من ورقة إعدادات الطابعة (اضغط زر الطابعة مطوّلاً وهي تشتغل).</div></div>` : ''}
+      ${DESK.canAutoStart === false ? '' : `<label class="set-check"><input type="checkbox" id="dpAutoChk" onchange="dpAuto(this.checked)"> شغّل برنامج الكاشير وحده مع تشغيل الحاسبة</label>`}
       <details style="margin-top:8px" ontoggle="if(this.open)dpJobs()"><summary class="ac-sub" style="cursor:pointer">🧾 سجل الطباعة (آخر 30) — وإعادة الطباعة</summary><div id="dpJobs" class="dp-jobs"></div></details>
       <div class="ac-sub" style="margin-top:6px">برنامج الكاشير ${esc(DESK.version || '')}</div>`;
   }
