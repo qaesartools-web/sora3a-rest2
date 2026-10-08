@@ -460,6 +460,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <div>
       <div class="tlogo"><img src="logo.svg" alt="" class="brand-ic"> سرعة <span class="cdot" id="cdot"></span></div>
       <div class="trest" id="restName">المطعم</div>
+      <button type="button" class="br-sw" id="branchBtn" hidden onclick="switchBranch()" title="تغيير الفرع">🏢 تغيير الفرع</button>
     </div>
     <button class="lout" onclick="doLogout()">خروج</button>
   </div>
@@ -957,14 +958,19 @@ window.addEventListener('fbReady',()=>{
           try{const q=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('userId','==',user.uid)));if(!q.empty)restId=q.docs[0].id;}catch(e){}
         }
         if(!restId){await denyLogin('⚠️ الحساب غير مرتبط بمطعم — تواصل مع الإدارة');return;}
+        // الفروع: صاحب المطعم يختار الفرع اللي يشتغل عليه هذا الجهاز (يربطها المدير الأعلى)
+        const branches=!isCashierAcc&&ud&&Array.isArray(ud.branches)?ud.branches.filter(b=>b&&b!==restId):[];
+        if(branches.length)restId=await pickBranch(user.uid,[restId,...branches]);
         const rs=await fb.getDoc(fb.doc(fb.db,'restaurants',restId));
-        if(!rs.exists()||(!isCashierAcc&&rs.data().userId!==user.uid)){await denyLogin('❌ هذا الحساب غير مرتبط بمطعم');return;}
+        if(!rs.exists()||(!isCashierAcc&&rs.data().userId!==user.uid&&!branches.includes(restId))){await denyLogin('❌ هذا الحساب غير مرتبط بمطعم');return;}
         const rd=rs.data();
-        if(rd.active===false){await denyLogin('⏸️ حساب المطعم موقوف — تواصل مع الإدارة');return;}
-        if(rd.expiryMs&&rd.expiryMs<Date.now()){await denyLogin('⛔ انتهى الاشتراك — تواصل مع الإدارة للتجديد');return;}
+        const brMsg=branches.length?' — سجّل دخول مرة ثانية واختار فرع ثاني':'';
+        if(branches.length&&(rd.active===false||(rd.expiryMs&&rd.expiryMs<Date.now()))){try{localStorage.removeItem('pos_branch_'+user.uid);}catch(e){}}
+        if(rd.active===false){await denyLogin('⏸️ حساب المطعم موقوف — تواصل مع الإدارة'+brMsg);return;}
+        if(rd.expiryMs&&rd.expiryMs<Date.now()){await denyLogin('⛔ انتهى الاشتراك — تواصل مع الإدارة للتجديد'+brMsg);return;}
         restData={id:rs.id,...rd};
         // من يستخدم الكاشير: صاحب المطعم (كل الصلاحيات) أو كاشير بصلاحيات يحددها صاحب المطعم
-        window.posUser={uid:user.uid,role:isCashierAcc?'cashier':'owner',name:(ud&&ud.name)||'',perms:isCashierAcc?(ud.perms||{}):null};
+        window.posUser={uid:user.uid,role:isCashierAcc?'cashier':'owner',name:(ud&&ud.name)||'',perms:isCashierAcc?(ud.perms||{}):null,branches:branches.length>0};
         try{localStorage.setItem(sessKey,JSON.stringify({rest:restData,user:window.posUser,at:Date.now()}));}catch(e){}
         menu=JSON.parse(JSON.stringify(defaultMenu));loadMenu();
         enterApp();
@@ -977,6 +983,30 @@ window.addEventListener('fbReady',()=>{
   document.getElementById('inPass').addEventListener('keypress',e=>{if(e.key==='Enter')doLogin();});
 });
 
+// اختيار الفرع (يتحفظ على هذا الجهاز)
+function pickBranch(uid,ids){
+  const k='pos_branch_'+uid;
+  let saved=null;try{saved=localStorage.getItem(k);}catch(e){}
+  if(saved&&ids.includes(saved))return Promise.resolve(saved);
+  return new Promise(async res=>{
+    const fb=window._fb;
+    const list=await Promise.all(ids.map(async id=>{
+      try{const s=await fb.getDoc(fb.doc(fb.db,'restaurants',id));const d=s.exists()?s.data():{};return{id,name:d.name||id,area:d.area||'',off:d.active===false||!!(d.expiryMs&&d.expiryMs<Date.now())};}
+      catch(e){return{id,name:id,area:'',off:false};}
+    }));
+    document.getElementById('splash')&&document.getElementById('splash').classList.add('hide');
+    const ov=document.createElement('div');ov.className='br-pick';ov.id='branchPick';
+    ov.innerHTML=`<div class="br-box"><div class="br-t">🏢 اختار الفرع</div><div class="br-s">يتحفظ على هذا الجهاز — تگدر تغيّره بعدين من زر «تغيير الفرع» فوق</div>
+      ${list.map(b=>`<button type="button" class="br-b" data-id="${esc(b.id)}" ${b.off?'disabled':''}><b>${esc(b.name)}</b><small>${b.off?'⛔ الاشتراك منتهي أو موقوف':esc(b.area||'')}</small></button>`).join('')}</div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener('click',e=>{const b=e.target.closest('.br-b');if(!b||b.disabled)return;try{localStorage.setItem(k,b.dataset.id);}catch(_){}ov.remove();res(b.dataset.id);});
+  });
+}
+window.switchBranch=()=>{
+  if(cart.length&&!confirm('السلة بيها أصناف — تتمسح إذا غيّرت الفرع. نكمل؟'))return;
+  try{localStorage.removeItem('pos_branch_'+(window.posUser&&window.posUser.uid));}catch(e){}
+  location.reload();
+};
 async function denyLogin(msg){
   try{await window._fb.signOut(window._fb.auth);}catch(e){}
   const err=document.getElementById('errBox');

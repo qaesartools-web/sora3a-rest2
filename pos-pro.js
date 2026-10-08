@@ -990,6 +990,7 @@
     const os = $('ordSum'); if (os) os.style.display = isCashierRole() ? 'none' : '';
     const rn = $('restName');
     if (rn) rn.textContent = (restData.name || 'المطعم') + (u.role === 'cashier' ? ' • 👤 ' + (u.name || 'كاشير') : '');
+    const bb = $('branchBtn'); if (bb) bb.hidden = !u.branches;
     const ts = $('themeSwitcher'); if (ts && u.role === 'cashier' && !can('settings')) ts.style.display = 'none';
     // إذا كان على شاشة لم يعد مسموحاً بها
     const cur = TABS.find((t) => $(t + 'Screen').classList.contains('on'));

@@ -54,6 +54,11 @@ export function staffGate(el, { title, sub, onIn, onOut }) {
         if (!q.empty) rid = q.docs[0].id;
       }
       if (!rid) return deny('❌ الحساب مو مربوط بمطعم');
+      // صاحب الفروع: نفس الفرع المختار على هذا الجهاز بالكاشير
+      if (d.role === 'restaurant' && Array.isArray(d.branches) && d.branches.length) {
+        let saved = null; try { saved = localStorage.getItem('pos_branch_' + user.uid); } catch (e) {}
+        if (saved && d.branches.includes(saved)) rid = saved;
+      }
       const r = await getDoc(doc(db, 'restaurants', rid));
       el.hidden = true; el.innerHTML = '';
       onIn({ uid: user.uid, role: d.role, name: d.name || '', rid, rest: r.exists() ? r.data() : {} });
