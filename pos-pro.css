@@ -278,12 +278,5 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 .sh-warn .btn-soft{display:block;margin-top:8px;width:100%}
 .sh-ok{background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.35)}
 .sh-save{margin-top:6px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.35)}
-.cl-box{margin-top:8px}
-.cl-perm{display:flex;align-items:center;gap:8px;justify-content:space-between;margin-top:6px;padding:8px 10px;border-radius:10px;font-size:13px;line-height:1.7}
-.cl-perm.ok{background:rgba(22,163,74,.07)}
-.cl-perm.bad{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4)}
-.cl-perm .btn-soft{flex:0 0 auto;padding:6px 14px}
-.cl-hint{display:block;margin-top:4px;opacity:.85}
-.cl-link{background:none;border:0;padding:0;font:inherit;color:#3B82F6;text-decoration:underline;cursor:pointer}
 .dp-net{margin-top:10px;padding:10px 12px;border-radius:12px;border:1px dashed rgba(59,130,246,.45);background:rgba(59,130,246,.06)}
 .dp-x{border:0;background:transparent;color:#b91c1c;font-weight:900;cursor:pointer;padding:0 2px}

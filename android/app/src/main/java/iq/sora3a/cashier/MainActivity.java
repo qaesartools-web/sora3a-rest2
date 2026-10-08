@@ -27,10 +27,11 @@ import androidx.webkit.WebViewFeature;
 
 import java.util.Collections;
 
-// تطبيق الكاشير للأندرويد: نفس الكاشير من الإنترنت (أي تحديث يوصل فوراً) + طباعة مباشرة
-// على الطابعة المدمجة بالجهاز، وطابعات الشبكة والبلوتوث — بدون أي برنامج ثاني
+// تطبيقين من نفس الكود (BuildConfig.LINE):
+//  • الكاشير: نفس الكاشير من الإنترنت (أي تحديث يوصل فوراً) + طباعة مباشرة على الطابعة المدمجة والشبكة والبلوتوث
+//  • خط المطعم: صفحة وحدة لربط رقم المطعم، والتلفون يبعث رقم المتصل للكاشير
 public class MainActivity extends Activity {
-    private static final String START_URL = "https://qaesartools-web.github.io/sora3a-rest2/";
+    private static final String START_URL = BuildConfig.START_URL;
     private static final int REQ_BT = 7, REQ_PHONE = 8;
     private WebView web;
     private volatile String pageUrl = "";
@@ -41,7 +42,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // شاشة الكاشير ما تطفي
+        if (!BuildConfig.LINE) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // شاشة الكاشير ما تطفي
         FrameLayout root = new FrameLayout(this);
         web = new WebView(this);
         root.addView(web, new FrameLayout.LayoutParams(-1, -1));
@@ -159,13 +160,14 @@ public class MainActivity extends Activity {
 
     @Override public void onBackPressed() {
         if (web.canGoBack()) { web.goBack(); return; }
+        if (BuildConfig.LINE) { finish(); return; } // الخط يشتغل بالخلفية حتى والتطبيق مسكّر
         new AlertDialog.Builder(this).setMessage("تريد تسكّر الكاشير؟")
             .setPositiveButton("إغلاق", (d, w) -> finish()).setNegativeButton("إلغاء", null).show();
     }
 
     private static final String OFFLINE = "<html dir=rtl><body style='margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0B1220;color:#EEF2F7;font-family:sans-serif;text-align:center'>"
-        + "<div style='padding:24px'><div style='font-size:52px'>📶</div><h2>ما كدرنا نفتح الكاشير</h2>"
-        + "<p style='color:#A9B5C6;line-height:1.8'>أول تشغيل يحتاج إنترنت حتى ينحفظ الكاشير بالجهاز. بعدها يشتغل حتى لو انقطع النت.</p>"
+        + "<div style='padding:24px'><div style='font-size:52px'>📶</div><h2>" + (BuildConfig.LINE ? "ما كدرنا نفتح الصفحة" : "ما كدرنا نفتح الكاشير") + "</h2>"
+        + "<p style='color:#A9B5C6;line-height:1.8'>" + (BuildConfig.LINE ? "ربط الخط يحتاج إنترنت. شغّل النت ونعيد المحاولة." : "أول تشغيل يحتاج إنترنت حتى ينحفظ الكاشير بالجهاز. بعدها يشتغل حتى لو انقطع النت.") + "</p>"
         + "<button style='font-size:18px;padding:12px 28px;border:0;border-radius:14px;background:#16A34A;color:#fff' onclick=\"location.href='" + START_URL + "'\">🔄 إعادة المحاولة</button>"
         + "</div><script>setTimeout(function(){location.href='" + START_URL + "'},10000)</script></body></html>";
 }

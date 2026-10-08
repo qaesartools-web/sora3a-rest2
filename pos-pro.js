@@ -844,7 +844,6 @@
           </details>
         </div>`}
       </div>
-      ${window.SoraDesktop && window.SoraDesktop.canCallLine ? clCardHtml() : ''}
       <div class="sh-card"><div class="sh-title">💰 الأسعار والضرائب</div>
         <div class="set-row"><div><div class="flbl">ضريبة ٪ (0 = بدون)</div><input class="finp" id="stTax" type="number" min="0" max="50" value="${s.taxPct || 0}"></div>
           <div><div class="flbl">خدمة الصالة ٪</div><input class="finp" id="stSvc" type="number" min="0" max="50" value="${s.servicePct || 0}"></div></div>
@@ -1144,7 +1143,7 @@
   function appOffer() {
     const ua = navigator.userAgent;
     const print = 'يطبع كل قسم على طابعته مباشرة، بدون أي برنامج ثاني وبدون نافذة طباعة.';
-    if (/Android/i.test(ua)) return { label: '📱 تطبيق الكاشير للأندرويد', text: 'يطبع على الطابعة المدمجة بجهاز الكاشير، وطابعات الشبكة والبلوتوث مباشرة، ويربط رقم المطعم (شريحة أو واتساب) حتى يطلع رقم المتصل بالكاشير.', url: REL + '/download/cashier-android/sora3a-cashier.apk' };
+    if (/Android/i.test(ua)) return { label: '📱 تطبيق الكاشير للأندرويد', text: 'يطبع على الطابعة المدمجة بجهاز الكاشير، وطابعات الشبكة والبلوتوث مباشرة.', url: REL + '/download/cashier-android/sora3a-cashier.apk' };
     if (/Windows/i.test(ua)) return { label: '💻 برنامج الكاشير للويندوز', text: print, url: WIN_APP_URL };
     if (/Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad/i.test(ua) && !('ontouchend' in document)) return { label: '💻 برنامج الكاشير للماك', text: print, url: REL + '/latest/download/sora3a-cashier-mac.dmg' };
     if (/Linux/i.test(ua) && !/CrOS/i.test(ua)) return { label: '💻 برنامج الكاشير للينكس', text: print, url: REL + '/latest/download/sora3a-cashier-linux.AppImage' };
@@ -1247,99 +1246,9 @@
       <details style="margin-top:8px" ontoggle="if(this.open)dpJobs()"><summary class="ac-sub" style="cursor:pointer">🧾 سجل الطباعة (آخر 30) — وإعادة الطباعة</summary><div id="dpJobs" class="dp-jobs"></div></details>
       <div class="ac-sub" style="margin-top:6px">برنامج الكاشير ${esc(DESK.version || '')}</div>`;
   }
-  // ══════════ خط المطعم (تطبيق الأندرويد): التلفون اللي بيه شريحة/واتساب المطعم يوصل رقم المتصل للكاشير — بدل MacroDroid ══════════
-  const clOwner = () => !window.posUser || window.posUser.role !== 'cashier';
-  const clNum = (v) => String(v || '').replace(/[^\d+]/g, '').slice(0, 20);
-  function clToken() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(40)), (x) => a[x % a.length]).join(''); }
-  function clCardHtml() {
-    return `<div class="sh-card"><div class="sh-title">📞 خط المطعم — الزبون يتصل ورقمه يطلع بالكاشير</div>
-      <div class="ac-sub" style="line-height:1.8">على التلفون اللي بيه <b>شريحة المطعم</b> أو <b>واتساب المطعم</b>: اكتب الرقم واضغط «اربط». أي زبون يتصل ← رقمه وطلباته السابقة تطلع فوراً بكل أجهزة الكاشير — بدون MacroDroid، وحتى لو التطبيق مسكّر.</div>
-      <div id="clBox" class="cl-box"><span class="ac-sub">⏳ …</span></div></div>`;
-  }
-  let clSt = null;
-  async function clRender() {
-    const box = $('clBox'); if (!box || !DESK || !DESK.getCallLine) return;
-    let st = null; try { st = await DESK.getCallLine(); } catch (e) {}
-    clSt = st = st || { linked: false, perms: {} };
-    const pm = st.perms || {}, simF = feat('calls'), waF = feat('whatsapp'), simOk = simF && pm.sim !== false;
-    if (!st.linked) {
-      if (!simF && !waF) { box.innerHTML = '<div class="sh-warn">⛔ خدمة المكالمات مطفية لهذا المطعم — تواصل ويا الإدارة.</div>'; return; }
-      if (!clOwner()) { box.innerHTML = '<div class="sh-warn">🔒 الربط يحتاج <b>حساب صاحب المطعم</b> — سجّل دخول بحساب صاحب المطعم على هذا التلفون واربط (مرة وحدة). بعد الربط الخط يبقى شغّال حتى لو سجّلت خروج.</div>'; return; }
-      box.innerHTML = `<div class="flbl">رقم المطعم على هذا التلفون</div>
-        <input class="finp" id="clNum" dir="ltr" type="tel" inputmode="tel" maxlength="20" placeholder="07xxxxxxxxx">
-        <label class="set-check"><input type="checkbox" id="clSim" ${simOk ? 'checked' : 'disabled'}> 📱 مكالمات الشريحة ${pm.sim === false ? '<small>(هذا الجهاز ما بيه شريحة)</small>' : simF ? '' : '<small>(مطفية من الإدارة)</small>'}</label>
-        <label class="set-check"><input type="checkbox" id="clWa" ${waF ? 'checked' : 'disabled'}> 🟢 مكالمات الواتساب ${waF ? '' : '<small>(مطفية من الإدارة)</small>'}</label>
-        <button type="button" class="sivbtn" style="margin-top:6px" onclick="clLink()">🔗 اربط هذا الرقم بالمطعم</button>`;
-      return;
-    }
-    const row = (ok, txt, kind, hint) => `<div class="cl-perm ${ok ? 'ok' : 'bad'}"><span>${ok ? '✅' : '⚠️'} ${txt}${ok || !hint ? '' : hint}</span>${ok ? '' : `<button type="button" class="btn-soft" onclick="clPerm('${kind}')">اسمح</button>`}</div>`;
-    const appLink = '<button type="button" class="cl-link" onclick="clPerm(\'app\')">معلومات التطبيق</button>';
-    const rows = [];
-    if (st.sim) rows.push(row(pm.phone, 'إذن الهاتف وسجل المكالمات — حتى يوصل رقم المتصل', 'phone'));
-    if (st.wa) rows.push(row(pm.notif, 'الوصول للإشعارات — حتى توصل مكالمات الواتساب', 'notif',
-      st.android >= 33 ? `<small class="cl-hint">إذا الخيار رمادي: افتح ${appLink} ← ⋮ فوق ← «السماح بالإعدادات المقيّدة»، وارجع اضغط «اسمح».</small>` : ''));
-    rows.push(row(pm.battery, 'إيقاف توفير البطارية للتطبيق — حتى ما ينام', 'battery'));
-    const oem = /xiaomi|redmi|poco|oppo|realme|vivo|huawei|honor|oneplus|tecno|infinix|itel/.test(st.maker || '');
-    const when = (t) => new Date(t).toLocaleString('ar-IQ-u-nu-latn', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const last = !st.lastAt ? '' : st.lastErr ? `<div class="sh-warn" style="margin-top:6px">❌ آخر مكالمة (<span dir="ltr">${esc(st.lastNumber)}</span>) ما وصلت: ${esc(st.lastErr)}</div>`
-      : `<div class="ac-sub" style="margin-top:6px">آخر مكالمة وصلت للكاشير: <b dir="ltr">${esc(st.lastNumber)}</b>${st.lastKind === 'wa' ? ' (واتساب)' : ''} • ${esc(when(st.lastAt))}</div>`;
-    box.innerHTML = `<div class="sh-ok">✅ هذا التلفون مربوط بالمطعم — <b>خط ${esc(st.line)}</b> • <b dir="ltr">${esc(st.label)}</b></div>
-      <label class="set-check"><input type="checkbox" id="clSim" ${st.sim ? 'checked' : ''} ${pm.sim === false ? 'disabled' : ''} onchange="clKinds()"> 📱 مكالمات الشريحة</label>
-      <label class="set-check"><input type="checkbox" id="clWa" ${st.wa ? 'checked' : ''} onchange="clKinds()"> 🟢 مكالمات الواتساب</label>
-      ${rows.join('')}
-      ${oem ? `<div class="ac-sub cl-hint">📌 بأجهزة <span dir="ltr">${esc(st.maker)}</span>: من ${appLink} فعّل «التشغيل التلقائي» (Autostart) حتى يبقى الخط شغّال بعد إعادة تشغيل التلفون.</div>` : ''}
-      ${last}
-      <div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="btn-soft" style="flex:1" onclick="clTest()">🧪 مكالمة تجريبية</button><button type="button" class="btn-soft" style="flex:1" onclick="clUnlink()">❌ إلغاء الربط</button></div>`;
-  }
-  window.clLink = async () => {
-    const num = clNum(($('clNum') || {}).value), sim = !!($('clSim') || {}).checked, wa = !!($('clWa') || {}).checked;
-    if (num.replace(/\D/g, '').length < 7) { toast('⚠️ اكتب رقم المطعم كامل'); return; }
-    if (!sim && !wa) { toast('⚠️ اختار الشريحة أو الواتساب'); return; }
-    const f = fb(), r = rid();
-    try {
-      const qs = await f.getDocs(f.query(f.collection(f.db, 'lineTokens'), f.where('restaurantId', '==', r)));
-      const lines = qs.docs.map((d) => ({ id: d.id, ...d.data() }));
-      // نفس الرقم مربوط من قبل (تلفون جديد أو إعادة تثبيت) ← نفس الخط، ما نزيد خطوط
-      let ln = lines.find((l) => clNum(l.label) === num);
-      if (ln && !ln.active) { toast('⛔ هذا الخط موقوف من الإدارة'); return; }
-      if (!ln) {
-        const used = new Set(lines.map((l) => String(l.line))); let n = 1; while (used.has(String(n))) n++;
-        if (n > 10) { toast('⚠️ وصلت الحد الأقصى (10 خطوط) — احذف خط قديم من لوحة الإدارة'); return; }
-        ln = { id: clToken(), line: String(n) };
-        await f.setDoc(f.doc(f.db, 'lineTokens', ln.id), { restaurantId: r, line: ln.line, label: num, active: true, createdAtMs: Date.now() });
-      }
-      const st = await DESK.setCallLine({ token: ln.id, restaurantId: r, line: String(ln.line), label: num, sim, wa });
-      if (st && st.ok === false) throw new Error(st.error);
-      toast('✅ انربط الرقم — خط ' + ln.line + '. اسمح بالأذونات تحت وجرّب مكالمة');
-    } catch (e) { toast('❌ ما انربط: ' + (e.code || e.message || e)); }
-    clRender();
-  };
-  window.clKinds = async () => {
-    const st = clSt; if (!st || !st.linked) return;
-    const sim = !!($('clSim') || {}).checked, wa = !!($('clWa') || {}).checked;
-    if (!sim && !wa) { toast('⚠️ خلي وحدة على الأقل — أو اضغط «إلغاء الربط»'); clRender(); return; }
-    await DESK.setCallLine({ token: st.token, restaurantId: st.restaurantId, line: st.line, label: st.label, sim, wa });
-    clRender();
-  };
-  window.clPerm = (k) => { DESK.openPerm(k); };
-  window.clTest = async () => {
-    toast('⏳ نرسل مكالمة تجريبية…');
-    const r = await DESK.testCall().catch(() => null);
-    toast(r && r.ok ? '📞 وصلت — لازم تطلع هسه بشاشة الكاشير (الرقم 07700000000)' : '❌ ما وصلت: ' + ((r && r.error) || 'خطأ'));
-    clRender();
-  };
-  window.clUnlink = async () => {
-    const st = clSt; if (!st || !st.linked) return;
-    if (!confirm('تلغي ربط هذا التلفون؟ مكالماته ما راح تطلع بالكاشير بعد.')) return;
-    if (clOwner()) { try { await fb().deleteDoc(fb().doc(fb().db, 'lineTokens', st.token)); } catch (e) {} }
-    await DESK.clearCallLine();
-    toast('تم إلغاء الربط'); clRender();
-  };
-  // رجعنا من شاشة أذونات الأندرويد ← نحدّث الحالة
+  // رجعنا من شاشة «الظهور فوق التطبيقات» بالأندرويد ← نحدّث خانة التشغيل مع الجهاز
   window.addEventListener('sora:resume', () => {
-    if (!DESK) return;
-    if ($('clBox')) clRender();
-    const el = $('dpAutoChk'); if (el) DESK.getAutoStart().then((v) => { el.checked = !!v; }).catch(() => {});
+    const el = $('dpAutoChk'); if (el && DESK) DESK.getAutoStart().then((v) => { el.checked = !!v; }).catch(() => {});
   });
 
   // ── هل الأقسام مضبوطة؟ (من الخانات المعروضة حالياً، قبل الحفظ) ──
@@ -1384,7 +1293,6 @@
     if (!DESK) return;
     dpFind(true);
     DESK.getAutoStart().then((v) => { const el = $('dpAutoChk'); if (el) el.checked = !!v; }).catch(() => {});
-    if (DESK.canCallLine) clRender();
     if (DESK.getTestMode) DESK.getTestMode().then((v) => { const el = $('dpTestChk'); if (el) el.checked = !!v; }).catch(() => {});
     dpEnforceTest();
   }

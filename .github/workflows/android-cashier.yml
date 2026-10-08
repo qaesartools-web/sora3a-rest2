@@ -1,5 +1,7 @@
-# يبني تطبيق الكاشير للأندرويد (APK) — رابط تنزيل ثابت: releases/download/cashier-android/sora3a-cashier.apk
-# (ما يصير «latest» حتى ما يأثر على تحديث برنامج الحاسبة)
+# يبني تطبيقين للأندرويد من نفس الكود — روابط تنزيل ثابتة:
+#   الكاشير:    releases/download/cashier-android/sora3a-cashier.apk
+#   خط المطعم:  releases/download/line-android/sora3a-line.apk
+# (ما يصيرون «latest» حتى ما يأثرون على تحديث برنامج الحاسبة)
 name: Android cashier app
 
 on:
@@ -31,10 +33,12 @@ jobs:
       - name: Unit tests + build
         working-directory: android
         env: { VERSION_CODE: '${{ github.run_number }}' }
-        run: gradle --no-daemon testDebugUnitTest assembleRelease
-      - run: cp android/app/build/outputs/apk/release/app-release.apk sora3a-cashier.apk
+        run: gradle --no-daemon testCashierDebugUnitTest assembleCashierRelease assembleLineRelease
+      - run: |
+          cp android/app/build/outputs/apk/cashier/release/app-cashier-release.apk sora3a-cashier.apk
+          cp android/app/build/outputs/apk/line/release/app-line-release.apk sora3a-line.apk
       - uses: actions/upload-artifact@v4
-        with: { name: sora3a-cashier-apk, path: sora3a-cashier.apk }
+        with: { name: sora3a-android-apks, path: 'sora3a-*.apk' }
       - name: Publish (fixed tag, not latest)
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
@@ -42,5 +46,14 @@ jobs:
           tag_name: cashier-android
           name: تطبيق الكاشير للأندرويد
           make_latest: false
-          body: نسخة ${{ github.run_number }} — نزّل sora3a-cashier.apk وثبّته على جهاز الكاشير أو التابلت، أو على تلفون خط المطعم (ربط الشريحة والواتساب من الإعدادات ← 📞 خط المطعم).
+          body: نسخة ${{ github.run_number }} — نزّل sora3a-cashier.apk وثبّته على جهاز الكاشير أو التابلت. (لربط رقم المطعم استخدم تطبيق «خط المطعم».)
           files: sora3a-cashier.apk
+      - name: Publish line app (fixed tag, not latest)
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: line-android
+          name: تطبيق خط المطعم للأندرويد
+          make_latest: false
+          body: نسخة ${{ github.run_number }} — نزّل sora3a-line.apk وثبّته على التلفون اللي بيه شريحة المطعم أو واتساب المطعم، سجّل دخول بحساب صاحب المطعم واكتب الرقم. رقم المتصل يطلع بالكاشير.
+          files: sora3a-line.apk
