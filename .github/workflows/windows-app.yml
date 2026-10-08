@@ -1,0 +1,46 @@
+# يبني برنامج الكاشير للويندوز (Setup.exe) وينشره بصفحة Releases — والبرنامج يحدّث نفسه منها
+name: Windows cashier app
+
+on:
+  push:
+    branches: [main]
+    paths: ['desktop/**', '.github/workflows/windows-app.yml']
+  pull_request:
+    paths: ['desktop/**', '.github/workflows/windows-app.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm pkg set version=1.0.${{ github.run_number }}
+      - run: npx electron-builder --win nsis --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sora3a-cashier-setup
+          path: desktop/dist/sora3a-cashier-setup.exe
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: cashier-v1.0.${{ github.run_number }}
+          name: برنامج الكاشير 1.0.${{ github.run_number }}
+          make_latest: true
+          files: |
+            desktop/dist/sora3a-cashier-setup.exe
+            desktop/dist/sora3a-cashier-setup.exe.blockmap
+            desktop/dist/latest.yml

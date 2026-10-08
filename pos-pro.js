@@ -829,6 +829,7 @@
         ${(s.sections || DEFAULTS.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join('')}
         <div class="flbl" style="margin-top:10px">كل فئة بالمنيو تابعة لأي قسم؟</div>
         ${menu.filter((c) => c && c.cat).map((c, i) => `<div class="set-row"><div class="sec-cat">${esc(c.emoji || '')} ${esc(c.cat)}</div><div><select class="fsel" id="stCat${i}" data-cat="${esc(c.cat)}"><option value="">— بدون قسم (لا تُطبع بالمطبخ) —</option>${(s.sections || []).filter((x) => x.name).map((x) => `<option value="${esc(x.id)}" ${(s.catSection || {})[c.cat] === x.id ? 'selected' : ''}>${esc(x.emoji || '')} ${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<div class="ac-sub">أضف فئات للمنيو أولاً</div>'}
+        ${window.SoraDesktop ? dpSettingsHtml(s) : `${/Windows/i.test(navigator.userAgent) ? `<div class="dp-promo"><b>💻 برنامج الكاشير للويندوز</b> — يطبع كل قسم على طابعته مباشرة، بدون QZ Tray وبدون نافذة طباعة. <a href="${WIN_APP_URL}">⬇️ تنزيل</a></div>` : ''}
         <div class="flbl" style="margin-top:12px">🖨️ الطباعة على هذا الجهاز</div>
         <select class="fsel" id="stQzOn"><option value="0" ${qzCfgGet().on ? '' : 'selected'}>طابعة واحدة — كل قسم تذكرته بورقة منفصلة</option><option value="1" ${qzCfgGet().on ? 'selected' : ''}>طابعة لكل قسم — عبر برنامج QZ Tray</option></select>
         <div id="qzBox" style="display:${qzCfgGet().on ? 'block' : 'none'}">
@@ -840,7 +841,7 @@
             <textarea class="finp" id="qzCert" rows="3" dir="ltr" placeholder="-----BEGIN CERTIFICATE-----">${esc(qzCfgGet().cert || '')}</textarea>
             <textarea class="finp" id="qzKey" rows="3" dir="ltr" placeholder="-----BEGIN PRIVATE KEY-----" style="margin-top:6px">${esc(qzCfgGet().key || '')}</textarea>
           </details>
-        </div>
+        </div>`}
       </div>
       <div class="sh-card"><div class="sh-title">💰 الأسعار والضرائب</div>
         <div class="set-row"><div><div class="flbl">ضريبة ٪ (0 = بدون)</div><input class="finp" id="stTax" type="number" min="0" max="50" value="${s.taxPct || 0}"></div>
@@ -860,6 +861,7 @@
         <button class="btn-soft" style="width:100%" onclick="enableRestPush()">🔔 تفعيل الإشعارات على هذا الجهاز</button></div>
       <div class="sh-card"><div class="sh-title">⌨️ اختصارات لوحة المفاتيح</div>
         <div class="ac-sub" style="line-height:2"><kbd>/</kbd> بحث عن صنف • <kbd>F9</kbd> ترحيل الطلب • <kbd>1</kbd>-<kbd>4</kbd> نوع الطلب • <kbd>Enter</kbd> تأكيد الدفع • <kbd>Esc</kbd> إغلاق</div></div>`;
+    if (window.SoraDesktop) dpAfterRender();
   }
   window.saveSettings = async () => {
     const list = (v) => String(v || '').split(/[,،]/).map((x) => x.trim()).filter(Boolean);
@@ -877,8 +879,9 @@
     settings = { ...DEFAULTS, ...next };
     lsSet(setKey(), settings);
     // إعدادات الطابعات خاصة بهذا الجهاز (لا تُرفع للسحابة)
+    if (window.SoraDesktop) dpSave();
     const qc = qzCfgGet();
-    qzCfgSet({ on: $('stQzOn').value === '1',
+    if ($('stQzOn')) qzCfgSet({ on: $('stQzOn').value === '1',
       printers: Object.fromEntries(secList().map((x) => [x.id, ($('qzP_' + x.id) || {}).value || (qc.printers || {})[x.id] || '']).filter(([, v]) => v)),
       cert: (($('qzCert') || {}).value || '').trim(), key: (($('qzKey') || {}).value || '').trim() });
     try { await fb().setDoc(sub('settings', 'main'), { ...settings, updatedAtMs: Date.now() }); toast('✅ تم حفظ الإعدادات لكل أجهزة المطعم'); }
@@ -1103,6 +1106,16 @@
   }
   async function printOrderAll(o, receipt) {
     const secs = o.kSec ? Object.keys(o.kSec) : [];
+    if (DESK) {
+      const c = dpCfg(), jobs = [];
+      if (receipt) jobs.push(deskPrint(receipt, c.main, '🧾 فاتورة #' + kNum(o), c.receiptCopies));
+      for (const sid of secs) {
+        const sc = secById(sid) || { name: sid };
+        jobs.push(deskPrint(docOf(secTicketBody(o, sid)), (c.printers || {})[sid] || c.main, '👨‍🍳 ' + sc.name + ' #' + kNum(o), (c.copies || {})[sid]));
+      }
+      await Promise.all(jobs);
+      return;
+    }
     const c = qzCfg();
     let left = secs;
     if (c.on && secs.length) {
@@ -1117,6 +1130,92 @@
     else if (pages) printHTML(docOf(pages.replace('page-break-before:always', 'page-break-before:auto')));
   }
   window.printOrderAll = printOrderAll;
+
+  // ══════════ برنامج الكاشير للويندوز: طباعة مدمجة بدون QZ Tray ══════════
+  // كل طابعة معرّفة بالويندوز تطلع بالقائمة، كل قسم لطابعته، طابور + إعادة محاولة،
+  // وإذا طابعة قسم ما اشتغلت تنطبع تذكرته على الرئيسية حتى ما تضيع. الإعداد خاص بهالحاسبة.
+  const DESK = window.SoraDesktop || null;
+  const WIN_APP_URL = 'https://github.com/qaesartools-web/sora3a-rest2/releases/latest/download/sora3a-cashier-setup.exe';
+  const dpKey = () => 'pos_dp_' + rid();
+  const dpCfg = () => ({ main: '', printers: {}, copies: {}, receiptCopies: 1, fallback: true, ...lsGet(dpKey(), {}) });
+  window.dpCfgGet = dpCfg;
+  let dpWarnAt = 0;
+  async function deskPrint(html, printer, title, copies) {
+    const c = dpCfg();
+    let r;
+    try {
+      r = await DESK.print(html, { printer: printer || '', widthMm: settings.paper === 58 ? 58 : 80, copies: copies || 1, title,
+        fallback: c.fallback && (printer || '') !== (c.main || '') ? (c.main || '') : null });
+    } catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+    if (r.ok) return r;
+    if (Date.now() - dpWarnAt > 3000) {
+      dpWarnAt = Date.now();
+      toast(r.fallback ? '⚠️ ' + title + ': طابعة «' + (printer || 'الافتراضية') + '» ' + r.error + ' — انطبعت على الطابعة الرئيسية'
+        : '❌ ما انطبعت ' + title + ': ' + r.error);
+    }
+    return r;
+  }
+  if (DESK) {
+    // كل طباعة بالكاشير (فواتير، تقارير، تذاكر محفوظة…) تروح مباشرة للطابعة الرئيسية بدون نافذة
+    window.printHTML = printHTML = (html) => { deskPrint(html, dpCfg().main, '🖨️ طباعة', 1); };
+    if (DESK.onUpdate) DESK.onUpdate((v) => toast('⬆️ نزل تحديث لبرنامج الكاشير (' + v + ') — يتثبت لما تسكّر البرنامج'));
+  }
+  const dpOpt = (list, cur, emptyLabel) => '<option value="">' + emptyLabel + '</option>' + [...new Set([...list.map((p) => p.name), cur].filter(Boolean))]
+    .map((n) => { const p = list.find((x) => x.name === n); const st = !p ? ' — ❓ مو موجودة' : p.ok ? '' : ' — ⚠️ ' + p.statusText;
+      return `<option value="${esc(n)}" ${n === cur ? 'selected' : ''}>${esc(n)}${p && p.isDefault ? ' (الافتراضية)' : ''}${st}</option>`; }).join('');
+  window.dpFind = async (quiet) => {
+    if (!DESK) return;
+    const list = await DESK.printers().catch(() => []);
+    const c = dpCfg();
+    const m = $('dpMain'); if (m) m.innerHTML = dpOpt(list, m.value || c.main, '— الطابعة الافتراضية للويندوز —');
+    secList().forEach((x) => { const sel = $('dpP_' + x.id); if (sel) sel.innerHTML = dpOpt(list, sel.value || (c.printers || {})[x.id] || '', '— نفس الطابعة الرئيسية —'); });
+    const st = $('dpStatus');
+    if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}</span>`).join('') : '<span class="ac-sub">ما لكينا طابعات — عرّف الطابعة بالويندوز أولاً</span>';
+    if (!quiet) toast('🖨️ ' + toA(list.length) + ' طابعة بالحاسبة');
+  };
+  window.dpTest = async (sid) => {
+    const pr = sid === 'main' ? ($('dpMain') || {}).value : ($('dpP_' + sid) || {}).value || ($('dpMain') || {}).value;
+    const name = sid === 'main' ? 'الفاتورة (الرئيسية)' : 'قسم ' + ((secById(sid) || {}).name || sid);
+    const r = await DESK.print(docOf(`<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;text-align:center;padding:10px;color:#000"><div style="font-size:22px;font-weight:900">🖨️ تجربة طابعة</div><div style="font-size:18px;font-weight:700;margin-top:6px">${esc(name)}</div><div style="font-size:13px;margin-top:6px">${esc(pr || 'الطابعة الافتراضية')}</div></div>`),
+      { printer: pr || '', widthMm: settings.paper === 58 ? 58 : 80, copies: 1, title: '🧪 تجربة ' + name }).catch((e) => ({ ok: false, error: String(e) }));
+    toast(r.ok ? '✅ انطبعت التجربة على ' + (pr || 'الطابعة الافتراضية') : '❌ فشلت: ' + r.error);
+    dpJobs();
+  };
+  window.dpJobs = async () => {
+    const el = $('dpJobs'); if (!el || !DESK) return;
+    const js = await DESK.jobs().catch(() => []);
+    el.innerHTML = js.length ? js.slice(0, 30).map((j) => `<div class="dp-job"><span>${j.ok ? '✅' : j.fallback ? '⚠️' : '❌'}</span>
+      <span class="dp-jt"><b>${esc(j.title)}</b><small>${esc(new Date(j.at).toLocaleTimeString('ar-IQ-u-nu-latn', { hour: '2-digit', minute: '2-digit' }))} • ${esc(j.fallback ? 'انطبعت على ' + j.fallback : j.printer)}${j.ok ? '' : ' • ' + esc(j.error)}</small></span>
+      ${j.canReprint ? `<button type="button" class="btn-soft" onclick="dpReprint(${j.id})">🔁</button>` : ''}</div>`).join('') : '<div class="ac-sub">ماكو طباعة لحد الآن</div>';
+  };
+  window.dpReprint = async (id) => { const r = await DESK.reprint(id); toast(r.ok ? '✅ انعادت الطباعة' : r.fallback ? '⚠️ انطبعت على الطابعة الرئيسية' : '❌ ' + r.error); dpJobs(); };
+  window.dpAuto = async (on) => { const v = await DESK.setAutoStart(on); toast(v ? '✅ البرنامج يشتغل وحده مع تشغيل الحاسبة' : 'تمام — ما يشتغل وحده'); };
+  function dpSettingsHtml(s) {
+    const c = dpCfg(), secs = (s.sections || []).filter((x) => x.name);
+    const cp = (id, v) => `<input class="finp" type="number" min="1" max="5" id="${id}" value="${v || 1}" title="عدد النسخ" style="width:64px;text-align:center">`;
+    return `<div class="flbl" style="margin-top:12px">🖨️ الطباعة — مدمجة ببرنامج الكاشير (بدون QZ)</div>
+      <div class="ac-sub" style="margin:4px 0 8px;line-height:1.8">كل طابعة معرّفة بالويندوز تطلع هنا. اختر طابعة الفاتورة وطابعة كل قسم، وجرّبها بـ 🧪. الطباعة مباشرة بدون أي نافذة.</div>
+      <div id="dpStatus" class="dp-status"><span class="ac-sub">⏳ نجيب الطابعات…</span></div>
+      <button type="button" class="btn-soft" style="width:100%;margin-top:6px" onclick="dpFind()">🔄 تحديث قائمة الطابعات</button>
+      <div class="set-row" style="margin-top:8px"><div class="sec-cat">🧾 الفاتورة (الطابعة الرئيسية)</div><div style="display:flex;gap:6px"><select class="fsel" id="dpMain" style="flex:1"><option value="${esc(c.main)}" selected>${esc(c.main || '— الطابعة الافتراضية للويندوز —')}</option></select>${cp('dpRc', c.receiptCopies)}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('main')">🧪</button></div></div>
+      ${secs.map((x) => `<div class="set-row" style="margin-top:8px"><div class="sec-cat">${esc(x.emoji || '')} ${esc(x.name)}</div><div style="display:flex;gap:6px"><select class="fsel" id="dpP_${esc(x.id)}" style="flex:1"><option value="${esc((c.printers || {})[x.id] || '')}" selected>${esc((c.printers || {})[x.id] || '— نفس الطابعة الرئيسية —')}</option></select>${cp('dpC_' + esc(x.id), (c.copies || {})[x.id])}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('${esc(x.id)}')">🧪</button></div></div>`).join('')}
+      <label class="set-check" style="margin-top:8px"><input type="checkbox" id="dpFb" ${c.fallback !== false ? 'checked' : ''}> إذا طابعة قسم ما اشتغلت (مطفية / خلص الورق)، اطبع تذكرتها على الطابعة الرئيسية حتى ما تضيع</label>
+      <label class="set-check"><input type="checkbox" id="dpAutoChk" onchange="dpAuto(this.checked)"> شغّل برنامج الكاشير وحده مع تشغيل الحاسبة</label>
+      <details style="margin-top:8px" ontoggle="if(this.open)dpJobs()"><summary class="ac-sub" style="cursor:pointer">🧾 سجل الطباعة (آخر 30) — وإعادة الطباعة</summary><div id="dpJobs" class="dp-jobs"></div></details>
+      <div class="ac-sub" style="margin-top:6px">برنامج الكاشير ${esc(DESK.version || '')}</div>`;
+  }
+  function dpAfterRender() {
+    if (!DESK) return;
+    dpFind(true);
+    DESK.getAutoStart().then((v) => { const el = $('dpAutoChk'); if (el) el.checked = !!v; }).catch(() => {});
+  }
+  function dpSave() {
+    const c = dpCfg(), n = (id) => Math.max(1, Math.min(5, Math.round(num(($(id) || {}).value) || 1)));
+    const next = { ...c, main: ($('dpMain') || {}).value || '', receiptCopies: n('dpRc'), fallback: !!($('dpFb') || {}).checked, printers: {}, copies: {} };
+    secList().forEach((x) => { const v = ($('dpP_' + x.id) || {}).value; if (v) next.printers[x.id] = v; const k = n('dpC_' + x.id); if (k > 1) next.copies[x.id] = k; });
+    lsSet(dpKey(), next);
+  }
+  window.dpSave = dpSave;
   window.qzFind = async () => {
     try { await qzReady(); const list = await qz.printers.find(); renderQzPrinters(list); toast('🖨️ وُجدت ' + toA(list.length) + ' طابعة'); }
     catch (e) { toast('❌ ما اتصل ببرنامج QZ Tray — تأكد أنه مثبت وشغّال'); }
