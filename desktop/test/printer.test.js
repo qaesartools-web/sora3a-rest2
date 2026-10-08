@@ -93,3 +93,29 @@ test('options are clamped; page gets Arabic font and zero margins', () => {
   const doc = preparePage('<div style="font-family:Tajawal">x</div>', 80);
   assert.match(doc, /fonts\.googleapis\.com/); assert.match(doc, /@page\{margin:0\}/); assert.match(doc, /<body><div/);
 });
+
+test('test mode: virtual printers appear, go to the simulator renderer, and "off" printers fall back', async () => {
+  let on = false;
+  const real = [], virt = [];
+  const p = createPrinter({
+    getPrinters: async () => [],
+    render: async (h, o) => { real.push(o.printer); },
+    virtual: { enabled: () => on, render: async (h, o) => { virt.push({ printer: o.printer, html: h }); } },
+  });
+  assert.equal((await p.printers()).length, 0, 'no virtual printers unless test mode is on');
+  on = true;
+  const list = await p.printers();
+  assert.equal(list.length, 6);
+  assert.deepEqual(list.filter((x) => !x.ok).map((x) => x.statusText), ['مطفية أو مفصولة', 'خلص الورق']);
+  // «الطابعة الافتراضية» بوضع التجربة = طابعة الكاشير الوهمية
+  assert.equal((await p.print('r', { printer: '', title: 'فاتورة' })).ok, true);
+  assert.equal(virt.at(-1).printer, '🧪 تجريبية — الكاشير');
+  assert.equal((await p.print('k', { printer: '🧪 تجريبية — مطبخ 2', fallback: '' })).ok, true);
+  assert.equal(virt.at(-1).printer, '🧪 تجريبية — مطبخ 2');
+  // الطابعة الوهمية «المطفية» → تنطبع على الكاشير الوهمية مع التنبيه
+  const r = await p.print('<html><body>T</body></html>', { printer: '🧪 تجريبية — مطفية', fallback: '' });
+  assert.equal(r.fallback, true);
+  assert.equal(virt.at(-1).printer, '🧪 تجريبية — الكاشير');
+  assert.match(virt.at(-1).html, /ما اشتغلت/);
+  assert.deepEqual(real, [], 'nothing reached a real printer');
+});

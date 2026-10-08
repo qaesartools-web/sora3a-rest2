@@ -1195,6 +1195,10 @@
     const cp = (id, v) => `<input class="finp" type="number" min="1" max="5" id="${id}" value="${v || 1}" title="عدد النسخ" style="width:64px;text-align:center">`;
     return `<div class="flbl" style="margin-top:12px">🖨️ الطباعة — مدمجة ببرنامج الكاشير (بدون QZ)</div>
       <div class="ac-sub" style="margin:4px 0 8px;line-height:1.8">كل طابعة معرّفة بالويندوز تطلع هنا. اختر طابعة الفاتورة وطابعة كل قسم، وجرّبها بـ 🧪. الطباعة مباشرة بدون أي نافذة.</div>
+      <div class="dp-test">
+        <label class="set-check" style="margin:0"><input type="checkbox" id="dpTestChk" onchange="dpTestMode(this.checked)"> 🧪 <b>وضع تجربة الطابعات</b> — طابعات وهمية، والورق يطلع على شاشة «محاكي الطابعات» بدون أي طابعة حقيقية</label>
+        <div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="btn-soft" style="flex:1" onclick="dpSample()">🧾 طلب تجريبي</button><button type="button" class="btn-soft" style="flex:1" onclick="SoraDesktop.openSimulator()">🖥️ فتح المحاكي</button></div>
+      </div>
       <div id="dpStatus" class="dp-status"><span class="ac-sub">⏳ نجيب الطابعات…</span></div>
       <button type="button" class="btn-soft" style="width:100%;margin-top:6px" onclick="dpFind()">🔄 تحديث قائمة الطابعات</button>
       <div class="set-row" style="margin-top:8px"><div class="sec-cat">🧾 الفاتورة (الطابعة الرئيسية)</div><div style="display:flex;gap:6px"><select class="fsel" id="dpMain" style="flex:1"><option value="${esc(c.main)}" selected>${esc(c.main || '— الطابعة الافتراضية للويندوز —')}</option></select>${cp('dpRc', c.receiptCopies)}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('main')">🧪</button></div></div>
@@ -1208,7 +1212,38 @@
     if (!DESK) return;
     dpFind(true);
     DESK.getAutoStart().then((v) => { const el = $('dpAutoChk'); if (el) el.checked = !!v; }).catch(() => {});
+    if (DESK.getTestMode) DESK.getTestMode().then((v) => { const el = $('dpTestChk'); if (el) el.checked = !!v; }).catch(() => {});
   }
+  // وضع التجربة: نختار الطابعات الوهمية تلقائياً (الكاشير + مطبخ 1/2/3 للأقسام) ونرجّع الحقيقية لما ينطفي
+  const VPRE = '🧪 تجريبية — ';
+  window.dpTestMode = async (on) => {
+    if (!DESK || !DESK.setTestMode) return;
+    await DESK.setTestMode(on);
+    await dpFind(true);
+    const set = (sel, v) => { const el = $(sel); if (el) el.value = v; };
+    if (on) {
+      set('dpMain', VPRE + 'الكاشير');
+      secList().forEach((x, i) => set('dpP_' + x.id, VPRE + 'مطبخ ' + ((i % 3) + 1)));
+    } else {
+      if ((($('dpMain') || {}).value || '').startsWith(VPRE)) set('dpMain', '');
+      secList().forEach((x) => { if ((($('dpP_' + x.id) || {}).value || '').startsWith(VPRE)) set('dpP_' + x.id, ''); });
+    }
+    dpSave(); await dpFind(true);
+    toast(on ? '🧪 وضع التجربة شغّال — اضغط «🧾 طلب تجريبي» وشوف الورق بالمحاكي' : '✅ رجعنا للطابعات الحقيقية');
+  };
+  // طلب تجريبي: فاتورة + تذكرة لكل قسم، بدون ما ينحفظ طلب حقيقي
+  window.dpSample = async () => {
+    const secs = secList();
+    const items = secs.map((x, i) => ({ name: 'صنف تجريبي — ' + x.name, variant: 'وحدة', qty: 1 + (i % 2), price: 5000, sec: x.id, note: i === 0 ? 'بدون بصل' : '' }));
+    items.push({ name: 'بيبسي', variant: 'وحدة', qty: 2, price: 1000 });
+    const total = items.reduce((t, i) => t + i.price * i.qty, 0);
+    const o = { id: 'TEST' + Date.now(), restaurantId: rid(), orderType: 'salon', salonNum: 99, ticketNo: 99, pager: 3, items,
+      kSec: Object.fromEntries(secs.map((x) => [x.id, { n: 1 }])), value: total, subtotal: total, discount: 0,
+      createdAtMs: Date.now(), createdAt: nowT(), note: 'هذا طلب تجريبي — لا تحضّره' };
+    await printOrderAll(o, receiptHTML(o, null, { payment: { method: 'cash', cash: total, card: 0 } }, false));
+    toast('🧾 انطبع طلب تجريبي: فاتورة + ' + toA(secs.length) + ' تذكرة قسم');
+    dpJobs();
+  };
   function dpSave() {
     const c = dpCfg(), n = (id) => Math.max(1, Math.min(5, Math.round(num(($(id) || {}).value) || 1)));
     const next = { ...c, main: ($('dpMain') || {}).value || '', receiptCopies: n('dpRc'), fallback: !!($('dpFb') || {}).checked, printers: {}, copies: {} };

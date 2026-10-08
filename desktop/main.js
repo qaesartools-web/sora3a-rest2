@@ -3,7 +3,8 @@
 'use strict';
 const { app, BrowserWindow, ipcMain, shell, dialog, Menu, session } = require('electron');
 const path = require('path');
-const { createPrinter, makeRenderer } = require('./printer');
+const fs = require('fs');
+const { createPrinter, makeRenderer, makeVirtualRenderer } = require('./printer');
 
 const START_URL = process.env.SORA_URL || 'https://qaesartools-web.github.io/sora3a-rest2/';
 const ALLOWED = new Set(['https://qaesartools-web.github.io', 'https://sora3a.com', 'https://pos.sora3a.com', new URL(START_URL).origin]);
@@ -14,7 +15,37 @@ const fromApp = (e) => originOk(e.senderFrame && e.senderFrame.url);
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 if (!app.requestSingleInstanceLock()) app.quit();
 
-let win = null, quitting = false, printer = null;
+let win = null, quitting = false, printer = null, simWin = null;
+
+// إعدادات البرنامج على هالحاسبة (وضع تجربة الطابعات)
+const cfgFile = () => path.join(app.getPath('userData'), 'sora3a-desktop.json');
+const readCfg = () => { try { return JSON.parse(fs.readFileSync(cfgFile(), 'utf8')); } catch (e) { return {}; } };
+const writeCfg = (c) => { try { fs.writeFileSync(cfgFile(), JSON.stringify(c)); } catch (e) {} };
+let testMode = false;
+
+// ── محاكي الطابعات: يعرض الورق اللي كان راح ينطبع ──
+const papers = [];
+const testDir = () => path.join(app.getPath('documents'), 'Sora3a Test Prints');
+function onPaper(p) {
+  papers.push(p); if (papers.length > 120) papers.shift();
+  openSimulator(false);
+  if (simWin && !simWin.isDestroyed() && !simWin.webContents.isLoading()) simWin.webContents.send('sim:paper', p);
+}
+function openSimulator(focus) {
+  if (simWin && !simWin.isDestroyed()) { if (focus) { simWin.show(); simWin.focus(); } return; }
+  simWin = new BrowserWindow({
+    width: 760, height: 820, title: 'محاكي الطابعات — سرعة', autoHideMenuBar: true, backgroundColor: '#111827',
+    icon: path.join(__dirname, 'build', 'icon.png'), show: false,
+    webPreferences: { preload: path.join(__dirname, 'simulator-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  if (focus) simWin.show(); else simWin.showInactive();
+  simWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  simWin.webContents.on('will-navigate', (e) => e.preventDefault());
+  simWin.loadFile(path.join(__dirname, 'simulator.html'));
+  simWin.webContents.on('did-finish-load', () => { papers.forEach((p) => simWin.webContents.send('sim:paper', p)); });
+  simWin.on('closed', () => { simWin = null; });
+}
+const fromSim = (e) => simWin && !simWin.isDestroyed() && e.sender === simWin.webContents;
 
 function openOutside(url) {
   if (/^(https?:|tel:|mailto:|whatsapp:)/i.test(url)) shell.openExternal(url).catch(() => {});
@@ -54,6 +85,7 @@ function createWindow() {
     });
     if (r === 0) quitting = true; else e.preventDefault();
   });
+  win.on('closed', () => { win = null; app.quit(); });
   win.loadURL(START_URL);
 }
 
@@ -65,6 +97,17 @@ function setupIpc() {
   });
   ipcMain.handle('sora:jobs', (e) => (fromApp(e) ? printer.jobs() : []));
   ipcMain.handle('sora:reprint', (e, id) => (fromApp(e) ? printer.reprint(id) : { ok: false, error: 'طلب مرفوض' }));
+  ipcMain.handle('sora:testmode:get', (e) => fromApp(e) && testMode);
+  ipcMain.handle('sora:testmode:set', (e, on) => {
+    if (!fromApp(e)) return false;
+    testMode = !!on; writeCfg({ ...readCfg(), testMode });
+    if (testMode) openSimulator(true);
+    return testMode;
+  });
+  ipcMain.handle('sora:simulator:open', (e) => { if (fromApp(e)) openSimulator(true); return true; });
+  ipcMain.handle('sim:clear', (e) => { if (fromSim(e)) papers.length = 0; return true; });
+  ipcMain.handle('sim:folder', (e) => { if (fromSim(e)) { fs.mkdirSync(testDir(), { recursive: true }); shell.openPath(testDir()); } return true; });
+  ipcMain.handle('sim:pdf', (e, f) => { if (fromSim(e) && typeof f === 'string' && f.startsWith(testDir()) && f.endsWith('.pdf')) shell.openPath(f); return true; });
   ipcMain.handle('sora:autostart:get', (e) => fromApp(e) && app.getLoginItemSettings().openAtLogin);
   ipcMain.handle('sora:autostart:set', (e, on) => {
     if (!fromApp(e)) return false;
@@ -91,14 +134,17 @@ function setupUpdates() {
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
 app.on('before-quit', () => { quitting = true; });
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => { if (simWin && !simWin.isDestroyed()) simWin.destroy(); });
 
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, perm, cb, details) => {
     cb(['notifications', 'clipboard-sanitized-write', 'fullscreen'].includes(perm) && originOk(details.requestingUrl || ''));
   });
+  testMode = !!readCfg().testMode;
   printer = createPrinter({
     getPrinters: () => (win && !win.isDestroyed() ? win.webContents.getPrintersAsync() : Promise.resolve([])),
     render: makeRenderer(BrowserWindow, app.getPath('temp')),
+    virtual: { enabled: () => testMode, render: makeVirtualRenderer(BrowserWindow, app.getPath('temp'), testDir(), onPaper) },
   });
   setupIpc();
   createWindow();
