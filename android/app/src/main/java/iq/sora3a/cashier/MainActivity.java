@@ -5,11 +5,15 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.ComponentName;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.view.WindowManager;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -27,7 +31,7 @@ import java.util.Collections;
 // على الطابعة المدمجة بالجهاز، وطابعات الشبكة والبلوتوث — بدون أي برنامج ثاني
 public class MainActivity extends Activity {
     private static final String START_URL = "https://qaesartools-web.github.io/sora3a-rest2/";
-    private static final int REQ_BT = 7;
+    private static final int REQ_BT = 7, REQ_PHONE = 8;
     private WebView web;
     private volatile String pageUrl = "";
 
@@ -83,6 +87,73 @@ public class MainActivity extends Activity {
         if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) return;
         runOnUiThread(() -> requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, REQ_BT));
     }
+
+    // ── خط المطعم وتشغيل الكاشير مع الجهاز: الأذونات اللي يحتاجها ──
+    private boolean has(String p) { return checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED; }
+    boolean phoneOk() { return has(Manifest.permission.READ_PHONE_STATE) && has(Manifest.permission.READ_CALL_LOG); }
+    boolean hasSim() { return getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY); }
+    boolean notifOk() {
+        String s = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
+        return s != null && s.contains(getPackageName() + "/");
+    }
+    boolean overlayOk() { return Settings.canDrawOverlays(this); }
+    boolean batteryOk() {
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        return pm == null || pm.isIgnoringBatteryOptimizations(getPackageName());
+    }
+    private SharedPreferences appPrefs() { return getSharedPreferences("app", 0); }
+    // أندرويد 10+ يحتاج «الظهور فوق التطبيقات» حتى يفتح الكاشير وحده بعد تشغيل الجهاز
+    boolean autoStartOn() { return appPrefs().getBoolean("autoStart", true) && (Build.VERSION.SDK_INT < 29 || overlayOk()); }
+    boolean setAutoStart(boolean on) {
+        appPrefs().edit().putBoolean("autoStart", on).apply();
+        if (on && Build.VERSION.SDK_INT >= 29 && !overlayOk()) openPerm("overlay");
+        return autoStartOn();
+    }
+
+    void openPerm(String kind) {
+        runOnUiThread(() -> {
+            String pkg = getPackageName();
+            switch (kind) {
+                case "phone": {
+                    String[] ps = {Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG};
+                    boolean asked = appPrefs().getBoolean("askedPhone", false);
+                    boolean blocked = asked && !shouldShowRequestPermissionRationale(ps[0]) && !shouldShowRequestPermissionRationale(ps[1]);
+                    if (phoneOk() || blocked) { openSettings(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg))); return; }
+                    appPrefs().edit().putBoolean("askedPhone", true).apply();
+                    requestPermissions(ps, REQ_PHONE);
+                    return;
+                }
+                case "notif": {
+                    Intent i = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        Intent d = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                            .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, new ComponentName(this, WaListener.class).flattenToString());
+                        if (d.resolveActivity(getPackageManager()) != null) i = d;
+                    }
+                    openSettings(i);
+                    return;
+                }
+                case "overlay": openSettings(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + pkg))); return;
+                case "battery": {
+                    @SuppressLint("BatteryLife")
+                    Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + pkg));
+                    if (!openSettings(i)) openSettings(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+                    return;
+                }
+                default: openSettings(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg)));
+            }
+        });
+    }
+    private boolean openSettings(Intent i) {
+        try { startActivity(i); return true; } catch (Exception e) { return false; }
+    }
+
+    // رجعنا من شاشة الأذونات ← الكاشير يحدّث حالة الخط
+    private void notifyPage() {
+        if (web != null && pageOriginOk()) web.evaluateJavascript("window.dispatchEvent(new Event('sora:resume'))", null);
+    }
+    @Override protected void onResume() { super.onResume(); notifyPage(); }
+    @Override public void onRequestPermissionsResult(int req, String[] perms, int[] res) { super.onRequestPermissionsResult(req, perms, res); notifyPage(); }
 
     @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); web.saveState(out); }
 

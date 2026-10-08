@@ -23,6 +23,27 @@ const readCfg = () => { try { return JSON.parse(fs.readFileSync(cfgFile(), 'utf8
 const writeCfg = (c) => { try { fs.writeFileSync(cfgFile(), JSON.stringify(c)); } catch (e) {} };
 let testMode = false;
 
+// ── يشتغل وحده مع تشغيل الجهاز (مفعّل افتراضياً من أول تشغيل) ──
+const linuxAutostartFile = () => path.join(app.getPath('home'), '.config', 'autostart', 'sora3a-cashier.desktop');
+function getAutoStart() {
+  if (process.platform === 'linux') return fs.existsSync(linuxAutostartFile());
+  return app.getLoginItemSettings().openAtLogin;
+}
+function setAutoStart(on) {
+  try {
+    if (process.platform === 'linux') {
+      const f = linuxAutostartFile();
+      if (on) {
+        fs.mkdirSync(path.dirname(f), { recursive: true });
+        const exe = process.env.APPIMAGE || process.execPath;
+        fs.writeFileSync(f, `[Desktop Entry]\nType=Application\nName=Sora3a Cashier\nExec="${exe}"\nX-GNOME-Autostart-enabled=true\n`);
+      } else if (fs.existsSync(f)) fs.unlinkSync(f);
+    } else app.setLoginItemSettings({ openAtLogin: !!on });
+  } catch (e) { /* ما نوقف البرنامج إذا ما انضبط */ }
+  writeCfg({ ...readCfg(), autoStartSet: true });
+  return getAutoStart();
+}
+
 // ── محاكي الطابعات: يعرض الورق اللي كان راح ينطبع ──
 const papers = [];
 const testDir = () => path.join(app.getPath('documents'), 'Sora3a Test Prints');
@@ -109,12 +130,8 @@ function setupIpc() {
   ipcMain.handle('sim:clear', (e) => { if (fromSim(e)) papers.length = 0; return true; });
   ipcMain.handle('sim:folder', (e) => { if (fromSim(e)) { fs.mkdirSync(testDir(), { recursive: true }); shell.openPath(testDir()); } return true; });
   ipcMain.handle('sim:pdf', (e, f) => { if (fromSim(e) && typeof f === 'string' && f.startsWith(testDir()) && f.endsWith('.pdf')) shell.openPath(f); return true; });
-  ipcMain.handle('sora:autostart:get', (e) => fromApp(e) && app.getLoginItemSettings().openAtLogin);
-  ipcMain.handle('sora:autostart:set', (e, on) => {
-    if (!fromApp(e)) return false;
-    app.setLoginItemSettings({ openAtLogin: !!on });
-    return !!on;
-  });
+  ipcMain.handle('sora:autostart:get', (e) => fromApp(e) && getAutoStart());
+  ipcMain.handle('sora:autostart:set', (e, on) => (fromApp(e) ? setAutoStart(!!on) : false));
 }
 
 // تحديث البرنامج نفسه تلقائياً (ينزل بالخلفية ويتثبت عند الإغلاق)
@@ -143,6 +160,8 @@ app.whenReady().then(() => {
     cb(['notifications', 'clipboard-sanitized-write', 'fullscreen'].includes(perm) && originOk(details.requestingUrl || ''));
   });
   testMode = !!readCfg().testMode;
+  // أول تشغيل للنسخة المثبتة: يفتح وحده مع تشغيل الجهاز (يكدر الكاشير يطفيه من الإعدادات)
+  if (app.isPackaged && !readCfg().autoStartSet) setAutoStart(true);
   printer = createPrinter({
     getPrinters: () => (win && !win.isDestroyed() ? win.webContents.getPrintersAsync() : Promise.resolve([])),
     render: makeRenderer(BrowserWindow, app.getPath('temp')),

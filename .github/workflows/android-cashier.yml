@@ -42,5 +42,5 @@ jobs:
           tag_name: cashier-android
           name: تطبيق الكاشير للأندرويد
           make_latest: false
-          body: نسخة ${{ github.run_number }} — نزّل sora3a-cashier.apk وثبّته على جهاز الكاشير أو التابلت.
+          body: نسخة ${{ github.run_number }} — نزّل sora3a-cashier.apk وثبّته على جهاز الكاشير أو التابلت، أو على تلفون خط المطعم (ربط الشريحة والواتساب من الإعدادات ← 📞 خط المطعم).
           files: sora3a-cashier.apk

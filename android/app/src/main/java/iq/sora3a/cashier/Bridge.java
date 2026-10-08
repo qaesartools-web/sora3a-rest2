@@ -1,5 +1,6 @@
 package iq.sora3a.cashier;
 
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
@@ -78,8 +79,43 @@ public class Bridge {
                 return new JSONObject().put("ok", true).put("name", label);
             }
             case "removePrinter": backend.removeLan(a.optString(0, "")); return new JSONObject().put("ok", true);
+            // ── يفتح وحده مع تشغيل الجهاز ──
+            case "getAutoStart": return act.autoStartOn();
+            case "setAutoStart": return act.setAutoStart(a.optBoolean(0));
+            // ── خط المطعم (بدل MacroDroid) ──
+            case "getCallLine": return lineStatus();
+            case "setCallLine": {
+                JSONObject o = a.optJSONObject(0); if (o == null) o = new JSONObject();
+                CallLine.Config c = new CallLine.Config(o.optString("token", ""), o.optString("restaurantId", ""), o.optString("line", ""),
+                    o.optString("label", ""), o.optBoolean("sim", true), o.optBoolean("wa", true));
+                if (!c.valid()) return errorJson("بيانات الخط ناقصة");
+                LineStore.save(act, c);
+                if (c.sim && act.hasSim() && !act.phoneOk()) act.openPerm("phone");
+                return lineStatus();
+            }
+            case "clearCallLine": LineStore.clear(act); return lineStatus();
+            case "testCall": {
+                CallLine.Config c = LineStore.load(act);
+                if (c == null) return errorJson("التلفون مو مربوط");
+                String err = LineStore.send(act, c, "07700000000", !c.sim && c.wa);
+                return err.isEmpty() ? new JSONObject().put("ok", true) : errorJson(err);
+            }
+            case "openPerm": act.openPerm(a.optString(0, "app")); return true;
             default: return errorJson("unknown");
         }
+    }
+
+    private JSONObject lineStatus() throws Exception {
+        CallLine.Config c = LineStore.load(act);
+        SharedPreferences p = LineStore.prefs(act);
+        JSONObject perms = new JSONObject().put("phone", act.phoneOk()).put("notif", act.notifOk()).put("battery", act.batteryOk())
+            .put("overlay", act.overlayOk()).put("sim", act.hasSim());
+        JSONObject o = new JSONObject().put("linked", c != null).put("perms", perms).put("android", android.os.Build.VERSION.SDK_INT)
+            .put("maker", String.valueOf(android.os.Build.MANUFACTURER).toLowerCase());
+        if (c != null) o.put("token", c.token).put("restaurantId", c.restaurantId).put("line", c.line).put("label", c.label).put("sim", c.sim).put("wa", c.wa)
+            .put("lastAt", p.getLong("lastAt", 0)).put("lastNumber", p.getString("lastNumber", "")).put("lastErr", p.getString("lastErr", ""))
+            .put("lastKind", p.getString("lastKind", ""));
+        return o;
     }
 
     private static JSONObject result(PrintEngine.Result r) throws Exception {
@@ -93,12 +129,15 @@ public class Bridge {
     public static final String SHIM = "(function(){if(window.SoraDesktop||!window.SoraPOS)return;var seq=0,pend={};"
         + "window.__soraCb=function(id,j){var p=pend[id];if(!p)return;delete pend[id];var v=null;try{v=JSON.parse(j)}catch(e){}p(v)};"
         + "function call(m,a){return new Promise(function(res){var id=++seq;pend[id]=res;SoraPOS.call(id,m,JSON.stringify(a||[]))})}"
-        + "window.SoraDesktop={version:SoraPOS.version(),platform:'android',canAutoStart:false,canAddNetwork:true,"
+        + "window.SoraDesktop={version:SoraPOS.version(),platform:'android',canAutoStart:true,canAddNetwork:true,canCallLine:true,"
         + "printers:function(){return call('printers')},print:function(h,o){return call('print',[String(h||''),o||{}])},"
         + "jobs:function(){return call('jobs')},reprint:function(id){return call('reprint',[Number(id)])},"
         + "getTestMode:function(){return call('getTestMode')},setTestMode:function(on){return call('setTestMode',[!!on])},"
-        + "openSimulator:function(){return call('openSimulator')},getAutoStart:function(){return Promise.resolve(false)},"
-        + "setAutoStart:function(){return Promise.resolve(false)},onUpdate:function(){},"
+        + "openSimulator:function(){return call('openSimulator')},getAutoStart:function(){return call('getAutoStart')},"
+        + "setAutoStart:function(on){return call('setAutoStart',[!!on])},onUpdate:function(){},"
+        + "getCallLine:function(){return call('getCallLine')},setCallLine:function(c){return call('setCallLine',[c||{}])},"
+        + "clearCallLine:function(){return call('clearCallLine')},testCall:function(){return call('testCall')},"
+        + "openPerm:function(k){return call('openPerm',[String(k||'app')])},"
         + "addNetworkPrinter:function(n,ip,port){return call('addNetworkPrinter',[n||'',ip||'',Number(port)||9100])},"
         + "removePrinter:function(n){return call('removePrinter',[n])}};})();";
 }
