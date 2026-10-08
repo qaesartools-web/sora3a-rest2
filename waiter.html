@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>سرعة — الويتر</title>
 <meta name="theme-color" content="#0A100D">
-<link rel="icon" href="logo.svg">
+<link rel="icon" href="waiter-192.png">
+<link rel="manifest" href="waiter.webmanifest">
+<link rel="apple-touch-icon" href="waiter-apple-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="الويتر">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Sora:wght@600;800&display=swap" rel="stylesheet">
@@ -98,7 +104,18 @@ button{cursor:pointer}
 .empty{text-align:center;color:var(--muted);padding:30px 10px}
 .toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-16px);background:var(--ink);color:#FAF7F0;padding:10px 18px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;transition:.2s;z-index:90;pointer-events:none;max-width:calc(100vw - 32px)}
 .toast.on{opacity:1;transform:translateX(-50%)}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* تثبيت التطبيق */
+.inst{position:fixed;inset:calc(10px + env(safe-area-inset-top)) 10px auto 10px;z-index:150;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:12px;
+  background:#0A100D;color:#FAF7F0;border:1px solid #2A3830;border-radius:20px;padding:12px 12px 12px 10px;box-shadow:0 18px 50px rgba(0,0,0,.35);animation:instIn .3s ease}
+@keyframes instIn{from{transform:translateY(-16px);opacity:0}to{transform:none;opacity:1}}
+.inst img{width:46px;height:46px;border-radius:12px;flex:none}
+.inst-t{flex:1;min-width:0;line-height:1.5}
+.inst-t b{display:block;font-size:15.5px}
+.inst-t span{display:block;font-size:12.5px;color:#B9C2BB}
+.inst-t span b{display:inline;font-size:inherit;color:#FAF7F0}
+.inst-go{flex:none;border:none;border-radius:12px;background:#3DF08B;color:#0A100D;font-weight:700;font-size:15px;padding:10px 16px}
+.inst-x{flex:none;border:none;background:none;color:#8E978F;font-size:18px;padding:4px 6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 <style id="gateCss"></style>
 </head>
@@ -126,6 +143,51 @@ button{cursor:pointer}
 <div class="sheet" id="itemSh"></div>
 <div class="sheet" id="cartSh"></div>
 <div class="toast" id="toast"></div>
+<div class="inst" id="inst" hidden role="dialog" aria-label="تثبيت التطبيق">
+  <img src="waiter-192.png" alt="">
+  <div class="inst-t"><b>ثبّت تطبيق الويتر</b><span id="instSub">يفتح بضغطة من الشاشة الرئيسية، مثل أي تطبيق</span></div>
+  <button type="button" class="inst-go" id="instGo">تثبيت</button>
+  <button type="button" class="inst-x" id="instX" aria-label="إغلاق">✕</button>
+</div>
+<script>
+// ── تثبيت تطبيق الويتر: أول ما ينفتح الرابط يطلب التثبيت (منفصل عن Firebase حتى يشتغل حتى بدون نت) ──
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  var ua = navigator.userAgent || '';
+  var ios = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var mobile = ios || /android|mobile/i.test(ua);
+  var deferred = null;
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('waiter-sw.js', { scope: './waiter' }).catch(function () {});
+  function closed() { try { return sessionStorage.getItem('w_inst_x') === '1'; } catch (e) { return false; } }
+  function show(mode) {
+    if (standalone || closed()) return;
+    $('inst').hidden = false;
+    $('instGo').hidden = mode !== 'prompt';
+    if (mode === 'ios') $('instSub').innerHTML = 'اضغط زر المشاركة <b>⬆️</b> وبعدها «<b>إضافة إلى الشاشة الرئيسية</b>»';
+    else if (mode === 'menu') $('instSub').innerHTML = 'من قائمة المتصفح <b>⋮</b> اختار «<b>تثبيت التطبيق</b>» أو «<b>إضافة للشاشة الرئيسية</b>» — وإذا فتحته من واتساب اختار «فتح في Chrome» أول';
+    else $('instSub').textContent = 'يفتح بضغطة من الشاشة الرئيسية، مثل أي تطبيق';
+  }
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; show('prompt'); });
+  window.addEventListener('appinstalled', function () {
+    $('inst').hidden = true; deferred = null;
+    var t = $('toast'); if (t) { t.textContent = '✅ انثبت — افتح «الويتر» من الشاشة الرئيسية'; t.classList.add('on'); setTimeout(function () { t.classList.remove('on'); }, 3000); }
+  });
+  $('instGo').onclick = function () {
+    if (!deferred) return;
+    deferred.prompt();
+    Promise.resolve(deferred.userChoice).then(function (r) { if (r && r.outcome === 'accepted') $('inst').hidden = true; }).catch(function () {});
+    deferred = null;
+  };
+  $('instX').onclick = function () { $('inst').hidden = true; try { sessionStorage.setItem('w_inst_x', '1'); } catch (e) {} };
+  // المتصفح ما عرض التثبيت (آيفون، أو متصفح ثاني، أو فاتحه من واتساب): نشرحله شلون
+  if (!standalone && mobile) setTimeout(function () {
+    if (deferred || !$('inst').hidden) return;
+    var check = navigator.getInstalledRelatedApps ? navigator.getInstalledRelatedApps().catch(function () { return []; }) : Promise.resolve([]);
+    check.then(function (apps) { if (!apps || !apps.length) show(ios ? 'ios' : 'menu'); });
+  }, ios ? 800 : 3500);
+})();
+</script>
 
 <script type="module">
 import { db, staffGate, logout, esc, bagDay, GATE_CSS, doc, getDoc, setDoc, collection, query, where, onSnapshot } from './staff.js';
