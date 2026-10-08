@@ -24,7 +24,8 @@ jobs:
         with: { gradle-version: '8.9' }
       - name: Signing key (generated per build)
         run: |
-          echo "KEYSTORE_PASS=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+          P=$(openssl rand -hex 16); echo "::add-mask::$P"
+          echo "KEYSTORE_PASS=$P" >> "$GITHUB_ENV"
           echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
       - run: keytool -genkeypair -keystore "$KEYSTORE_PATH" -storepass "$KEYSTORE_PASS" -keypass "$KEYSTORE_PASS" -alias sora3a -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Sora3a Cashier"
       - name: Unit tests + build
