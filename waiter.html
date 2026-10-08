@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>سرعة — الويتر</title>
+<meta name="theme-color" content="#0A100D">
+<link rel="icon" href="logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Sora:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0A100D; --neon:#3DF08B; --saf:#FFB627; --chili:#FF4D2E;
+  --bg:#FAF7F0; --card:#FFFFFF; --soft:#F1EDE2; --line:#E6E0D2; --text:#0A100D; --muted:#676C64;
+  --btn:#0A100D; --btn-fg:#3DF08B; --ok:#0F9D58;
+  --font:'IBM Plex Sans Arabic',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif; --num:'Sora','IBM Plex Sans Arabic',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0A100D; --card:#131B16; --soft:#1A241E; --line:#26322B; --text:#F1EFE8; --muted:#9AA39C; --btn:#3DF08B; --btn-fg:#0A100D; --ok:#3DF08B;
+}}
+:root[data-theme="dark"]{--bg:#0A100D; --card:#131B16; --soft:#1A241E; --line:#26322B; --text:#F1EFE8; --muted:#9AA39C; --btn:#3DF08B; --btn-fg:#0A100D; --ok:#3DF08B}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:150px;line-height:1.6}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+.hd{position:sticky;top:0;z-index:30;background:var(--ink);color:#FAF7F0;padding:10px 0}
+.hd .wrap{display:flex;align-items:center;gap:10px}
+.hd .t{flex:1;min-width:0}
+.hd b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hd small{color:#B9C2BB;font-size:12.5px}
+.hb{border:1px solid #2A3830;background:#141C17;color:#FAF7F0;border-radius:12px;padding:7px 11px;font-size:13px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.tab{border:1.5px solid var(--line);background:var(--card);border-radius:14px;padding:11px;font-weight:700;font-size:15px;position:relative}
+.tab.on{background:var(--btn);color:var(--btn-fg);border-color:var(--btn)}
+.tab .bd{position:absolute;top:-7px;inset-inline-start:10px;background:var(--saf);color:var(--ink);border-radius:10px;min-width:22px;height:22px;font-size:12px;display:grid;place-items:center;padding:0 6px}
+.lbl{font-weight:700;font-size:14px;margin:14px 0 8px}
+.tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px}
+.tb{aspect-ratio:1;border:1.5px solid var(--line);background:var(--card);border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-family:var(--num);font-weight:800;font-size:28px;position:relative}
+.tb small{font-family:var(--font);font-size:11.5px;font-weight:600;color:var(--muted)}
+.tb.busy{border-color:var(--saf)}
+.tb.ready{border-color:var(--ok);background:color-mix(in srgb,var(--neon) 18%,var(--card))}
+.tb.ready small{color:var(--ok)}
+.manual{display:flex;gap:8px;margin-top:12px}
+.inp{display:block;width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);font-size:15px;outline:none}
+.inp:focus{border-color:var(--ok)}
+.go{border:none;border-radius:14px;padding:12px 18px;background:var(--btn);color:var(--btn-fg);font-weight:700;font-size:15px}
+.go.big{display:block;width:100%;padding:16px;font-size:17px;margin-top:16px}
+.go:disabled{opacity:.55}
+.tbar{display:flex;align-items:center;gap:10px;margin-top:12px}
+.tbar .pill{background:var(--btn);color:var(--btn-fg);border-radius:999px;padding:6px 14px;font-weight:700}
+.tbar button{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:7px 12px;font-size:13px}
+.cats{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:12px 0 4px;position:sticky;top:58px;z-index:20;background:var(--bg)}
+.cats::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px;white-space:nowrap}
+.chip.on{background:var(--btn);color:var(--btn-fg);border-color:var(--btn)}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
+.it{border:1.5px solid var(--line);background:var(--card);border-radius:16px;padding:8px;text-align:start;position:relative}
+.it:disabled{opacity:.45}
+.it-img{height:90px;border-radius:12px;background:var(--soft) center/cover no-repeat;display:grid;place-items:center;font-size:34px;margin-bottom:6px}
+.it b{display:block;font-size:14.5px;line-height:1.4}
+.it span{font-size:13px;color:var(--muted)}
+.it .q{position:absolute;top:-7px;inset-inline-start:-7px;background:var(--saf);color:var(--ink);border-radius:11px;min-width:24px;height:24px;font-size:13px;font-weight:700;display:grid;place-items:center;padding:0 6px}
+.bar{position:fixed;inset:auto 0 0 0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));z-index:40;background:linear-gradient(transparent,var(--bg) 35%)}
+.bar button{display:flex;align-items:center;gap:10px;width:100%;max-width:728px;margin:0 auto;border:none;border-radius:18px;padding:15px 18px;background:var(--btn);color:var(--btn-fg);font-weight:700;font-size:16px;box-shadow:0 12px 30px rgba(10,16,13,.3)}
+.bar .n{background:var(--btn-fg);color:var(--btn);border-radius:10px;min-width:28px;height:28px;display:grid;place-items:center;font-size:14px;padding:0 6px}
+.bar .tt{margin-inline-start:auto}
+.ov{position:fixed;inset:0;background:rgba(10,16,13,.55);z-index:60;opacity:0;pointer-events:none;transition:opacity .2s}
+.ov.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;inset:auto 0 0 0;z-index:70;max-height:90vh;overflow:auto;background:var(--card);border-radius:24px 24px 0 0;padding:10px 18px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .25s;max-width:760px;margin:0 auto}
+.sheet.on{transform:none}
+.grab{width:44px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+.sheet h3{font-size:19px}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{border:1.5px solid var(--line);background:var(--card);border-radius:14px;padding:9px 13px;font-weight:600;font-size:14px}
+.opt small{display:block;color:var(--muted);font-weight:500;font-size:12px}
+.opt.on{border-color:var(--ok);background:color-mix(in srgb,var(--neon) 16%,var(--card))}
+.qty{display:inline-flex;align-items:center;border:1.5px solid var(--line);border-radius:14px;overflow:hidden}
+.qty button{width:42px;height:42px;border:none;background:none;font-size:21px;font-weight:700}
+.qty b{min-width:32px;text-align:center}
+.ln{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line)}
+.ln .b{flex:1;min-width:0}
+.ln .nt{color:var(--muted);font-size:12.5px}
+.ln .qty button{width:34px;height:34px;font-size:18px}
+.sum{display:flex;justify-content:space-between;font-weight:700;font-size:16px;margin-top:12px}
+.ords{display:grid;gap:10px;margin-top:4px}
+.od{background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:12px 14px}
+.od.ready{border-color:var(--ok);box-shadow:0 0 0 4px color-mix(in srgb,var(--neon) 22%,transparent)}
+.od.bad{border-color:var(--chili)}
+.od-h{display:flex;align-items:center;gap:8px;font-weight:700}
+.od-h .tn{font-family:var(--num);font-weight:800;font-size:20px}
+.od-h .st{margin-inline-start:auto;font-size:13px;border-radius:999px;padding:3px 10px;background:var(--soft)}
+.od.ready .st{background:var(--neon);color:var(--ink)}
+.od-i{color:var(--muted);font-size:13px;margin-top:4px}
+.od button{margin-top:8px;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:7px 12px;font-size:13px;font-weight:600}
+.empty{text-align:center;color:var(--muted);padding:30px 10px}
+.toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-16px);background:var(--ink);color:#FAF7F0;padding:10px 18px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;transition:.2s;z-index:90;pointer-events:none;max-width:calc(100vw - 32px)}
+.toast.on{opacity:1;transform:translateX(-50%)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style id="gateCss"></style>
+</head>
+<body>
+<div class="gate" id="gate" hidden></div>
+<div id="app" hidden>
+  <header class="hd"><div class="wrap">
+    <div class="t"><b id="rName"></b><small id="wName"></small></div>
+    <button type="button" class="hb" id="outBtn">خروج</button>
+  </div></header>
+  <div class="wrap">
+    <div class="tabs"><button type="button" class="tab on" data-tab="tables">🪑 الطاولات</button><button type="button" class="tab" data-tab="orders">🧾 طلباتي <span class="bd" id="rdBadge" hidden></span></button></div>
+    <section id="vTables"></section>
+    <section id="vMenu" hidden>
+      <div class="tbar"><span class="pill" id="curTable"></span><button type="button" id="chgTable">↩️ تغيير الطاولة</button></div>
+      <input class="inp" id="q" type="search" placeholder="🔍 دوّر على صنف…" style="margin-top:10px" autocomplete="off">
+      <nav class="cats" id="cats"></nav>
+      <div id="items"></div>
+    </section>
+    <section id="vOrders" hidden><div class="ords" id="ords"></div></section>
+  </div>
+  <div class="bar" id="bar" hidden><button type="button" id="barBtn"><span class="n" id="barN">0</span><span>مراجعة وإرسال</span><span class="tt" id="barT"></span></button></div>
+</div>
+<div class="ov" id="ov"></div>
+<div class="sheet" id="itemSh"></div>
+<div class="sheet" id="cartSh"></div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { db, staffGate, logout, esc, bagDay, GATE_CSS, doc, getDoc, setDoc, collection, query, where, onSnapshot } from './staff.js';
+document.getElementById('gateCss').textContent = GATE_CSS;
+const $ = (id) => document.getElementById(id);
+const money = (n) => Math.round(n || 0).toLocaleString('en-US') + ' د.ع';
+const digits = (s) => String(s || '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+const safeImg = (u) => typeof u === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(u);
+const ST = { new: '⏳ عند الكاشير', preparing: '👨‍🍳 يتحضر', ready: '✅ جاهز — وصّله', done: '✔️ تم', cancelled: '❌ انلغى', rejected: '⛔ انرفض' };
+
+let me = null, cats = [], tables = 0, table = '', cart = [], sel = null, mine = [], unsubs = [], activeCat = 0, sending = false;
+const readySeen = new Set(); let firstSnap = true;
+
+function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2200); }
+const stOf = (w) => (w.status === 'new' ? 'new' : w.status === 'rejected' ? 'rejected' : w.stage || 'preparing');
+
+staffGate($('gate'), {
+  title: 'سرعة — الويتر', sub: 'سجّل دخول بحساب الكاشير اللي سوّاه إلك صاحب المطعم',
+  onIn: (u) => { me = u; start(); },
+  onOut: () => { unsubs.forEach((f) => f()); unsubs = []; me = null; $('app').hidden = true; },
+});
+$('outBtn').onclick = () => { if (!cart.length || confirm('عندك أصناف ما انرسلت — تطلع؟')) logout(); };
+
+function start() {
+  $('app').hidden = false;
+  $('rName').textContent = me.rest.name || 'المطعم';
+  $('wName').textContent = '🧑‍🍳 ' + (me.name || (me.role === 'restaurant' ? 'صاحب المطعم' : 'الويتر'));
+  const R = (...p) => doc(db, 'restaurants', me.rid, ...p);
+  unsubs.push(onSnapshot(R('menu', 'main'), (s) => { cats = s.exists() ? (s.data().cats || []).filter((c) => (c.items || []).length) : []; if (!$('vMenu').hidden) renderMenu(); }, () => {}));
+  unsubs.push(onSnapshot(R('settings', 'main'), (s) => {
+    const d = s.exists() ? s.data() : {};
+    tables = Number(d.tables) || 0;
+    if (d.receiptTitle) $('rName').textContent = d.receiptTitle;
+    renderTables();
+  }, () => renderTables()));
+  // طلباتي اليوم (وأمس للي يشتغلون بعد نص الليل)
+  unsubs.push(onSnapshot(query(collection(db, 'webOrders'), where('restaurantId', '==', me.rid), where('waiterUid', '==', me.uid), where('day', 'in', [bagDay(), bagDay(Date.now() - 86400000)])), (s) => {
+    mine = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((w) => Date.now() - (w.createdAtMs || 0) < 14 * 3600000).sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+    let ding = false;
+    mine.forEach((w) => { if (stOf(w) === 'ready' && !readySeen.has(w.id)) { readySeen.add(w.id); if (!firstSnap) { ding = true; toast('✅ طاولة ' + w.table + ' جاهزة — وصّلها'); } } });
+    firstSnap = false;
+    if (ding) { try { navigator.vibrate && navigator.vibrate([250, 120, 250]); } catch (e) {} beep(); }
+    renderTables(); renderOrders();
+  }, (e) => console.warn('mine', e.code)));
+  show('tables');
+}
+
+// ── التبويبات ──
+document.querySelectorAll('.tab').forEach((b) => b.onclick = () => show(b.dataset.tab === 'tables' && table ? 'menu' : b.dataset.tab));
+function show(v) {
+  $('vTables').hidden = v !== 'tables'; $('vMenu').hidden = v !== 'menu'; $('vOrders').hidden = v !== 'orders';
+  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('on', (b.dataset.tab === 'orders') === (v === 'orders')));
+  if (v === 'menu') renderMenu();
+  renderBar(); scrollTo(0, 0);
+}
+
+// ── الطاولات ──
+function renderTables() {
+  const st = {};
+  mine.forEach((w) => { const s = stOf(w); if (!w.table || ['done', 'cancelled', 'rejected'].includes(s)) return; if (st[w.table] !== 'ready') st[w.table] = s === 'ready' ? 'ready' : 'busy'; });
+  const n = Math.min(tables, 200);
+  $('vTables').innerHTML = `<div class="lbl">اختار الطاولة</div>
+    ${n ? `<div class="tables">${Array.from({ length: n }, (_, i) => String(i + 1)).map((t) => `<button type="button" class="tb ${st[t] || ''}" data-t="${t}">${t}<small>${st[t] === 'ready' ? '✅ جاهز' : st[t] === 'busy' ? '👨‍🍳 يتحضر' : 'فارغة'}</small></button>`).join('')}</div>` : ''}
+    <div class="manual"><input class="inp" id="tIn" inputmode="numeric" maxlength="10" placeholder="${n ? 'أو اكتب رقم الطاولة' : 'رقم الطاولة'}"><button type="button" class="go" id="tGo">فتح</button></div>`;
+  const rd = mine.filter((w) => stOf(w) === 'ready').length;
+  $('rdBadge').hidden = !rd; $('rdBadge').textContent = rd;
+}
+$('vTables').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-t]');
+  if (b) return pickTable(b.dataset.t);
+  if (e.target.id === 'tGo') { const t = digits($('tIn').value).trim(); if (t) pickTable(t.slice(0, 10)); else $('tIn').focus(); }
+});
+function pickTable(t) {
+  if (table && table !== t && cart.length && !confirm('عندك أصناف ما انرسلت لطاولة ' + table + ' — تمسحها؟')) return;
+  if (table !== t) cart = [];
+  table = t; $('curTable').textContent = '🪑 طاولة ' + t; $('q').value = '';
+  show('menu');
+}
+$('chgTable').onclick = () => show('tables');
+
+// ── المنيو ──
+const imgCache = new Map();
+async function paint(el) {
+  const id = el.dataset.img;
+  if (!imgCache.has(id)) imgCache.set(id, getDoc(doc(db, 'restaurants', me.rid, 'menuImages', id)).then((s) => (s.exists() && safeImg(s.data().data) ? s.data().data : null)).catch(() => null));
+  const d = await imgCache.get(id); if (d) { el.style.backgroundImage = `url("${d}")`; el.textContent = ''; }
+}
+const out = (p) => typeof p.stock === 'number' && p.stock <= 0;
+function renderMenu() {
+  const q = $('q').value.trim();
+  if (activeCat >= cats.length) activeCat = 0;
+  $('cats').innerHTML = q ? '' : cats.map((c, i) => `<button type="button" class="chip${i === activeCat ? ' on' : ''}" data-c="${i}">${esc(c.emoji || '')} ${esc(c.cat)}</button>`).join('');
+  const list = q ? cats.flatMap((c, ci) => c.items.map((p, pi) => ({ c, ci, p, pi }))).filter((x) => x.p.name.includes(q)) : (cats[activeCat] ? cats[activeCat].items.map((p, pi) => ({ c: cats[activeCat], ci: activeCat, p, pi })) : []);
+  $('items').innerHTML = list.length ? `<div class="items">${list.map(({ c, ci, p, pi }) => {
+    const n = cart.filter((x) => x.name === p.name).reduce((s, x) => s + x.qty, 0), ps = (p.variants || []).map((v) => Number(v.price) || 0);
+    return `<button type="button" class="it" data-ci="${ci}" data-pi="${pi}" ${out(p) ? 'disabled' : ''}>${n ? `<span class="q">${n}</span>` : ''}
+      <div class="it-img"${p.imgId ? ` data-img="${esc(p.imgId)}"` : ''}>${esc(c.emoji || '🍽️')}</div><b>${esc(p.name)}</b>
+      <span>${out(p) ? 'نفذ' : (ps.length > 1 ? 'من ' : '') + money(Math.min(...ps))}</span></button>`;
+  }).join('')}</div>` : `<div class="empty">${cats.length ? 'ماكو صنف بهالاسم' : 'المنيو فارغ — صاحب المطعم يضيفه من الكاشير'}</div>`;
+  $('items').querySelectorAll('[data-img]').forEach(paint);
+}
+$('cats').addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) { activeCat = +b.dataset.c; renderMenu(); } });
+$('q').addEventListener('input', renderMenu);
+$('items').addEventListener('click', (e) => {
+  const b = e.target.closest('.it'); if (!b || b.disabled) return;
+  const p = cats[+b.dataset.ci].items[+b.dataset.pi];
+  if ((p.variants || []).length === 1) { addLine(p, p.variants[0], 1, ''); toast('➕ ' + p.name); return; }
+  sel = { p, v: 0, qty: 1 }; renderItem(); open_('itemSh');
+});
+function renderItem() {
+  const { p } = sel, vs = p.variants || [];
+  $('itemSh').innerHTML = `<div class="grab"></div><h3>${esc(p.name)}</h3>
+    <div class="lbl">الحجم</div><div class="opts">${vs.map((x, i) => `<button type="button" class="opt${i === sel.v ? ' on' : ''}" data-v="${i}">${esc(x.name)}<small>${money(x.price)}</small></button>`).join('')}</div>
+    <div class="lbl">العدد</div><div class="qty"><button type="button" data-q="-1">−</button><b>${sel.qty}</b><button type="button" data-q="1">+</button></div>
+    <div class="lbl">ملاحظة للمطبخ</div><input class="inp" id="iNote" maxlength="80" placeholder="بدون بصل…">
+    <button type="button" class="go big" id="iAdd">إضافة • ${money((vs[sel.v] || {}).price * sel.qty)}</button>`;
+}
+$('itemSh').addEventListener('click', (e) => {
+  const v = e.target.closest('[data-v]'), q = e.target.closest('[data-q]'), note = ($('iNote') || {}).value || '';
+  if (v) { sel.v = +v.dataset.v; renderItem(); $('iNote').value = note; }
+  else if (q) { sel.qty = Math.max(1, Math.min(50, sel.qty + +q.dataset.q)); renderItem(); $('iNote').value = note; }
+  else if (e.target.id === 'iAdd') { addLine(sel.p, sel.p.variants[sel.v], sel.qty, note.trim()); close_(); }
+});
+function addLine(p, v, qty, note) {
+  const ex = cart.find((c) => c.name === p.name && c.variant === v.name && c.note === note);
+  if (ex) ex.qty = Math.min(99, ex.qty + qty);
+  else { if (cart.length >= 40) { toast('⚠️ ٤٠ صنف كحد أقصى بالطلب الواحد'); return; } cart.push({ name: p.name, variant: v.name, price: Number(v.price) || 0, qty, note }); }
+  renderMenu(); renderBar();
+}
+const total = () => cart.reduce((s, c) => s + c.price * c.qty, 0);
+function renderBar() { const n = cart.reduce((s, c) => s + c.qty, 0); $('bar').hidden = !n || $('vMenu').hidden; $('barN').textContent = n; $('barT').textContent = money(total()); }
+
+// ── المراجعة والإرسال ──
+$('barBtn').onclick = () => { renderCart(); open_('cartSh'); };
+function renderCart() {
+  const note = ($('cNote') || {}).value || '';
+  $('cartSh').innerHTML = `<div class="grab"></div><h3>🪑 طاولة ${esc(table)}</h3>
+    ${cart.map((c, i) => `<div class="ln"><div class="b"><b>${esc(c.name)}${c.variant && c.variant !== 'وحدة' ? ' — ' + esc(c.variant) : ''}</b><div class="nt">${money(c.price * c.qty)}${c.note ? ' • 📝 ' + esc(c.note) : ''}</div></div>
+      <div class="qty"><button type="button" data-l="${i}" data-d="-1">−</button><b>${c.qty}</b><button type="button" data-l="${i}" data-d="1">+</button></div></div>`).join('')}
+    <div class="lbl">ملاحظة للطلب</div><input class="inp" id="cNote" maxlength="200" value="${esc(note)}" placeholder="مثال: الطاولة مستعجلة">
+    <div class="sum"><span>المجموع</span><span>${money(total())}</span></div>
+    <button type="button" class="go big" id="cSend"${sending ? ' disabled' : ''}>${sending ? '⏳ جاري الإرسال…' : '📨 إرسال للمطبخ'}</button>`;
+}
+$('cartSh').addEventListener('click', (e) => {
+  const l = e.target.closest('[data-l]');
+  if (l) { const c = cart[+l.dataset.l]; c.qty += +l.dataset.d; if (c.qty <= 0) cart.splice(+l.dataset.l, 1); renderMenu(); renderBar(); if (!cart.length) close_(); else renderCart(); return; }
+  if (e.target.id === 'cSend') send();
+});
+async function send() {
+  if (sending || !cart.length || !table) return;
+  const note = $('cNote').value.trim();
+  const ref = doc(collection(db, 'webOrders'));
+  const data = { restaurantId: me.rid, source: 'waiter', mode: 'table', table: String(table).slice(0, 10), status: 'new', createdAtMs: Date.now(), day: bagDay(),
+    waiter: String(me.name || (me.role === 'restaurant' ? 'صاحب المطعم' : 'الويتر')).slice(0, 60), waiterUid: me.uid, total: total(),
+    items: cart.map((c) => (c.note ? { name: c.name, variant: c.variant, price: c.price, qty: c.qty, note: c.note } : { name: c.name, variant: c.variant, price: c.price, qty: c.qty })) };
+  if (note) data.note = note.slice(0, 500);
+  sending = true; renderCart();
+  try {
+    await setDoc(ref, data);
+    toast('📨 انرسل طلب طاولة ' + table);
+    cart = []; table = ''; sending = false; close_(); show('orders');
+  } catch (e) {
+    sending = false; renderCart();
+    toast(e.code === 'permission-denied' ? '⛔ ما ينقبل — الخدمة موقوفة أو خارج وقت دوامك' : '📶 ما انرسل — تأكد من الإنترنت');
+  }
+}
+
+// ── طلباتي ──
+function renderOrders() {
+  $('ords').innerHTML = mine.length ? mine.map((w) => {
+    const s = stOf(w), cls = s === 'ready' ? 'ready' : ['rejected', 'cancelled'].includes(s) ? 'bad' : '';
+    const mins = Math.max(0, Math.floor((Date.now() - (w.createdAtMs || 0)) / 60000));
+    return `<div class="od ${cls}"><div class="od-h"><span class="tn">🪑 ${esc(w.table)}</span>${w.ticket ? `<span>#${esc(w.ticket)}</span>` : ''}<span class="st">${ST[s] || s}</span></div>
+      <div class="od-i">${(w.items || []).map((i) => `${i.qty}× ${esc(i.name)}`).join('، ')} • قبل ${mins} د</div>
+      ${s === 'rejected' && w.reason ? `<div class="od-i">السبب: ${esc(w.reason)}</div>` : ''}
+      ${['done', 'rejected', 'cancelled'].includes(s) ? '' : `<button type="button" data-more="${esc(w.table)}">➕ إضافة للطاولة</button>`}</div>`;
+  }).join('') : '<div class="empty">ماكو طلبات اليوم بعد — اختار طاولة وابدأ</div>';
+}
+$('ords').addEventListener('click', (e) => { const b = e.target.closest('[data-more]'); if (b) pickTable(b.dataset.more); });
+setInterval(() => { if (me && !$('vOrders').hidden) renderOrders(); }, 30000);
+
+function beep() {
+  try { const ctx = new (window.AudioContext || window.webkitAudioContext)(), o = ctx.createOscillator(), g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value = 1046;
+    g.gain.setValueAtTime(.0001, ctx.currentTime); g.gain.exponentialRampToValueAtTime(.3, ctx.currentTime + .03); g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + .4); o.start(); o.stop(ctx.currentTime + .45); } catch (e) {}
+}
+function open_(id) { $('ov').classList.add('on'); $(id).classList.add('on'); }
+function close_() { $('ov').classList.remove('on'); document.querySelectorAll('.sheet').forEach((s) => s.classList.remove('on')); }
+$('ov').onclick = close_;
+</script>
+</body>
+</html>
