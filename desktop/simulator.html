@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>محاكي الطابعات — سرعة</title>
+<style>
+:root{--bg:#0f172a;--panel:#111c33;--line:#22304d;--txt:#e5edf7;--mute:#93a4bd;--ok:#22c55e;--warn:#f59e0b}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:Tahoma,Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(15,23,42,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(6px)}
+header h1{font-size:17px;margin:0;flex:1}
+header small{display:block;color:var(--mute);font-weight:400;font-size:12px;margin-top:2px}
+.count{font-size:12px;color:var(--mute);background:#1b2742;border-radius:999px;padding:4px 10px}
+button{font:inherit;font-size:13px;font-weight:700;border:1px solid var(--line);background:#1b2742;color:var(--txt);border-radius:10px;padding:7px 12px;cursor:pointer}
+button:hover{background:#243354}
+main{display:flex;gap:18px;padding:18px;overflow-x:auto;align-items:flex-start;min-height:calc(100% - 64px)}
+.empty{margin:80px auto;text-align:center;color:var(--mute);line-height:1.9;max-width:420px}
+.empty b{color:var(--txt);font-size:18px;display:block;margin-bottom:6px}
+.col{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:0}
+.head{width:340px;border-radius:16px 16px 6px 6px;background:linear-gradient(#2b3a5c,#1c2846);border:1px solid #33456b;padding:10px 12px 14px;position:relative;box-shadow:0 10px 30px -12px #000}
+.head .nm{font-weight:800;font-size:14px;display:flex;align-items:center;gap:8px}
+.head .led{width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.head.flash .led{animation:blink .25s 4}
+@keyframes blink{50%{background:#fff;box-shadow:0 0 14px #fff}}
+.head .meta{font-size:11px;color:var(--mute);margin-top:3px}
+.head .slot{position:absolute;left:14px;right:14px;bottom:-4px;height:8px;border-radius:4px;background:#05080f}
+.feed{display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:2px}
+.slip{margin:0;animation:out .6s ease-out}
+@keyframes out{from{transform:translateY(-40px);opacity:0;clip-path:inset(0 0 100% 0)}to{transform:none;opacity:1;clip-path:inset(0 0 0 0)}}
+.paper{background:#fff;padding:0;position:relative;box-shadow:0 8px 18px -8px rgba(0,0,0,.7);
+  -webkit-mask:linear-gradient(#000,#000) top/100% calc(100% - 8px) no-repeat,conic-gradient(from 135deg at top,#0000,#000 1deg 89deg,#0000 90deg) bottom/12px 8px repeat-x}
+.paper img{display:block}
+.cap{display:flex;align-items:center;gap:8px;justify-content:space-between;font-size:12px;color:var(--mute);margin:6px 2px 0}
+.cap b{color:var(--txt);font-size:12px}
+.cap .x{color:var(--warn);font-weight:800}
+.cap button{padding:3px 8px;font-size:11px}
+.copies{font-size:11px;color:var(--warn);text-align:center;margin-top:-6px}
+</style></head>
+<body>
+<header>
+  <h1>🧪 محاكي الطابعات<small>كل ورقة كانت راح تنطبع تطلع هنا، تحت طابعتها — ونسخة PDF بمجلد «Sora3a Test Prints»</small></h1>
+  <span class="count" id="cnt">0 ورقة</span>
+  <button id="folder">📂 مجلد PDF</button>
+  <button id="clear">🗑️ مسح</button>
+</header>
+<main id="m"><div class="empty" id="empty"><b>بانتظار أول طباعة…</b>اسوِّ طلب من الكاشير، أو اضغط «🧾 طلب تجريبي» بالإعدادات. الورق يطلع هنا مثل ما يطلع من الطابعة الحرارية.</div></main>
+<script>
+const m = document.getElementById('m'), cols = new Map();
+let n = 0, ctx = null;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clean = (s) => String(s || '').replace(/^🧪\s*تجريبية\s*—\s*/, '');
+function tick() { // صوت طابعة خفيف
+  try { ctx = ctx || new AudioContext(); const t = ctx.currentTime;
+    for (let i = 0; i < 6; i++) { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.frequency.value = 180 + i * 7;
+      g.gain.setValueAtTime(0.0001, t + i * 0.05); g.gain.exponentialRampToValueAtTime(0.05, t + i * 0.05 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.05 + 0.04);
+      o.connect(g); g.connect(ctx.destination); o.start(t + i * 0.05); o.stop(t + i * 0.05 + 0.05); } } catch (e) {}
+}
+function col(name, widthMm) {
+  if (cols.has(name)) return cols.get(name);
+  document.getElementById('empty')?.remove();
+  const c = document.createElement('section'); c.className = 'col';
+  c.innerHTML = `<div class="head"><div class="nm"><span class="led"></span>🖨️ ${esc(clean(name))}</div><div class="meta">ورق ${widthMm} ملم • <span class="k">0</span> ورقة</div><div class="slot"></div></div><div class="feed"></div>`;
+  m.appendChild(c);
+  const o = { el: c, feed: c.querySelector('.feed'), head: c.querySelector('.head'), k: c.querySelector('.k'), n: 0 };
+  cols.set(name, o);
+  return o;
+}
+Sim.onPaper((p) => {
+  const c = col(p.printer, p.widthMm);
+  const f = document.createElement('figure'); f.className = 'slip';
+  const t = new Date(p.at).toLocaleTimeString('ar-IQ-u-nu-latn', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  f.innerHTML = `<div class="paper"><img alt="" width="${p.w}" height="${p.h}"></div>
+    ${p.copies > 1 ? `<div class="copies">× ${p.copies} نسخ</div>` : ''}
+    <div class="cap"><span><b>${esc(p.title)}</b> • ${esc(t)}</span><button type="button">PDF</button></div>`;
+  f.querySelector('img').src = p.png;
+  f.querySelector('button').onclick = () => Sim.openPdf(p.pdf);
+  c.feed.prepend(f);
+  c.n += p.copies || 1; c.k.textContent = c.n;
+  c.head.classList.remove('flash'); void c.head.offsetWidth; c.head.classList.add('flash');
+  n += p.copies || 1; document.getElementById('cnt').textContent = n + ' ورقة';
+  c.el.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+  tick();
+});
+document.getElementById('clear').onclick = () => { Sim.clear(); cols.clear(); n = 0; document.getElementById('cnt').textContent = '0 ورقة';
+  m.innerHTML = '<div class="empty" id="empty"><b>انمسح الورق</b>اسوِّ طلب جديد حتى يطلع ورقه هنا.</div>'; };
+document.getElementById('folder').onclick = () => Sim.openFolder();
+</script>
+</body></html>

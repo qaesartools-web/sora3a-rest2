@@ -22,9 +22,24 @@
   "build": {
     "appId": "iq.sora3a.cashier",
     "productName": "Sora3a Cashier",
-    "files": ["main.js", "preload.js", "printer.js", "offline.html", "build/icon.png"],
-    "directories": { "output": "dist", "buildResources": "build" },
-    "win": { "target": "nsis", "icon": "build/icon.png", "artifactName": "sora3a-cashier-setup.${ext}" },
+    "files": [
+      "main.js",
+      "preload.js",
+      "printer.js",
+      "offline.html",
+      "simulator.html",
+      "simulator-preload.js",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png",
+      "artifactName": "sora3a-cashier-setup.${ext}"
+    },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
@@ -33,6 +48,13 @@
       "shortcutName": "Sora3a Cashier",
       "runAfterFinish": true
     },
-    "publish": [{ "provider": "github", "owner": "qaesartools-web", "repo": "sora3a-rest2", "releaseType": "release" }]
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "qaesartools-web",
+        "repo": "sora3a-rest2",
+        "releaseType": "release"
+      }
+    ]
   }
 }
