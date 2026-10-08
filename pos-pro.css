@@ -260,3 +260,14 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 .fee-row .fee-presets{flex:1 1 100%;}
 #feePresets{display:flex;flex-wrap:wrap;gap:6px;}
 #feePresets .fee-p{flex:1 0 auto;min-width:56px;padding:8px 6px;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;}
+
+/* ── برنامج الويندوز: الطباعة المدمجة ── */
+.dp-status{display:flex;flex-wrap:wrap;gap:6px}
+.dp-pr{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.3)}
+.dp-pr.bad{background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.35);color:#b91c1c}
+.dp-jobs{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:320px;overflow:auto}
+.dp-job{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid rgba(0,0,0,.08);border-radius:10px}
+.dp-jt{flex:1;display:flex;flex-direction:column;min-width:0}
+.dp-jt small{color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dp-promo{margin-top:12px;padding:10px 12px;border-radius:12px;background:rgba(22,163,74,.08);border:1px dashed rgba(22,163,74,.45);font-size:13px;line-height:1.8}
+.dp-promo a{font-weight:800}

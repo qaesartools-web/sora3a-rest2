@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>سرعة — الكاشير</title>
+<style>
+body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0B1220;color:#EEF2F7;font-family:Tahoma,Arial,sans-serif;text-align:center}
+.b{max-width:460px;padding:24px}h1{font-size:26px;margin:12px 0}p{color:#A9B5C6;line-height:1.8}
+button{margin-top:16px;font-size:18px;font-weight:700;padding:12px 28px;border:0;border-radius:14px;background:#16A34A;color:#fff;cursor:pointer}
+</style></head><body><div class="b">
+<div style="font-size:56px">📶</div>
+<h1>ما كدرنا نفتح الكاشير</h1>
+<p>أول تشغيل يحتاج إنترنت حتى ينحفظ الكاشير بالحاسبة. بعدها يشتغل حتى لو انقطع النت.<br>نعيد المحاولة تلقائياً…</p>
+<button id="r">🔄 إعادة المحاولة</button>
+</div>
+<script>
+const u = new URLSearchParams(location.search).get('u') || 'https://qaesartools-web.github.io/sora3a-rest2/';
+const go = () => { location.href = u; };
+document.getElementById('r').onclick = go;
+setTimeout(go, 10000);
+</script>
+</body></html>
