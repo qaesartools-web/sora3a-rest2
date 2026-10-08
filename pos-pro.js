@@ -844,7 +844,8 @@
         ${menu.filter((c) => c && c.cat).map((c, i) => `<div class="set-row"><div class="sec-cat">${esc(c.emoji || '')} ${esc(c.cat)}</div><div><select class="fsel" id="stCat${i}" data-cat="${esc(c.cat)}"><option value="">— بدون قسم (لا تُطبع بالمطبخ) —</option>${(s.sections || []).filter((x) => x.name).map((x) => `<option value="${esc(x.id)}" ${(s.catSection || {})[c.cat] === x.id ? 'selected' : ''}>${esc(x.emoji || '')} ${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<div class="ac-sub">أضف فئات للمنيو أولاً</div>'}
         <div id="secHealth" class="sec-health"></div>
         ${window.SoraDesktop ? dpSettingsHtml(s) : `${appOffer() ? `<div class="dp-promo"><b>${appOffer().label}</b> — ${appOffer().text} <a href="${appOffer().url}">⬇️ تنزيل</a></div>` : ''}
-        <div class="flbl" style="margin-top:12px">🖨️ الطباعة على هذا الجهاز</div>
+        ${qzCfgGet().on ? '' : `<div class="ac-sub" style="margin-top:10px;line-height:1.8">🖨️ من المتصفح: كل قسم ينطبع بورقة منفصلة على نفس الطابعة. حتى كل قسم يطلع على طابعته، شغّل الكاشير من تطبيق سرعة (ويندوز، ماك، لينكس، أندرويد).</div>`}
+        ${!qzCfgGet().on ? '' : `<div class="flbl" style="margin-top:12px">🖨️ الطباعة على هذا الجهاز (QZ Tray — ننصح بتطبيق الكاشير بدله)</div>
         <select class="fsel" id="stQzOn"><option value="0" ${qzCfgGet().on ? '' : 'selected'}>طابعة واحدة — كل قسم تذكرته بورقة منفصلة</option><option value="1" ${qzCfgGet().on ? 'selected' : ''}>طابعة لكل قسم — عبر برنامج QZ Tray</option></select>
         <div id="qzBox" style="display:${qzCfgGet().on ? 'block' : 'none'}">
           <div class="ac-sub" style="margin:8px 0;line-height:1.8">1) نزّل وثبّت <a href="https://qz.io/download/" target="_blank" rel="noopener">QZ Tray</a> على هذه الحاسبة وشغّله. 2) اضغط «جلب الطابعات» واختر طابعة كل قسم. 3) جرّب كل طابعة.</div>
@@ -855,7 +856,7 @@
             <textarea class="finp" id="qzCert" rows="3" dir="ltr" placeholder="-----BEGIN CERTIFICATE-----">${esc(qzCfgGet().cert || '')}</textarea>
             <textarea class="finp" id="qzKey" rows="3" dir="ltr" placeholder="-----BEGIN PRIVATE KEY-----" style="margin-top:6px">${esc(qzCfgGet().key || '')}</textarea>
           </details>
-        </div>`}
+        </div>`}`}
       </div>
       <div class="sh-card"><div class="sh-title">💰 الأسعار والضرائب</div>
         <div class="set-row"><div><div class="flbl">ضريبة ٪ (0 = بدون)</div><input class="finp" id="stTax" type="number" min="0" max="50" value="${s.taxPct || 0}"></div>
@@ -956,7 +957,14 @@
   // التحديث التلقائي ينتظر لحد ما الكاشير يكون فاضي: سلة فارغة، لا نافذة مفتوحة، لا مكالمة
   window.auIdle = () => !restData || (!cart.length && !document.querySelector('[id$="Ov"].on, .duty-lock.on, .call-card'));
   window.auSave = () => ({ tab: TABS.find((t) => { const e = $(t + 'Screen'); return e && e.classList.contains('on'); }) || 'cashier' });
+  // التقارير والأرباح صارت بلوحة الإدارة بس (بدون تكرار) — الكاشير يبقى بيه تقرير اليوم والوردية
+  const ADMIN_URL = /^https?:$/.test(location.protocol) ? new URL('../sora3a-admin/', location.href.split(/[?#]/)[0]).href : 'https://qaesartools-web.github.io/sora3a-admin/';
+  window.openAdminPanel = () => {
+    toast('📊 التقارير والأرباح بلوحة الإدارة — ادخل بنفس حسابك');
+    window.open(ADMIN_URL, '_blank', 'noopener');
+  };
   window.goTab = (tab) => {
+    if (tab === 'reports') { if (tabAllowed('reports')) openAdminPanel(); else deny(); return; }
     if (!TABS.includes(tab)) tab = 'cashier';
     if (!tabAllowed(tab)) { deny(); return; }
     TABS.forEach((t) => $(t + 'Screen').classList.toggle('on', t === tab));

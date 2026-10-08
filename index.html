@@ -470,7 +470,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="dnb" data-tab="orders" onclick="goTab('orders')">📋 الطلبات</button>
     <button class="dnb" data-tab="kitchen" onclick="goTab('kitchen')">👨‍🍳 المطبخ <span class="nav-pill" id="kdsPillD"></span></button>
     <button class="dnb" data-tab="shift" onclick="goTab('shift')">🧮 الوردية</button>
-    <button class="dnb" data-tab="reports" onclick="goTab('reports')">📊 التقارير</button>
+    <button class="dnb" data-tab="reports" onclick="goTab('reports')" title="التقارير والأرباح بلوحة الإدارة">📊 التقارير ↗</button>
     <button class="dnb" data-tab="menu" onclick="goTab('menu')">🍔 المنيو والإعدادات</button>
     <button class="dnb" data-tab="acc" onclick="goTab('acc')">📦 المخزون والحسابات</button>
   </div>
@@ -640,7 +640,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nb" id="nb2" data-tab="orders" onclick="goTab('orders')"><div class="ni">📋</div><div>الطلبات</div></button>
     <button class="nb" id="nb6" data-tab="kitchen" onclick="goTab('kitchen')"><div class="ni">👨‍🍳<span class="nav-pill" id="kdsPillM"></span></div><div>المطبخ</div></button>
     <button class="nb" id="nb7" data-tab="shift" onclick="goTab('shift')"><div class="ni">🧮</div><div>الوردية</div></button>
-    <button class="nb" id="nb3" data-tab="reports" onclick="goTab('reports')"><div class="ni">📊</div><div>التقارير</div></button>
+    <button class="nb" id="nb3" data-tab="reports" onclick="goTab('reports')" title="التقارير والأرباح بلوحة الإدارة"><div class="ni">📊</div><div>التقارير ↗</div></button>
     <button class="nb" id="nb4" data-tab="menu" onclick="goTab('menu')"><div class="ni">🍔</div><div>المنيو</div></button>
     <button class="nb" id="nb5" data-tab="acc" onclick="goTab('acc')"><div class="ni">📦</div><div>المخزون</div></button>
   </nav>
@@ -2017,16 +2017,18 @@ function rangeBar(){
 }
 
 // ── التبويبات ──
-const AC_TABS=[['mat','📦 المخزون'],['mov','🔄 حركة المخزون'],['rec','🧾 الوصفات والتكلفة'],['exp','💸 المصروفات'],['fin','💰 قائمة الدخل'],['tools','🧰 أدوات']];
+// الشغل اليومي بالكاشير؛ قائمة الدخل وحركة المخزون والتقارير بلوحة الإدارة (بدون تكرار)
+const AC_TABS=[['mat','📦 المخزون'],['rec','🧾 الوصفات والتكلفة'],['exp','💸 المصروفات'],['tools','🧰 أدوات']];
 // سجل التنقل بين الأقسام حتى يعمل زر «رجوع»
 const acHist=[];
 window.acTab=t=>{if(t!==acCur){acHist.push(acCur);if(acHist.length>20)acHist.shift();}acCur=t;renderAcc();const sc=document.getElementById('accScreen');if(sc)sc.scrollTop=0;};
-window.acBack=()=>{if(!acHist.length)return;acCur=acHist.pop();renderAcc();const sc=document.getElementById('accScreen');if(sc)sc.scrollTop=0;};
+window.acBack=()=>{while(acHist.length&&!AC_TABS.some(([k])=>k===acHist[acHist.length-1]))acHist.pop();if(!acHist.length)return;acCur=acHist.pop();renderAcc();const sc=document.getElementById('accScreen');if(sc)sc.scrollTop=0;};
 function renderAcc(){
   const tabs=document.getElementById('acTabs');
   const CASHIER_TABS=['mat','exp'];
-  if(!isOwnerPOS()&&!CASHIER_TABS.includes(acCur))acCur='mat';
-  if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+AC_TABS.filter(([k])=>isOwnerPOS()||CASHIER_TABS.includes(k)).map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('');
+  if((!isOwnerPOS()&&!CASHIER_TABS.includes(acCur))||!AC_TABS.some(([k])=>k===acCur))acCur='mat';
+  if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+AC_TABS.filter(([k])=>isOwnerPOS()||CASHIER_TABS.includes(k)).map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('')
+    +(isOwnerPOS()?`<button class="mtab ac-ext" onclick="openAdminPanel()" title="تنفتح بلوحة الإدارة">💰 قائمة الدخل والحركات ↗</button>`:'');
   const body=document.getElementById('acBody');if(!body)return;
   const fn={mat:tabMat,mov:tabMov,rec:tabRec,exp:tabExp,fin:tabFin,tools:tabTools}[acCur]||tabMat;
   body.innerHTML=fn();
@@ -2711,7 +2713,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=25"></script>
+<script src="pos-pro.js?v=26"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
