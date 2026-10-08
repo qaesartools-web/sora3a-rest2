@@ -14,8 +14,10 @@ const BAD = [
   [0x40, 'مشكلة بالورق'], [0x400000, 'الغطاء مفتوح'], [0x2, 'بيها خطأ'], [0x1, 'موقوفة مؤقتاً'],
   [0x100000, 'تحتاج تدخل'], [0x40000, 'خلص الحبر'],
 ];
-function describeStatus(status) {
+// ماك ولينكس (CUPS): 3 = جاهزة، 4 = تطبع، 5 = موقوفة
+function describeStatus(status, platform = process.platform) {
   const st = Number(status) || 0;
+  if (platform !== 'win32') return st === 5 ? { ok: false, statusText: 'موقوفة' } : { ok: true, statusText: 'جاهزة' };
   const bad = BAD.find(([bit]) => st & bit);
   return bad ? { ok: false, statusText: bad[1] } : { ok: true, statusText: 'جاهزة' };
 }
@@ -128,7 +130,7 @@ function cleanOpts(o) {
   };
 }
 
-function createPrinter({ getPrinters: getReal, render: renderReal, virtual = null, retries = 1 }) {
+function createPrinter({ getPrinters: getReal, render: renderReal, virtual = null, retries = 1, platform = process.platform }) {
   const testOn = () => !!(virtual && virtual.enabled());
   const getPrinters = async () => [...(await getReal().catch(() => [])), ...(testOn() ? VIRTUAL : [])];
   const render = (html, o) => (isVirtual(o.printer) ? virtual.render(html, o) : renderReal(html, o));
@@ -160,7 +162,7 @@ function createPrinter({ getPrinters: getReal, render: renderReal, virtual = nul
       const list = await getPrinters().catch(() => []);
       const p = list.find((x) => x.name === o.printer);
       if (!p) err = 'الطابعة مو موجودة بهالحاسبة';
-      else if (!describeStatus(p.status).ok) err = 'الطابعة ' + describeStatus(p.status).statusText;
+      else { const ds = describeStatus(p.status, isVirtual(p.name) ? 'win32' : platform); if (!ds.ok) err = 'الطابعة ' + ds.statusText; }
     }
     if (!err) err = await attempt(html, o);
     if (!err) { job.ok = true; return { ok: true, id: job.id, printer: job.printer }; }
@@ -179,7 +181,7 @@ function createPrinter({ getPrinters: getReal, render: renderReal, virtual = nul
     print,
     async printers() {
       const list = await getPrinters().catch(() => []);
-      return list.map((p) => ({ name: p.name, displayName: p.displayName || p.name, isDefault: !!p.isDefault, ...describeStatus(p.status) }));
+      return list.map((p) => ({ name: p.name, displayName: p.displayName || p.name, isDefault: !!p.isDefault, ...describeStatus(p.status, isVirtual(p.name) ? 'win32' : platform) }));
     },
     jobs: () => jobs.map(({ html, opts, ...j }) => ({ ...j, canReprint: !!html })),
     async reprint(id) {

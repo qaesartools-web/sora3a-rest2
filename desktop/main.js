@@ -57,10 +57,11 @@ function createWindow() {
     title: 'سرعة — الكاشير', icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false,
-      additionalArguments: ['--sora-origins=' + [...ALLOWED].join(','), '--sora-version=' + app.getVersion()],
+      additionalArguments: ['--sora-origins=' + [...ALLOWED].join(','), '--sora-version=' + app.getVersion(), '--sora-platform=' + process.platform],
     },
   });
-  Menu.setApplicationMenu(null);
+  // ماك: قائمة صغيرة حتى تشتغل اختصارات النسخ واللصق (⌘C / ⌘V)
+  Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }]) : null);
   win.once('ready-to-show', () => { win.maximize(); win.show(); });
   const wc = win.webContents;
   wc.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
@@ -118,7 +119,8 @@ function setupIpc() {
 
 // تحديث البرنامج نفسه تلقائياً (ينزل بالخلفية ويتثبت عند الإغلاق)
 function setupUpdates() {
-  if (!app.isPackaged) return;
+  // ماك: التحديث التلقائي يحتاج توقيع مدفوع من أبل — الشاشات تتحدث فوراً على كل حال
+  if (!app.isPackaged || process.platform === 'darwin') return;
   try {
     const { autoUpdater } = require('electron-updater');
     autoUpdater.autoDownload = true;

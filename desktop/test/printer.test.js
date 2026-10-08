@@ -17,7 +17,7 @@ function rig({ failOn = [], failTimes = {} } = {}) {
     if (left[o.printer] > 0) { left[o.printer]--; throw new Error('flaky'); }
     done.push({ printer: o.printer, html, copies: o.copies, widthMm: o.widthMm });
   };
-  return { done, p: createPrinter({ getPrinters: async () => PRINTERS, render }) };
+  return { done, p: createPrinter({ getPrinters: async () => PRINTERS, render, platform: 'win32' }) };
 }
 
 test('prints to the named printer with clean options', async () => {
@@ -29,7 +29,7 @@ test('prints to the named printer with clean options', async () => {
 
 test('jobs on the same printer never overlap (queue), different printers run together', async () => {
   let active = 0, maxActive = 0;
-  const p = createPrinter({ getPrinters: async () => PRINTERS, render: async (_h, o) => {
+  const p = createPrinter({ platform: 'win32', getPrinters: async () => PRINTERS, render: async (_h, o) => {
     if (o.printer === 'Kitchen') { active++; maxActive = Math.max(maxActive, active); }
     await new Promise((r) => setTimeout(r, 20));
     if (o.printer === 'Kitchen') active--;
@@ -85,7 +85,11 @@ test('printer list carries readable status', async () => {
   const l = await p.printers();
   assert.deepEqual(l.find((x) => x.name === 'OffPrinter'), { name: 'OffPrinter', displayName: 'OffPrinter', isDefault: false, ok: false, statusText: 'مطفية أو مفصولة' });
   assert.equal(l.find((x) => x.name === 'Main').isDefault, true);
-  assert.deepEqual(describeStatus(0), { ok: true, statusText: 'جاهزة' });
+  assert.deepEqual(describeStatus(0, 'win32'), { ok: true, statusText: 'جاهزة' });
+  // ماك ولينكس (CUPS)
+  assert.deepEqual(describeStatus(3, 'darwin'), { ok: true, statusText: 'جاهزة' });
+  assert.deepEqual(describeStatus(4, 'linux'), { ok: true, statusText: 'جاهزة' });
+  assert.deepEqual(describeStatus(5, 'darwin'), { ok: false, statusText: 'موقوفة' });
 });
 
 test('options are clamped; page gets Arabic font and zero margins', () => {

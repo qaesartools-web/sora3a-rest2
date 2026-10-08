@@ -1,0 +1,46 @@
+# يبني تطبيق الكاشير للأندرويد (APK) — رابط تنزيل ثابت: releases/download/cashier-android/sora3a-cashier.apk
+# (ما يصير «latest» حتى ما يأثر على تحديث برنامج الحاسبة)
+name: Android cashier app
+
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android-cashier.yml']
+  pull_request:
+    paths: ['android/**', '.github/workflows/android-cashier.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.9' }
+      - name: Signing key (generated per build)
+        run: |
+          P=$(openssl rand -hex 16); echo "::add-mask::$P"
+          echo "KEYSTORE_PASS=$P" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+      - run: keytool -genkeypair -keystore "$KEYSTORE_PATH" -storepass "$KEYSTORE_PASS" -keypass "$KEYSTORE_PASS" -alias sora3a -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Sora3a Cashier"
+      - name: Unit tests + build
+        working-directory: android
+        env: { VERSION_CODE: '${{ github.run_number }}' }
+        run: gradle --no-daemon testDebugUnitTest assembleRelease
+      - run: cp android/app/build/outputs/apk/release/app-release.apk sora3a-cashier.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: sora3a-cashier-apk, path: sora3a-cashier.apk }
+      - name: Publish (fixed tag, not latest)
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: cashier-android
+          name: تطبيق الكاشير للأندرويد
+          make_latest: false
+          body: نسخة ${{ github.run_number }} — نزّل sora3a-cashier.apk وثبّته على جهاز الكاشير أو التابلت.
+          files: sora3a-cashier.apk
