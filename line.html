@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0F7A3D">
+<title>سرعة — خط المطعم</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+/* صفحة تطبيق «سرعة — خط المطعم»: شغلها الوحيد ربط رقم المطعم (شريحة/واتساب) حتى يطلع رقم المتصل بالكاشير */
+:root{--bg:#F3F6F4;--card:#fff;--text:#10231A;--muted:#5B6B62;--line:#DCE5DF;--green:#16A34A;--green2:#0F7A3D;--warn:#B45309;--warnbg:#FFF7E6;--warnline:#F5C46B;--okbg:#ECFDF3;--okline:#A7E3BD;--bad:#B91C1C}
+@media (prefers-color-scheme:dark){:root{--bg:#0B1220;--card:#111C2E;--text:#EEF2F7;--muted:#9AA8B8;--line:#23324A;--warnbg:#2A2010;--warnline:#7A5A1C;--warn:#F5B44A;--okbg:#0E2A1B;--okline:#1F6B3F;--bad:#F87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Tajawal',Tahoma,Arial,sans-serif;font-size:15px;line-height:1.7}
+header{background:linear-gradient(160deg,#43C171,#12873F);color:#fff;padding:22px 18px 46px;text-align:center}
+header .ic{font-size:40px;line-height:1}
+header h1{margin:6px 0 2px;font-size:22px;font-weight:900}
+header p{margin:0;opacity:.9;font-size:14px}
+main{max-width:520px;margin:-30px auto 24px;padding:0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:0 8px 24px -16px rgba(0,0,0,.35)}
+.card h2{margin:0 0 6px;font-size:17px}
+.muted{color:var(--muted);font-size:13px}
+label.f{display:block;font-weight:700;font-size:13px;margin:10px 0 4px}
+input.in{width:100%;font:inherit;font-size:16px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--text)}
+.chk{display:flex;gap:8px;align-items:center;margin:8px 0;font-weight:700}
+.chk input{width:20px;height:20px;accent-color:var(--green)}
+.chk small{font-weight:400;color:var(--muted)}
+.btn{display:block;width:100%;font:inherit;font-weight:800;font-size:16px;border:0;border-radius:14px;padding:13px;margin-top:12px;background:var(--green);color:#fff;cursor:pointer;text-align:center;text-decoration:none}
+.btn.soft{background:transparent;color:var(--text);border:1px solid var(--line);font-size:14px;padding:10px}
+.row2{display:flex;gap:8px}.row2 .btn{flex:1}
+.ok,.warn{border-radius:14px;padding:10px 12px;font-size:14px}
+.ok{background:var(--okbg);border:1px solid var(--okline)}
+.warn{background:var(--warnbg);border:1px solid var(--warnline)}
+.perm{display:flex;align-items:center;gap:8px;justify-content:space-between;margin-top:8px;padding:9px 11px;border-radius:12px;font-size:14px}
+.perm.ok{padding:9px 11px}
+.perm.bad{background:var(--warnbg);border:1px solid var(--warnline)}
+.perm .btn{width:auto;margin:0;padding:7px 16px;font-size:14px;flex:0 0 auto}
+.hint{display:block;margin-top:4px;font-size:12.5px;color:var(--muted)}
+.link{background:none;border:0;padding:0;font:inherit;color:#2563EB;text-decoration:underline;cursor:pointer}
+.err{color:var(--bad);font-weight:700;font-size:14px;min-height:1em;margin-top:8px}
+.steps{margin:6px 0 0;padding-inline-start:20px}
+.steps li{margin:4px 0}
+.foot{text-align:center;color:var(--muted);font-size:12.5px;margin-top:8px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(120px);background:#10231A;color:#fff;padding:11px 16px;border-radius:12px;font-size:14px;max-width:92vw;transition:transform .25s;z-index:9}
+.toast.on{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<header><div class="ic">📞</div><h1>سرعة — خط المطعم</h1><p>الزبون يتصل ← رقمه وطلباته السابقة تطلع فوراً بكاشير المطعم</p></header>
+<main id="app"><div class="card muted">⏳ لحظة…</div></main>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ",
+  authDomain: "sora3a-system.firebaseapp.com",
+  projectId: "sora3a-system",
+  storageBucket: "sora3a-system.firebasestorage.app",
+  messagingSenderId: "516304449260",
+  appId: "1:516304449260:web:0110ba6c2621d6a16dbfc9"
+}, "line-v1");
+const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
+const db = initializeFirestore(app, {});
+
+const APK = 'https://github.com/qaesartools-web/sora3a-rest2/releases/download/line-android/sora3a-line.apk';
+const DESK = window.SoraDesktop && window.SoraDesktop.canCallLine ? window.SoraDesktop : null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const cleanNum = (v) => String(v || '').replace(/[^\d+]/g, '').slice(0, 20);
+let toastT;
+const toast = (m) => { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 3500); };
+const newToken = () => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(40)), (x) => a[x % a.length]).join(''); };
+
+let user = null, rest = null, authReady = false, loginErr = '', st = null;
+const feat = (k) => !rest || !rest.features || rest.features[k] !== false;
+
+// ── الحساب: لازم صاحب المطعم (هو بس يكدر يضيف خط حسب قواعد الحماية) ──
+onAuthStateChanged(auth, async (u) => {
+  user = null; rest = null;
+  if (u) {
+    try {
+      const ud = (await getDoc(doc(db, 'users', u.uid))).data() || {};
+      if (ud.disabled || ud.role !== 'restaurant' || !ud.restaurantId) throw new Error(ud.role === 'cashier' ? 'هذا حساب كاشير — الربط يحتاج حساب صاحب المطعم' : 'هذا الحساب مو حساب صاحب مطعم');
+      const rs = await getDoc(doc(db, 'restaurants', ud.restaurantId));
+      const rd = rs.exists() ? rs.data() : null;
+      if (!rd || rd.userId !== u.uid) throw new Error('الحساب مو مربوط بمطعم — تواصل ويا الإدارة');
+      if (rd.active === false) throw new Error('حساب المطعم موقوف — تواصل ويا الإدارة');
+      if (rd.expiryMs && rd.expiryMs < Date.now()) throw new Error('انتهى اشتراك المطعم — تواصل ويا الإدارة');
+      user = u; rest = { id: rs.id, ...rd };
+    } catch (e) { loginErr = '❌ ' + (e.message || 'تعذّر تحميل الحساب'); await signOut(auth).catch(() => {}); }
+  }
+  authReady = true;
+  render();
+});
+
+async function render() {
+  const box = $('app');
+  if (!DESK) { box.innerHTML = notAppHtml(); return; }
+  try { st = await DESK.getCallLine(); } catch (e) { st = null; }
+  st = st || { linked: false, perms: {} };
+  if (st.linked) { box.innerHTML = linkedHtml(); return; }
+  if (!authReady) return;
+  box.innerHTML = user ? linkHtml() : loginHtml();
+}
+
+function notAppHtml() {
+  return `<div class="card"><h2>📲 هذي الصفحة تشتغل داخل تطبيق «سرعة — خط المطعم»</h2>
+    <ol class="steps"><li>على التلفون اللي بيه <b>شريحة المطعم</b> أو <b>واتساب المطعم</b> نزّل التطبيق.</li>
+    <li>افتحه وسجّل دخول بحساب صاحب المطعم.</li><li>اكتب رقم المطعم واضغط «اربط».</li></ol>
+    <a class="btn" href="${APK}">⬇️ تنزيل تطبيق خط المطعم</a></div>`;
+}
+
+function loginHtml() {
+  return `<div class="card"><h2>🔐 سجّل دخول بحساب صاحب المطعم</h2>
+    <div class="muted">مرة وحدة بس، حتى ننضيف الخط لمطعمك.</div>
+    <label class="f" for="lnEmail">الإيميل</label><input class="in" id="lnEmail" type="email" dir="ltr" autocomplete="username">
+    <label class="f" for="lnPass">كلمة المرور</label><input class="in" id="lnPass" type="password" dir="ltr" autocomplete="current-password" onkeydown="if(event.key==='Enter')lnLogin()">
+    <div class="err" id="lnErr">${esc(loginErr)}</div>
+    <button class="btn" id="lnLoginBtn" onclick="lnLogin()">دخول</button></div>`;
+}
+
+function linkHtml() {
+  const simF = feat('calls'), waF = feat('whatsapp'), pm = st.perms || {}, simOk = simF && pm.sim !== false;
+  if (!simF && !waF) return `<div class="card"><div class="warn">⛔ خدمة المكالمات مطفية لمطعم <b>${esc(rest.name)}</b> — تواصل ويا الإدارة.</div>
+    <button class="btn soft" onclick="lnLogout()">تسجيل خروج</button></div>`;
+  return `<div class="card"><h2>🍽️ ${esc(rest.name || '')}</h2>
+    <div class="muted">اكتب رقم المطعم اللي على هذا التلفون.</div>
+    <label class="f" for="lnNum">رقم المطعم</label>
+    <input class="in" id="lnNum" type="tel" dir="ltr" inputmode="tel" maxlength="20" placeholder="07xxxxxxxxx">
+    <label class="chk"><input type="checkbox" id="lnSim" ${simOk ? 'checked' : 'disabled'}> 📱 مكالمات الشريحة ${pm.sim === false ? '<small>(هذا الجهاز ما بيه شريحة)</small>' : simF ? '' : '<small>(مطفية من الإدارة)</small>'}</label>
+    <label class="chk"><input type="checkbox" id="lnWa" ${waF ? 'checked' : 'disabled'}> 🟢 مكالمات الواتساب ${waF ? '' : '<small>(مطفية من الإدارة)</small>'}</label>
+    <button class="btn" id="lnLinkBtn" onclick="lnLink()">🔗 اربط هذا الرقم بالمطعم</button>
+    <button class="btn soft" onclick="lnLogout()">تسجيل خروج</button></div>`;
+}
+
+function linkedHtml() {
+  const pm = st.perms || {};
+  const appLink = `<button type="button" class="link" onclick="lnPerm('app')">معلومات التطبيق</button>`;
+  const row = (ok, txt, kind, hint) => `<div class="perm ${ok ? 'ok' : 'bad'}"><span>${ok ? '✅' : '⚠️'} ${txt}${!ok && hint ? hint : ''}</span>${ok ? '' : `<button type="button" class="btn" onclick="lnPerm('${kind}')">اسمح</button>`}</div>`;
+  const rows = [];
+  if (st.sim) rows.push(row(pm.phone, 'إذن الهاتف وسجل المكالمات — حتى يوصل رقم المتصل', 'phone'));
+  if (st.wa) rows.push(row(pm.notif, 'الوصول للإشعارات — حتى توصل مكالمات الواتساب', 'notif',
+    st.android >= 33 ? `<small class="hint">إذا الخيار رمادي: افتح ${appLink} ← ⋮ فوق ← «السماح بالإعدادات المقيّدة»، وارجع اضغط «اسمح».</small>` : ''));
+  rows.push(row(pm.battery, 'إيقاف توفير البطارية — حتى ما ينام التطبيق', 'battery'));
+  const allOk = (!st.sim || pm.phone) && (!st.wa || pm.notif) && pm.battery;
+  const oem = /xiaomi|redmi|poco|oppo|realme|vivo|huawei|honor|oneplus|tecno|infinix|itel/.test(st.maker || '');
+  const when = (t) => new Date(t).toLocaleString('ar-IQ-u-nu-latn', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const last = !st.lastAt ? '' : st.lastErr
+    ? `<div class="warn" style="margin-top:10px">❌ آخر مكالمة (<span dir="ltr">${esc(st.lastNumber)}</span>) ما وصلت: ${esc(st.lastErr)}</div>`
+    : `<div class="muted" style="margin-top:10px">آخر مكالمة وصلت للكاشير: <b dir="ltr">${esc(st.lastNumber)}</b>${st.lastKind === 'wa' ? ' (واتساب)' : ''} • ${esc(when(st.lastAt))}</div>`;
+  return `<div class="card"><div class="ok">✅ هذا التلفون مربوط${rest && rest.id === st.restaurantId ? ` بمطعم <b>${esc(rest.name)}</b>` : ''} — <b>خط ${esc(st.line)}</b> • <b dir="ltr">${esc(st.label)}</b></div>
+      <label class="chk"><input type="checkbox" id="lnSim" ${st.sim ? 'checked' : ''} ${pm.sim === false ? 'disabled' : ''} onchange="lnKinds()"> 📱 مكالمات الشريحة</label>
+      <label class="chk"><input type="checkbox" id="lnWa" ${st.wa ? 'checked' : ''} onchange="lnKinds()"> 🟢 مكالمات الواتساب</label></div>
+    <div class="card"><h2>${allOk ? '✅ الأذونات كاملة' : '⚠️ اسمح بالأذونات حتى يشتغل الخط'}</h2>${rows.join('')}
+      ${oem ? `<div class="hint" style="margin-top:8px">📌 بأجهزة <span dir="ltr">${esc(st.maker)}</span>: من ${appLink} فعّل «التشغيل التلقائي» (Autostart) حتى يبقى الخط شغّال بعد إعادة تشغيل التلفون.</div>` : ''}</div>
+    <div class="card">${last}
+      <div class="row2"><button type="button" class="btn" id="lnTestBtn" onclick="lnTest()">🧪 مكالمة تجريبية</button><button type="button" class="btn soft" onclick="lnUnlink()">❌ إلغاء الربط</button></div>
+      <div class="foot">تكدر تسكّر التطبيق — الخط يشتغل وحده بالخلفية.</div></div>`;
+}
+
+window.lnLogin = async () => {
+  const email = ($('lnEmail').value || '').trim(), pass = $('lnPass').value || '';
+  if (!email || !pass) { $('lnErr').textContent = '⚠️ اكتب الإيميل وكلمة المرور'; return; }
+  const b = $('lnLoginBtn'); b.disabled = true; b.textContent = '⏳ …'; loginErr = '';
+  try { await signInWithEmailAndPassword(auth, email, pass); }
+  catch (e) {
+    loginErr = /invalid|wrong|not-found|credential/i.test(e.code || '') ? '❌ الإيميل أو كلمة المرور غلط' : /network/i.test(e.code || '') ? '📡 ماكو إنترنت' : '❌ ما كدرنا ندخل';
+    $('lnErr').textContent = loginErr; b.disabled = false; b.textContent = 'دخول';
+  }
+};
+window.lnLogout = async () => { loginErr = ''; await signOut(auth).catch(() => {}); };
+
+window.lnLink = async () => {
+  const num = cleanNum($('lnNum').value), sim = !!$('lnSim').checked, wa = !!$('lnWa').checked;
+  if (num.replace(/\D/g, '').length < 7) { toast('⚠️ اكتب رقم المطعم كامل'); return; }
+  if (!sim && !wa) { toast('⚠️ اختار الشريحة أو الواتساب'); return; }
+  const b = $('lnLinkBtn'); b.disabled = true; b.textContent = '⏳ نربط…';
+  try {
+    const qs = await getDocs(query(collection(db, 'lineTokens'), where('restaurantId', '==', rest.id)));
+    const lines = qs.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // نفس الرقم مربوط من قبل (تلفون جديد أو إعادة تثبيت) ← نفس الخط، ما نزيد خطوط
+    let ln = lines.find((l) => cleanNum(l.label) === num);
+    if (ln && !ln.active) throw new Error('هذا الخط موقوف من الإدارة');
+    if (!ln) {
+      const used = new Set(lines.map((l) => String(l.line))); let n = 1; while (used.has(String(n))) n++;
+      if (n > 10) throw new Error('وصلت الحد الأقصى (10 خطوط) — احذف خط قديم من لوحة الإدارة');
+      ln = { id: newToken(), line: String(n) };
+      await setDoc(doc(db, 'lineTokens', ln.id), { restaurantId: rest.id, line: ln.line, label: num, active: true, createdAtMs: Date.now() });
+    }
+    const r = await DESK.setCallLine({ token: ln.id, restaurantId: rest.id, line: String(ln.line), label: num, sim, wa });
+    if (r && r.ok === false) throw new Error(r.error);
+    toast('✅ انربط الرقم — خط ' + ln.line + '. اسمح بالأذونات وجرّب مكالمة');
+  } catch (e) { toast('❌ ما انربط: ' + (e.message || e.code || e)); }
+  render();
+};
+window.lnKinds = async () => {
+  const sim = !!$('lnSim').checked, wa = !!$('lnWa').checked;
+  if (!sim && !wa) { toast('⚠️ خلي وحدة على الأقل — أو اضغط «إلغاء الربط»'); render(); return; }
+  await DESK.setCallLine({ token: st.token, restaurantId: st.restaurantId, line: st.line, label: st.label, sim, wa });
+  render();
+};
+window.lnPerm = (k) => { DESK.openPerm(k); };
+window.lnTest = async () => {
+  const b = $('lnTestBtn'); if (b) { b.disabled = true; b.textContent = '⏳ نرسل…'; }
+  const r = await DESK.testCall().catch(() => null);
+  toast(r && r.ok ? '📞 وصلت — لازم تطلع هسه بشاشة الكاشير (الرقم 07700000000)' : '❌ ما وصلت: ' + ((r && r.error) || 'خطأ'));
+  render();
+};
+window.lnUnlink = async () => {
+  if (!confirm('تلغي ربط هذا التلفون؟ مكالماته ما راح تطلع بالكاشير بعد.')) return;
+  let gone = false;
+  if (user && rest && rest.id === st.restaurantId) { try { await deleteDoc(doc(db, 'lineTokens', st.token)); gone = true; } catch (e) {} }
+  await DESK.clearCallLine();
+  toast(gone ? 'تم إلغاء الربط وانحذف الخط من المطعم' : 'انلغى الربط من هذا التلفون — الخط بعده بلوحة الإدارة، تكدر تحذفه من هناك');
+  render();
+};
+// رجعنا من شاشة أذونات الأندرويد ← نحدّث الحالة
+window.addEventListener('sora:resume', render);
+render();
+</script>
+</body>
+</html>

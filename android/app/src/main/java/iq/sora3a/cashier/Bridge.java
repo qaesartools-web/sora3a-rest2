@@ -42,7 +42,12 @@ public class Bridge {
         });
     }
 
+    // كل تطبيق يشوف بس دواله: الخط ما يطبع، والكاشير ما يربط خط
+    private static final java.util.Set<String> LINE_METHODS = new java.util.HashSet<>(java.util.Arrays.asList(
+        "getCallLine", "setCallLine", "clearCallLine", "testCall", "openPerm"));
+
     private Object handle(String m, JSONArray a) throws Exception {
+        if (BuildConfig.LINE != LINE_METHODS.contains(m)) return errorJson("unknown");
         switch (m) {
             case "printers": {
                 act.ensureBluetoothPermission();
@@ -79,7 +84,7 @@ public class Bridge {
                 return new JSONObject().put("ok", true).put("name", label);
             }
             case "removePrinter": backend.removeLan(a.optString(0, "")); return new JSONObject().put("ok", true);
-            // ── يفتح وحده مع تشغيل الجهاز ──
+            // ── الكاشير يفتح وحده مع تشغيل الجهاز ──
             case "getAutoStart": return act.autoStartOn();
             case "setAutoStart": return act.setAutoStart(a.optBoolean(0));
             // ── خط المطعم (بدل MacroDroid) ──
@@ -126,18 +131,21 @@ public class Bridge {
     }
 
     // يتحقن ببداية الصفحة: نفس واجهة برنامج الويندوز حتى الكاشير يستخدمها بدون أي تغيير
-    public static final String SHIM = "(function(){if(window.SoraDesktop||!window.SoraPOS)return;var seq=0,pend={};"
+    private static final String HEAD = "(function(){if(window.SoraDesktop||!window.SoraPOS)return;var seq=0,pend={};"
         + "window.__soraCb=function(id,j){var p=pend[id];if(!p)return;delete pend[id];var v=null;try{v=JSON.parse(j)}catch(e){}p(v)};"
         + "function call(m,a){return new Promise(function(res){var id=++seq;pend[id]=res;SoraPOS.call(id,m,JSON.stringify(a||[]))})}"
-        + "window.SoraDesktop={version:SoraPOS.version(),platform:'android',canAutoStart:true,canAddNetwork:true,canCallLine:true,"
+        + "window.SoraDesktop={version:SoraPOS.version(),platform:'android',";
+    private static final String CASHIER = "canAutoStart:true,canAddNetwork:true,"
         + "printers:function(){return call('printers')},print:function(h,o){return call('print',[String(h||''),o||{}])},"
         + "jobs:function(){return call('jobs')},reprint:function(id){return call('reprint',[Number(id)])},"
         + "getTestMode:function(){return call('getTestMode')},setTestMode:function(on){return call('setTestMode',[!!on])},"
         + "openSimulator:function(){return call('openSimulator')},getAutoStart:function(){return call('getAutoStart')},"
         + "setAutoStart:function(on){return call('setAutoStart',[!!on])},onUpdate:function(){},"
-        + "getCallLine:function(){return call('getCallLine')},setCallLine:function(c){return call('setCallLine',[c||{}])},"
-        + "clearCallLine:function(){return call('clearCallLine')},testCall:function(){return call('testCall')},"
-        + "openPerm:function(k){return call('openPerm',[String(k||'app')])},"
         + "addNetworkPrinter:function(n,ip,port){return call('addNetworkPrinter',[n||'',ip||'',Number(port)||9100])},"
         + "removePrinter:function(n){return call('removePrinter',[n])}};})();";
+    private static final String LINE = "canCallLine:true,"
+        + "getCallLine:function(){return call('getCallLine')},setCallLine:function(c){return call('setCallLine',[c||{}])},"
+        + "clearCallLine:function(){return call('clearCallLine')},testCall:function(){return call('testCall')},"
+        + "openPerm:function(k){return call('openPerm',[String(k||'app')])}};})();";
+    public static final String SHIM = HEAD + (BuildConfig.LINE ? LINE : CASHIER);
 }
