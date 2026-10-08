@@ -102,6 +102,7 @@
       menuCloudTs = Date.now();
       _saveMenuLocal();
       await f.setDoc(sub('menu', 'main'), { cats, updatedAtMs: menuCloudTs, device: deviceId });
+      pubSoon();
     } catch (e) { console.warn('menu push', e); }
   }
 
@@ -316,6 +317,7 @@
     return cart.map((c) => { const it = { name: c.name, variant: c.variant, price: c.price, qty: c.qty, cost: unitCost(c.name, c.variant) }; if (c.note) it.note = c.note; return it; });
   };
 
+  const bagDay = (ms) => new Date((ms || Date.now()) + 3 * 3600000).toISOString().slice(0, 10);
   function baseOrder(type, t, items) {
     const now = nowT();
     const o = {
@@ -323,8 +325,15 @@
       orderType: type, items, notes: items.map((c) => `${c.name}(${c.variant})×${c.qty}${c.note ? ' [' + c.note + ']' : ''}`).join(', ').slice(0, 4900),
       subtotal: t.sub, discount: t.disc, service: t.service, tax: t.tax, value: t.total,
       inv: true, kitchen: 'new', createdAt: now, createdAtMs: Date.now(), shiftId: shift ? shift.id : null, device: deviceId,
+      day: bagDay(),             // يوم الطلب بتوقيت بغداد (لشاشة «طلبك جاهز» بدون فهارس إضافية)
     };
     if (t.disc) { o.discountInfo = { type: disc.type, value: disc.value, reason: disc.reason || '' }; if (disc.loyalty) o.discountInfo.loyalty = true; }
+    // طلب من المنيو الأونلاين أو الويتر
+    if (webAttach) {
+      o.webId = webAttach.id; o.source = webAttach.source === 'waiter' ? 'waiter' : 'qr';
+      if (webAttach.waiter) o.waiter = String(webAttach.waiter).slice(0, 60);
+      if (webAttach.note) o.note = String(webAttach.note).slice(0, 500);
+    }
     applySections(o);
     return o;
   }
@@ -357,10 +366,12 @@
     if (type !== 'delivery' && pagerSel && feat('pager')) { o.pager = pagerSel; pagerSel = 0; }
     o.timeline = [{ status: o.status, time: now, text: 'تم إنشاء الطلب' }];
     f.setDoc(ref, o).then(() => { if (type === 'delivery') notifyCaptain(ref.id); }).catch((e) => toast('❌ تعذّر حفظ الطلب: ' + (e.code || e.message)));
+    if (o.webId) webLink(o, ref.id);
     if (type === 'delivery') { syncTracking(ref.id, { ...o, captainName: '' }); saveCustomer(o); }
     curCust = null;
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
-    printOrderAll({ id: ref.id, ...o }, receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen && !o.kSec));
+    if (o.webId && type === 'salon') webKitchenPrint({ id: ref.id, ...o }, items, t.total);
+    else printOrderAll({ id: ref.id, ...o }, receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen && !o.kSec));
     const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: '🏍️ دلفري — ' + (captain ? captain.name : '') };
     toast('✅ تم — ' + names[type] + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : '') + (pay && pay.payment.change ? ' • الباقي ' + money(pay.payment.change) : ''));
     cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
@@ -376,6 +387,7 @@
       status: 'preparing', timeline: [{ status: 'preparing', time: now, text: 'تم إنشاء الطلب — قيد التحضير' }] });
     if (pagerSel && feat('pager')) { o.pager = pagerSel; pagerSel = 0; }
     f.setDoc(ref, o).catch((e) => toast('❌ تعذر حفظ الطلب: ' + (e.code || e.message)));
+    if (o.webId) webLink(o, ref.id);
     if (info.phone) saveCustomer({ ...o, customer: info.name || '' });
     curCust = null;
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
@@ -793,6 +805,7 @@
     _renderOrders();
     renderKds();
     renderPagers();
+    syncWebStages();
     // الشاشات المفتوحة تتحدث مباشرة مع كل طلب (بدون ما نلمس خانة يكتب بيها المستخدم)
     const typing = /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '');
     if (!typing && $('reportsScreen') && $('reportsScreen').classList.contains('on') && typeof renderRep === 'function') renderRep();
@@ -856,6 +869,7 @@
         <label class="set-check"><input type="checkbox" id="stQuick" ${s.quickAdd ? 'checked' : ''}> إضافة سريعة: الصنف ذو السعر الواحد ينضاف بضغطة واحدة</label>
         <div class="flbl">ملاحظات سريعة للمطبخ (مفصولة بفاصلة)</div><input class="finp" id="stNotes" value="${esc((s.quickNotes || []).join('، '))}">
       </div>
+      ${onlineCardHtml()}
       <button class="sivbtn" onclick="saveSettings()">✅ حفظ الإعدادات</button>
       <div class="sh-card" style="margin-top:10px"><div class="sh-title">🔔 إشعارات المطعم</div>
         <div class="ac-sub" style="margin-bottom:8px">إشعار عند رفض الكابتن لطلب أو عند تسليمه — حتى لو كان التطبيق مغلقاً. الحالة: <b>${notifState}</b></div>
@@ -878,6 +892,9 @@
       catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
       quickAdd: $('stQuick').checked, quickNotes: list($('stNotes').value).slice(0, 10).map((x) => x.slice(0, 30)),
     };
+    const onBefore = JSON.stringify(onlineCfg()), online = readOnlineForm();
+    if (online) next.online = online;
+    if (online && online.on && !online.table && !online.pickup && !online.delivery) { toast('⚠️ اختار طريقة طلب وحدة على الأقل للمنيو الأونلاين'); return; }
     settings = { ...DEFAULTS, ...next };
     lsSet(setKey(), settings);
     // إعدادات الطابعات خاصة بهذا الجهاز (لا تُرفع للسحابة)
@@ -888,6 +905,7 @@
       cert: (($('qzCert') || {}).value || '').trim(), key: (($('qzKey') || {}).value || '').trim() });
     try { await fb().setDoc(sub('settings', 'main'), { ...settings, updatedAtMs: Date.now() }); toast('✅ تم حفظ الإعدادات لكل أجهزة المطعم'); }
     catch (e) { toast('⚠️ حُفظت على هذا الجهاز فقط — تحقق من الإنترنت'); }
+    publishMenu(onBefore !== JSON.stringify(onlineCfg()));
     renderCart();
   };
   function listenSettings() {
@@ -1389,7 +1407,7 @@
       if (!s.exists() || !restData) return;
       const before = JSON.stringify(restData.features || {});
       restData.features = s.data().features || null;
-      if (before !== JSON.stringify(restData.features || {})) { applyFeatures(); toast('🔄 تم تحديث خدمات المطعم'); }
+      if (before !== JSON.stringify(restData.features || {})) { applyFeatures(); pubSoon(); toast('🔄 تم تحديث خدمات المطعم'); }
     }, () => {}));
   }
 
@@ -1765,6 +1783,292 @@
     if (!typing && (e.key === '/' || e.key === 'F2')) { e.preventDefault(); goTab('cashier'); $('prodSearch').focus(); }
   });
 
+  // ══════════ المنيو الأونلاين وطلبات QR ══════════
+  // الزبون يمسح QR الطاولة أو يفتح رابط المطعم من البيت ويطلب (menu.html) — الطلب يوصل هنا فوراً وينطبع بالمطبخ.
+  // المنيو المنشور نسخة عامة بدون كلفة ولا مخزون (publicMenus/{rid})، والطلبات بـ webOrders، والأسعار دائماً من منيو الكاشير.
+  const SITE = /^https?:$/.test(location.protocol) ? new URL('./', location.href.split(/[?#]/)[0]).href : 'https://qaesartools-web.github.io/sora3a-rest2/';
+  const ONLINE_DEF = { on: false, table: true, pickup: true, delivery: false, autoTable: false, note: '' };
+  const onlineCfg = () => ({ ...ONLINE_DEF, ...(settings.online || {}) });
+  const onlineOk = () => feat('online') && onlineCfg().on;
+  const menuLink = (t) => SITE + 'menu.html?r=' + encodeURIComponent(rid() || '') + (t ? '&t=' + encodeURIComponent(t) : '');
+  window.menuLink = menuLink;
+  // الجهاز اللي يقبل الطلبات التلقائية ويطبعها (الافتراضي: جهاز الكاشير، مو التلفون)
+  const webAutoKey = () => 'pos_web_auto_' + rid();
+  const webAutoDev = () => lsGet(webAutoKey(), !window.matchMedia('(max-width:600px)').matches);
+  const hashStr = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h + ':' + s.length; };
+
+  // ── نشر المنيو للزبائن ──
+  let pubT = null, pubBusy = false, pubAgain = false;
+  const pubSoon = () => { clearTimeout(pubT); pubT = setTimeout(() => publishMenu(false), 1500); };
+  function publicMenuDoc() {
+    const oc = onlineCfg();
+    const cats = menu.filter((c) => c && c.cat && (c.items || []).length).slice(0, 80).map((c) => ({
+      cat: String(c.cat).slice(0, 40), emoji: c.emoji || '',
+      items: c.items.slice(0, 200).map((p) => {
+        const x = { name: p.name, variants: (p.variants || []).map((v) => ({ name: v.name, price: Number(v.price) || 0 })) };
+        if (p.imgId && p.img) x.imgId = p.imgId;
+        if (typeof p.stock === 'number' && p.stock <= 0) x.out = true;
+        return x;
+      }),
+    }));
+    return {
+      name: String(settings.receiptTitle || restData.name || '').slice(0, 80), area: String(settings.receiptSub || restData.area || '').slice(0, 120),
+      phone: String(settings.receiptPhone || restData.phone || '').slice(0, 30), on: !!oc.on && feat('online'),
+      modes: { table: !!oc.table, pickup: !!oc.pickup, delivery: !!oc.delivery && feat('captain') },
+      fee: Number(settings.defaultFee) || 0, tables: Number(settings.tables) || 0, note: String(oc.note || '').slice(0, 300), autoTable: !!oc.autoTable, cats,
+    };
+  }
+  async function publishMenu(force) {
+    if (!rid() || !restData) return;
+    if (pubBusy) { pubAgain = true; return; }
+    const sigKey = 'pos_pubsig_' + rid();
+    // المطاعم اللي ما شغّلت الخدمة ما ننشر لها شي
+    if (!force && !onlineCfg().on && !lsGet(sigKey, '')) return;
+    const d = publicMenuDoc(), sig = hashStr(JSON.stringify(d));
+    if (!force && lsGet(sigKey, '') === sig) return;
+    const f = fb(), myRid = rid(), imgKey_ = 'pos_pubimg_' + myRid, sent = lsGet(imgKey_, {});
+    pubBusy = true;
+    try {
+      // الصور أولاً (كل صورة مرة وحدة) حتى يلگاها الزبون وية المنيو
+      for (const c of menu) for (const p of (c.items || [])) {
+        if (!p.imgId || !p.img || sent[p.imgId] === imgSig(p.img) || p.img.length >= 300000) continue;
+        try { await f.setDoc(f.doc(f.db, 'publicMenus', myRid, 'img', p.imgId), { data: p.img, updatedAtMs: Date.now() }); sent[p.imgId] = imgSig(p.img); }
+        catch (e) { console.warn('pub img', e.code); }
+      }
+      lsSet(imgKey_, sent);
+      await f.setDoc(f.doc(f.db, 'publicMenus', myRid), { ...d, updatedAtMs: Date.now() });
+      lsSet(sigKey, sig);
+    } catch (e) { console.warn('publish menu', e.code || e); }
+    finally { pubBusy = false; if (pubAgain) { pubAgain = false; pubSoon(); } }
+  }
+  window.publishMenu = publishMenu;
+
+  // ── استلام الطلبات ──
+  const webs = new Map();            // طلبات جديدة بانتظار القبول
+  const webBusy = new Set(), webGone = new Set();   // webGone: انقبل أو انرفض من هذا الجهاز
+  let webAttach = null, webRingT = null, webSt = null;
+  const WEB_MODE = { table: '🪑 طاولة', pickup: '🛍️ استلام', delivery: '🏍️ توصيل' };
+  const webAutoOk = (w) => webAutoDev() && (w.source === 'waiter' || (w.mode === 'table' && onlineCfg().autoTable));
+  function listenWeb() {
+    const f = fb();
+    webs.clear(); renderWeb();
+    unsubs.push(f.onSnapshot(f.query(f.collection(f.db, 'webOrders'), f.where('restaurantId', '==', rid()), f.where('status', '==', 'new')), (s) => {
+      let fresh = false;
+      s.docChanges().forEach((ch) => {
+        if (ch.type === 'removed') { webs.delete(ch.doc.id); return; }
+        const w = { id: ch.doc.id, ...ch.doc.data() };
+        // نسخة محلية قديمة (الكاش يرجّع الطلب «جديد» لحظياً بعد ما نحدّث مرحلته): مو طلب جديد
+        if (webGone.has(w.id) || ch.doc.metadata.hasPendingWrites || w.acceptedBy || w.stage || w.orderId) { webs.delete(w.id); return; }
+        if (Date.now() - (w.createdAtMs || 0) > 3 * 3600000) return;     // طلب قديم ما انقبل: ما نزعج الكاشير بيه
+        if (!webs.has(w.id) && !webAutoOk(w)) fresh = true;
+        webs.set(w.id, w);
+        if (webAutoOk(w)) setTimeout(() => webAccept(w.id, true), 0);
+      });
+      renderWeb();
+      if (fresh) notifyWeb();
+    }, (e) => console.warn('web orders', e.code)));
+  }
+  // الأسعار والأصناف من منيو الكاشير — الصنف اللي مو موجود ما ينحسب
+  function webItems(w) {
+    const out = [];
+    (w.items || []).slice(0, 40).forEach((i) => {
+      let p = null;
+      menu.forEach((c) => (c.items || []).forEach((x) => { if (!p && x.name === i.name) p = x; }));
+      if (!p) return;
+      const vs = p.variants || [], v = vs.find((x) => x.name === i.variant) || (vs.length === 1 ? vs[0] : null);
+      if (!v) return;
+      const it = { name: p.name, variant: v.name, price: Number(v.price) || 0, qty: Math.max(1, Math.min(99, Math.round(num(i.qty)) || 1)) };
+      if (i.note) it.note = String(i.note).slice(0, 80);
+      out.push(it);
+    });
+    return out;
+  }
+  function webChime() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [784, 988, 1175].forEach((hz, i) => { const d = i * .16, o = ctx.createOscillator(), g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.type = 'triangle'; o.frequency.value = hz;
+        g.gain.setValueAtTime(.0001, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.35, ctx.currentTime + d + .03); g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d + .24); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .26); });
+    } catch (e) {}
+  }
+  function notifyWeb() {
+    webChime();
+    clearInterval(webRingT);
+    let n = 0; webRingT = setInterval(() => { if (!webs.size || ++n > 6) { clearInterval(webRingT); return; } webChime(); }, 4000);
+    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+      navigator.serviceWorker && navigator.serviceWorker.getRegistration().then((r) => r && r.showNotification('📱 طلب أونلاين جديد', { body: 'افتح الكاشير حتى تقبله', tag: 'web-order', renotify: true, dir: 'rtl', lang: 'ar' }));
+    }
+  }
+  const webWhere = (w) => w.mode === 'table' ? WEB_MODE.table + ' ' + toA(w.table || '') : WEB_MODE[w.mode] || '';
+  function renderWeb() {
+    const el = $('webBox'); if (!el) return;
+    const list = [...webs.values()].sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
+    el.innerHTML = list.slice(0, 3).map((w) => {
+      const items = webItems(w), miss = (w.items || []).length - items.length, busy = webBusy.has(w.id);
+      const sum = items.reduce((s, i) => s + i.price * i.qty, 0) + (w.mode === 'delivery' ? (settings.defaultFee || 0) : 0);
+      const mins = Math.max(0, Math.floor((Date.now() - (w.createdAtMs || Date.now())) / 60000));
+      return `<div class="call-card web-card">
+        <div class="call-top"><span class="call-pulse">📱</span> ${w.source === 'waiter' ? '🧑‍🍳 ' + esc(w.waiter || 'الويتر') : 'طلب أونلاين'} <span class="call-line">${esc(webWhere(w))}</span>
+          <span class="web-ago">${mins ? 'قبل ' + toA(mins) + ' د' : 'هسه'}</span></div>
+        ${w.customer || w.phone ? `<div class="web-cust">👤 ${esc(w.customer || '')}${w.phone ? ` <b dir="ltr">${esc(w.phone)}</b>` : ''}</div>` : ''}
+        ${w.address ? `<div class="web-cust">📍 ${esc(w.address)}</div>` : ''}
+        <div class="web-items">${items.map((i) => `<div><b>${toA(i.qty)}×</b> ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? ` <small>📝 ${esc(i.note)}</small>` : ''}</div>`).join('')}</div>
+        ${miss > 0 ? `<div class="web-warn">⚠️ ${toA(miss)} صنف مو موجود بالمنيو — ما راح ينحسب</div>` : ''}
+        ${w.note ? `<div class="web-note">📝 ${esc(w.note)}</div>` : ''}
+        <div class="web-sum"><span>المجموع${w.mode === 'delivery' ? ' مع التوصيل' : ''}</span><b>${money(sum)}</b></div>
+        <div class="call-btns">
+          <button type="button" class="call-go" onclick="webAccept('${esc(w.id)}')" ${busy || !items.length ? 'disabled' : ''}>${busy ? '⏳ …' : '✅ قبول وإرسال للمطبخ'}</button>
+          <button type="button" onclick="webReject('${esc(w.id)}')" ${busy ? 'disabled' : ''}>✕ رفض</button>
+        </div></div>`;
+    }).join('') + (list.length > 3 ? `<div class="call-card web-more">+ ${toA(list.length - 3)} طلبات ثانية بالانتظار</div>` : '');
+  }
+  setInterval(() => { if (webs.size) renderWeb(); }, 30000);
+  // القبول مرة وحدة بس حتى لو أكثر من جهاز ضغط سوا
+  async function webClaim(w) {
+    const f = fb(), ref = f.doc(f.db, 'webOrders', w.id);
+    return f.runTransaction(f.db, async (tx) => {
+      const s = await tx.get(ref);
+      if (!s.exists() || s.data().status !== 'new') return false;
+      tx.update(ref, { status: 'accepted', acceptedBy: deviceId, acceptedAtMs: Date.now(), stage: 'preparing', stageAtMs: Date.now() });
+      return true;
+    });
+  }
+  // نفس مسار الكاشير بالضبط (رقم الطلب، الأقسام، البيجر، المخزون، الكابتن) بسلة مؤقتة
+  async function webPlace(w, items) {
+    const keep = { cart, disc, pagerSel, curCust };
+    cart = items.map((i) => ({ ...i })); disc = { type: 'amt', value: 0, reason: '' }; pagerSel = 0; curCust = null;
+    webAttach = w;
+    try {
+      if (w.mode === 'table') await finalOrder('salon', null, null, { table: w.table, payment: { method: 'later', cash: 0, card: 0, received: 0, change: 0 } });
+      else if (w.mode === 'pickup') holdOrder({ name: w.customer || '', phone: w.phone || '', note: w.note || '' });
+      else await finalOrder('delivery', { id: null, name: '' }, { name: w.customer || '', phone: w.phone || '', addr: w.address || '', fee: settings.defaultFee || 0 });
+    } finally {
+      webAttach = null;
+      cart = keep.cart; disc = keep.disc; pagerSel = keep.pagerSel; curCust = keep.curCust;
+      renderCart();
+    }
+  }
+  window.webAccept = async (id, auto) => {
+    const w = webs.get(id); if (!w || webBusy.has(id) || !restData) return;
+    const items = webItems(w);
+    if (!items.length) { if (!auto) toast('⚠️ أصناف الطلب مو موجودة بالمنيو — ارفضه'); return; }
+    if (w.mode === 'delivery' && !feat('captain')) { if (!auto) toast('⛔ خدمة التوصيل موقوفة'); return; }
+    webBusy.add(id); renderWeb();
+    try {
+      const ok = await webClaim(w);
+      webs.delete(id); webGone.add(id);
+      if (!ok) return;                 // انقبل من جهاز ثاني
+      await webPlace(w, items);
+      if (!webs.size) clearInterval(webRingT);
+    } catch (e) { console.warn('web accept', e); if (!auto) toast('❌ تعذّر قبول الطلب — تأكد من الإنترنت'); }
+    finally { webBusy.delete(id); renderWeb(); }
+  };
+  window.webReject = (id) => {
+    if (!webs.get(id)) return;
+    acDialog('✕ رفض الطلب الأونلاين', 'الزبون يشوف السبب على تلفونه', [{ id: 'reason', label: 'السبب', ph: 'مثال: الصنف خلص / المطبخ مسكّر' }], async (v) => {
+      try {
+        await fb().updateDoc(fb().doc(fb().db, 'webOrders', id), { status: 'rejected', reason: String(v.reason || '').trim().slice(0, 200) || 'المطعم ما يگدر يستقبل الطلب هسه' });
+        webs.delete(id); webGone.add(id); renderWeb(); if (!webs.size) clearInterval(webRingT);
+        toast('تم رفض الطلب');
+      } catch (e) { toast('❌ تعذّر الرفض — يمكن انقبل من جهاز ثاني'); }
+    }, '✕ رفض الطلب');
+  };
+  // ربط الطلب الأونلاين بطلب الكاشير: رقم التذكرة ورابط التتبع يوصلون للزبون
+  function webLink(o, orderId) {
+    const f = fb(), upd = { orderId, ticket: String(kNum(o)).slice(0, 10) };
+    if (o.orderType === 'delivery') upd.trackId = orderId;
+    f.updateDoc(f.doc(f.db, 'webOrders', o.webId), upd).catch((e) => console.warn('web link', e.code));
+    if (!webSt) webSt = lsGet('pos_webst_' + rid(), {});
+    webSt[o.webId] = 'preparing'; lsSet('pos_webst_' + rid(), webSt);
+  }
+  // طلب الطاولة الأونلاين: تذكرة المطبخ فقط (الفاتورة عند الحساب)
+  function webKitchenPrint(o, items, total) {
+    if (o.kSec) { printOrderAll(o, null); return; }
+    printSlip('🍳 ' + (o.source === 'waiter' ? 'ويتر' : 'QR') + ' — ' + o.customer + ' #' + kNum(o), { customer: o.customer + (o.waiter ? ' • ' + o.waiter : '') },
+      items.map((i) => ({ ...i, name: i.name + (i.note ? ' [' + i.note + ']' : '') })), total, 'المجموع', o.note);
+  }
+  // مرحلة الطلب تنعكس على تلفون الزبون
+  function webStageOf(o) {
+    if (o.status === 'cancelled') return 'cancelled';
+    const t = getOrderType(o);
+    if (t === 'delivery') return o.status === 'delivered' ? 'done' : ['pickup', 'delivering'].includes(o.status) ? 'on_way' : o.kitchen === 'ready' ? 'ready' : 'preparing';
+    if (o.servedAtMs || o.pagerDone || (t !== 'salon' && o.status === 'delivered') || (t === 'salon' && o.payment && o.payment.method !== 'later')) return 'done';
+    return o.kitchen === 'ready' || o.status === 'ready' ? 'ready' : 'preparing';
+  }
+  function syncWebStages() {
+    if (!restData) return;
+    if (!webSt) webSt = lsGet('pos_webst_' + rid(), {});
+    const day = Date.now() - 86400000, live = new Set();
+    let dirty = false;
+    orders.forEach((o) => {
+      if (!o.webId || (o.createdAtMs || 0) < day) return;
+      live.add(o.webId);
+      const st = webStageOf(o);
+      if (webSt[o.webId] === st) return;
+      webSt[o.webId] = st; dirty = true;
+      fb().updateDoc(fb().doc(fb().db, 'webOrders', o.webId), { stage: st, stageAtMs: Date.now() }).catch(() => {});
+    });
+    if (dirty) { Object.keys(webSt).forEach((k) => { if (!live.has(k)) delete webSt[k]; }); lsSet('pos_webst_' + rid(), webSt); }
+  }
+
+  // ── الإعدادات + QR الطاولات ──
+  function onlineCardHtml() {
+    const title = '<div class="sh-title">📱 المنيو الأونلاين وطلبات QR</div>';
+    if (!feat('online')) return `<div class="sh-card">${title}<div class="ac-sub">⛔ الخدمة موقوفة لمطعمك — تواصل ويا إدارة سرعة لتفعيلها.</div></div>`;
+    const oc = onlineCfg(), dl = feat('captain');
+    return `<div class="sh-card" id="onCard">${title}
+      <div class="ac-sub" style="margin-bottom:8px;line-height:1.8">الزبون يمسح QR الطاولة أو يفتح رابط المطعم من البيت، يختار ويطلب — والطلب يوصل هنا فوراً وينطبع بالمطبخ. الأسعار دائماً من منيو الكاشير.</div>
+      <label class="set-check"><input type="checkbox" id="stOnOn" ${oc.on ? 'checked' : ''}> <b>تشغيل المنيو الأونلاين</b></label>
+      <label class="set-check"><input type="checkbox" id="stOnTable" ${oc.table ? 'checked' : ''}> 🪑 الطلب من الطاولة (QR على كل طاولة)</label>
+      <label class="set-check"><input type="checkbox" id="stOnPickup" ${oc.pickup ? 'checked' : ''}> 🛍️ يطلب ويستلم من المطعم</label>
+      <label class="set-check"${dl ? '' : ' style="opacity:.55"'}><input type="checkbox" id="stOnDeliv" ${oc.delivery && dl ? 'checked' : ''} ${dl ? '' : 'disabled'}> 🏍️ توصيل للبيت ${dl ? '(ينرسل لكل الكباتن)' : '— يحتاج خدمة الكابتن'}</label>
+      <label class="set-check"><input type="checkbox" id="stOnAuto" ${oc.autoTable ? 'checked' : ''}> ⚡ طلبات الطاولات تدخل للمطبخ مباشرة بدون تأكيد</label>
+      <div class="flbl">ملاحظة تظهر للزبون (اختياري)</div><input class="finp" id="stOnNote" maxlength="300" value="${esc(oc.note || '')}" placeholder="مثال: التوصيل من ١٢ الظهر لحد ١٢ بالليل">
+      <label class="set-check" style="margin-top:8px"><input type="checkbox" id="stOnDev" ${webAutoDev() ? 'checked' : ''}> 🖨️ هذا الجهاز يقبل الطلبات التلقائية ويطبعها (خليها على جهاز الكاشير بس)</label>
+      <div class="on-link"><input class="finp" id="stOnLink" readonly dir="ltr" value="${esc(menuLink())}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink()">📋 نسخ</button><a class="btn-soft" href="${esc(menuLink())}" target="_blank" rel="noopener">👁️ فتح</a></div>
+      <div class="on-qr"><button type="button" class="btn-soft" onclick="printTableQR()">🖨️ QR الطاولات (${toA(settings.tables || 0)})</button><button type="button" class="btn-soft" onclick="printTableQR(true)">🖨️ QR المطعم (استلام وتوصيل)</button></div>
+      <div class="flbl" style="margin-top:14px">🧑‍🍳 تطبيق الويتر — يفتحه بتلفونه ويدخل بحساب كاشير (سوّيه من لوحة الإدارة)، وطلباته تدخل للمطبخ مباشرة</div>
+      <div class="on-link"><input class="finp" id="stWaiterLink" readonly dir="ltr" value="${esc(SITE + 'waiter.html')}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink('${esc(SITE + 'waiter.html')}')">📋 نسخ</button></div>
+      <div class="flbl" style="margin-top:10px">📺 شاشة «طلبك جاهز» — افتحها على تلفزيون أو تابلت قدام الزبائن</div>
+      <div class="on-link"><input class="finp" id="stScreenLink" readonly dir="ltr" value="${esc(SITE + 'screen.html')}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink('${esc(SITE + 'screen.html')}')">📋 نسخ</button></div>
+    </div>`;
+  }
+  function readOnlineForm() {
+    if (!$('stOnOn')) return settings.online;
+    if ($('stOnDev')) lsSet(webAutoKey(), $('stOnDev').checked);
+    return { on: $('stOnOn').checked, table: $('stOnTable').checked, pickup: $('stOnPickup').checked, delivery: $('stOnDeliv').checked && feat('captain'),
+      autoTable: $('stOnAuto').checked, note: $('stOnNote').value.trim().slice(0, 300) };
+  }
+  window.copyMenuLink = (link) => {
+    const u = link || menuLink();
+    (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast(link ? '📋 انسخ الرابط' : '📋 انسخ رابط المنيو — دزّه للزبائن أو حطه بالانستغرام'), () => prompt('انسخ الرابط:', u));
+  };
+  function loadQR() {
+    if (window.qrcode) return Promise.resolve();
+    return new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vendor/qrcode.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+  }
+  const qrSvg = (u) => { const q = window.qrcode(0, 'M'); q.addData(u); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); };
+  window.printTableQR = async (general) => {
+    if (!onlineOk()) { toast('⚠️ شغّل المنيو الأونلاين واحفظ الإعدادات أولاً'); return; }
+    const n = settings.tables || 0;
+    if (!general && !n) { toast('⚠️ حدد عدد الطاولات بقسم «الأسعار والضرائب» واحفظ'); return; }
+    try { await loadQR(); } catch (e) { toast('❌ تعذّر تحميل مولّد QR'); return; }
+    const name = settings.receiptTitle || restData.name || '';
+    const list = general ? [''] : Array.from({ length: n }, (_, i) => String(i + 1));
+    const cards = list.map((t) => `<div class="qc"><div class="qn">${esc(name)}</div><div class="qt">${t ? 'طاولة ' + toA(t) : 'اطلب أونلاين'}</div>${qrSvg(menuLink(t))}
+      <div class="qh">📱 وجّه كاميرا تلفونك على الكود واطلب</div><div class="qs">سرعة · sora3a</div></div>`).join('');
+    const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>QR — ${esc(name)}</title><style>@page{size:A4;margin:10mm}
+      body{margin:0;font-family:Tajawal,Arial,sans-serif;color:#0A100D}.g{display:grid;grid-template-columns:repeat(2,1fr);gap:8mm}
+      .qc{border:2px dashed #0A100D;border-radius:6mm;padding:6mm;text-align:center;break-inside:avoid;page-break-inside:avoid}
+      .qn{font-weight:900;font-size:18pt}.qt{display:inline-block;margin:2mm 0 3mm;padding:1mm 6mm;border-radius:99px;background:#0A100D;color:#fff;font-weight:900;font-size:16pt}
+      .qc svg{width:55mm;height:55mm;display:block;margin:0 auto}.qh{font-size:11pt;margin-top:2mm;font-weight:700}.qs{font-size:8pt;color:#666;margin-top:1mm}</style></head>
+      <body><div class="g">${cards}</div></body></html>`;
+    // ورقة A4 بنافذة الطباعة (مو طابعة الفواتير)
+    let fr = $('qrFr');
+    if (!fr) { fr = document.createElement('iframe'); fr.id = 'qrFr'; fr.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:800px;height:1100px;border:none'; document.body.appendChild(fr); }
+    fr.onload = () => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) {} };
+    fr.srcdoc = html;
+  };
+
   // ══════════ التشغيل بعد تسجيل الدخول ══════════
   const _enterApp = enterApp;
   window.enterApp = enterApp = function () {
@@ -1777,6 +2081,7 @@
     listenMenu();
     listenShifts();
     listenCalls();
+    webSt = null; listenWeb();
     listenMe();
     listenRest();
     applyFeatures();

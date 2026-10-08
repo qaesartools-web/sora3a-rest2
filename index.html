@@ -397,7 +397,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s;white-space:nowrap;}
 .toast.on{transform:translateX(-50%) translateY(0);}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=18">
+<link rel="stylesheet" href="pos-pro.css?v=19">
 </head>
 <body>
 
@@ -509,7 +509,8 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <div class="screen" id="kitchenScreen">
       <div class="kds-head">
         <div><b>👨‍🍳 شاشة المطبخ</b><span class="kds-sub" id="kdsSub"></span></div>
-        <button class="cact-b" id="kdsSoundBtn" onclick="kdsToggleSound()">🔔 الصوت: يعمل</button>
+        <div class="kds-acts"><a class="cact-b" id="readyScrBtn" href="screen.html" target="_blank" rel="noopener" title="افتحها على تلفزيون أو تابلت قدام الزبائن">📺 شاشة «طلبك جاهز»</a>
+        <button class="cact-b" id="kdsSoundBtn" onclick="kdsToggleSound()">🔔 الصوت: يعمل</button></div>
       </div>
       <div class="kds-grid" id="kdsGrid"></div>
     </div>
@@ -765,6 +766,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 
 <!-- INCOMING CALLS -->
 <div class="calls" id="callsBox"></div>
+<div class="calls webs" id="webBox"></div>
 
 <div class="toast" id="toast"></div>
 
@@ -772,7 +774,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, updateDoc as _updateDoc, deleteDoc as _deleteDoc, getDoc, getDocs, setDoc as _setDoc, arrayUnion, increment, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, updateDoc as _updateDoc, deleteDoc as _deleteDoc, getDoc, getDocs, setDoc as _setDoc, arrayUnion, increment, query, where, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
   apiKey:"AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ",
@@ -801,7 +803,7 @@ const setDoc=(...a)=>settle(_setDoc(...a));
 const updateDoc=(...a)=>settle(_updateDoc(...a));
 const deleteDoc=(...a)=>settle(_deleteDoc(...a));
 const addDoc=(col,data)=>{const ref=doc(col);return settle(_setDoc(ref,data)).then(()=>ref);};
-window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,deleteDoc,getDoc,getDocs,setDoc,arrayUnion,increment,query,where,onSnapshot,app};
+window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,deleteDoc,getDoc,getDocs,setDoc,arrayUnion,increment,query,where,onSnapshot,runTransaction,app};
 window.dispatchEvent(new Event('fbReady'));
 </script>
 
@@ -2679,7 +2681,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=24"></script>
+<script src="pos-pro.js?v=25"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){

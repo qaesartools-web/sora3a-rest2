@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>طلبك جاهز — شاشة المطعم</title>
+<meta name="theme-color" content="#0A100D">
+<link rel="icon" href="logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Reem+Kufi:wght@600;700&family=Sora:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0A100D; --neon:#3DF08B; --saf:#FFB627;
+  --bg:#0A100D; --card:#131B16; --line:#26322B; --text:#F1EFE8; --muted:#8E978F;
+  --font:'IBM Plex Sans Arabic',system-ui,'Segoe UI',Tahoma,sans-serif; --kufi:'Reem Kufi','IBM Plex Sans Arabic',sans-serif; --num:'Sora','IBM Plex Sans Arabic',system-ui,sans-serif;
+}
+/* الشاشة داكنة دائماً (تلفزيون بالمطعم)، والوضع الفاتح للتابلت عند الطلب */
+:root[data-theme="light"]{--bg:#FAF7F0; --card:#FFFFFF; --line:#E6E0D2; --text:#0A100D; --muted:#676C64}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{font-family:var(--font);background:var(--bg);color:var(--text);overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+.scr{height:100vh;height:100dvh;display:grid;grid-template-rows:auto 1fr auto}
+.top{display:flex;align-items:center;gap:14px;padding:14px clamp(16px,3vw,36px);border-bottom:1px solid var(--line)}
+.top .nm{font-family:var(--kufi);font-size:clamp(20px,2.6vw,36px);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .clk{font-family:var(--num);font-weight:600;font-size:clamp(18px,2.2vw,30px);color:var(--muted)}
+.ib{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:8px 12px;font-size:16px}
+.cols{display:grid;grid-template-columns:1fr 1.35fr;min-height:0}
+.col{padding:clamp(14px,2.4vw,32px);min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.col h2{font-size:clamp(20px,2.6vw,38px);font-weight:700;margin-bottom:clamp(10px,1.6vw,22px);display:flex;align-items:center;gap:10px}
+.col h2 small{font-family:var(--num);font-size:.6em;color:var(--muted);font-weight:600}
+.prep{border-inline-start:1px solid var(--line)}
+.prep h2{color:var(--muted)}
+.ready h2{color:var(--neon)}
+.nums{display:flex;flex-wrap:wrap;align-content:flex-start;gap:clamp(8px,1.2vw,16px);overflow:hidden}
+.n{font-family:var(--num);font-weight:800;border-radius:clamp(12px,1.4vw,22px);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.prep .n{background:var(--card);border:1px solid var(--line);color:var(--text);font-size:clamp(26px,3.6vw,60px);min-width:clamp(80px,9vw,160px);padding:clamp(10px,1.2vw,18px) clamp(12px,1.4vw,22px)}
+.ready .n{background:var(--neon);color:var(--ink);font-size:clamp(44px,7vw,130px);min-width:clamp(120px,15vw,280px);padding:clamp(14px,1.8vw,28px) clamp(16px,2vw,32px)}
+.n .pg{font-family:var(--font);font-size:clamp(12px,1.1vw,20px);font-weight:700;margin-top:6px;opacity:.75}
+.ready .n.new{animation:pop 1s ease-in-out 6}
+@keyframes pop{50%{transform:scale(1.08);box-shadow:0 0 0 12px rgba(61,240,139,.25)}}
+.empty{color:var(--muted);font-size:clamp(16px,1.8vw,26px);margin-top:10px}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px clamp(16px,3vw,36px);border-top:1px solid var(--line);color:var(--muted);font-size:clamp(12px,1.2vw,17px)}
+.foot b{color:var(--neon)}
+.hint{position:fixed;inset:auto 50% 70px auto;transform:translateX(50%);background:var(--saf);color:var(--ink);border:none;border-radius:14px;padding:12px 18px;font-weight:700;font-size:16px;z-index:20}
+@media (max-width:700px){body{overflow:auto}.scr{height:auto;min-height:100vh}.cols{grid-template-columns:1fr}.ready{order:-1}.prep{border-inline-start:none;border-top:1px solid var(--line)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+<style id="gateCss"></style>
+</head>
+<body>
+<div class="gate" id="gate" hidden></div>
+<div class="scr" id="scr" hidden>
+  <header class="top">
+    <div class="nm" id="nm"></div>
+    <div class="clk" id="clk"></div>
+    <button type="button" class="ib" id="sndBtn" title="صوت التنبيه">🔇</button>
+    <button type="button" class="ib" id="fsBtn" title="ملء الشاشة">⛶</button>
+  </header>
+  <main class="cols">
+    <section class="col ready"><h2>✅ جاهز — تفضل استلم <small id="rdN"></small></h2><div class="nums" id="ready"></div></section>
+    <section class="col prep"><h2>⏳ قيد التحضير <small id="ppN"></small></h2><div class="nums" id="prep"></div></section>
+  </main>
+  <footer class="foot"><span>رقم طلبك على الفاتورة أو البيجر — أول ما يطلع بالأخضر تفضل استلمه</span><span>مدعوم من <b>سرعة</b></span></footer>
+</div>
+<button type="button" class="hint" id="hint" hidden>🔊 اضغط هنا حتى يشتغل صوت التنبيه</button>
+
+<script type="module">
+import { db, staffGate, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc, getDoc } from './staff.js';
+document.getElementById('gateCss').textContent = GATE_CSS;
+const $ = (id) => document.getElementById(id);
+const P = new URLSearchParams(location.search);
+if (P.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
+const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+
+let orders = [], unsub = null, rid = '', day = '', first = true, sound = ls.get('scr_sound', true), audio = null;
+const seenReady = new Set(), fresh = new Map();   // fresh: رقم ← وقت صار جاهز (للوميض)
+const READY_KEEP = 20 * 60000;
+
+// أي طلب يطلع على الشاشة؟ الزبون اللي ينتظر بالمطعم: السفري، والصالة اللي وياها بيجر
+function where_(o) {
+  if (o.status === 'cancelled' || Date.now() - (o.createdAtMs || 0) > 12 * 3600000) return null;
+  const t = o.orderType || (o.captainId ? 'delivery' : 'delivery');
+  if (t === 'delivery' || (t === 'salon' && !o.pager)) return null;
+  if (o.servedAtMs || o.pagerDone || (o.held && o.status === 'delivered')) return null;
+  if (o.kitchen === 'ready' || o.status === 'ready') {
+    const at = o.kitchenReadyAt || o.readyAt || 0;
+    return at && Date.now() - at > READY_KEEP ? null : 'ready';
+  }
+  return o.kitchen === 'new' ? 'prep' : null;
+}
+const numOf = (o) => String(o.ticketNo || o.salonNum || o.holdNum || String(o.id).slice(0, 4).toUpperCase());
+
+function render() {
+  const prep = [], ready = [];
+  orders.forEach((o) => { const w = where_(o); if (w === 'prep') prep.push(o); else if (w === 'ready') ready.push(o); });
+  prep.sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
+  ready.sort((a, b) => (b.kitchenReadyAt || b.readyAt || 0) - (a.kitchenReadyAt || a.readyAt || 0));
+  // تنبيه للجاهز الجديد (مو أول تحميل)
+  const news = ready.filter((o) => !seenReady.has(o.id));
+  news.forEach((o) => { seenReady.add(o.id); if (!first) fresh.set(o.id, Date.now()); });
+  if (!first && news.length) announce(news.map(numOf));
+  first = false;
+  const tile = (o, cls) => `<div class="n${cls && fresh.has(o.id) && Date.now() - fresh.get(o.id) < 8000 ? ' new' : ''}" data-id="${esc(o.id)}">#${esc(numOf(o))}${o.pager ? `<span class="pg">📟 بيجر ${esc(o.pager)}</span>` : ''}</div>`;
+  $('ready').innerHTML = ready.map((o) => tile(o, true)).join('') || '<div class="empty">ماكو طلبات جاهزة هسه</div>';
+  $('prep').innerHTML = prep.map((o) => tile(o)).join('') || '<div class="empty">—</div>';
+  $('rdN').textContent = ready.length ? '(' + ready.length + ')' : '';
+  $('ppN').textContent = prep.length ? '(' + prep.length + ')' : '';
+}
+
+function listen() {
+  day = bagDay();
+  if (unsub) unsub();
+  // اليوم وأمس (المطاعم اللي تشتغل بعد نص الليل) — مساواة بس، ما تحتاج فهارس
+  unsub = onSnapshot(query(collection(db, 'orders'), where('restaurantId', '==', rid), where('day', 'in', [day, bagDay(Date.now() - 86400000)])), (s) => {
+    orders = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+    render();
+  }, (e) => { console.warn('orders', e.code); setTimeout(listen, 5000); });
+}
+
+// ── الصوت: نغمة + «الطلب رقم ١٢ جاهز» بصوت الجهاز (إذا عنده عربي) ──
+function chime() {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    [660, 880, 1320].forEach((hz, i) => { const o = audio.createOscillator(), g = audio.createGain(), d = audio.currentTime + i * .18; o.connect(g); g.connect(audio.destination); o.type = 'sine'; o.frequency.value = hz;
+      g.gain.setValueAtTime(.0001, d); g.gain.exponentialRampToValueAtTime(.4, d + .03); g.gain.exponentialRampToValueAtTime(.0001, d + .4); o.start(d); o.stop(d + .45); });
+  } catch (e) {}
+}
+function speak(nums) {
+  try {
+    const s = window.speechSynthesis; if (!s) return;
+    const v = s.getVoices().find((x) => /^ar/i.test(x.lang)); if (!v) return;
+    const u = new SpeechSynthesisUtterance((nums.length > 1 ? 'الطلبات ' : 'الطلب رقم ') + nums.join(' و ') + ' جاهز');
+    u.voice = v; u.lang = v.lang; u.rate = .9; s.speak(u);
+  } catch (e) {}
+}
+function announce(nums) { if (!sound) return; chime(); setTimeout(() => speak(nums), 700); }
+function soundUi() {
+  $('sndBtn').textContent = sound ? '🔊' : '🔇';
+  $('hint').hidden = !sound || !!(audio && audio.state === 'running');
+}
+$('sndBtn').onclick = () => { sound = !sound; ls.set('scr_sound', sound); if (sound) chime(); soundUi(); };
+$('hint').onclick = () => { chime(); soundUi(); };
+document.addEventListener('click', () => { if (sound && (!audio || audio.state !== 'running')) { chime(); setTimeout(soundUi, 300); } }, { once: false });
+$('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else d.documentElement.requestFullscreen && d.documentElement.requestFullscreen().catch(() => {}); };
+
+// الشاشة تبقى شغالة (ما تطفي)
+let lock = null;
+async function keepOn() { try { if ('wakeLock' in navigator && !document.hidden) lock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) keepOn(); });
+
+function clock() { const d = new Date(); $('clk').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); }
+setInterval(() => { clock(); if (rid) { if (bagDay() !== day) listen(); else render(); } }, 30000);
+
+staffGate($('gate'), {
+  title: 'شاشة «طلبك جاهز»', sub: 'افتحها على تلفزيون أو تابلت قدام الزبائن — سجّل دخول بحساب المطعم',
+  onIn: async (u) => {
+    rid = u.rid; first = true; seenReady.clear();
+    let name = u.rest.name || '';
+    try { const s = await getDoc(doc(db, 'restaurants', rid, 'settings', 'main')); if (s.exists() && s.data().receiptTitle) name = s.data().receiptTitle; } catch (e) {}
+    $('nm').textContent = name; document.title = 'طلبك جاهز — ' + name;
+    $('scr').hidden = false; clock(); soundUi(); keepOn(); listen();
+  },
+  onOut: () => { if (unsub) { unsub(); unsub = null; } rid = ''; $('scr').hidden = true; $('hint').hidden = true; },
+});
+</script>
+</body>
+</html>
