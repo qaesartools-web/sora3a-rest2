@@ -1197,10 +1197,10 @@
     const cp = (id, v) => `<input class="finp" type="number" min="1" max="5" id="${id}" value="${v || 1}" title="عدد النسخ" style="width:64px;text-align:center">`;
     return `<div class="flbl" style="margin-top:12px">🖨️ الطباعة — مدمجة ببرنامج الكاشير (بدون QZ)</div>
       <div class="ac-sub" style="margin:4px 0 8px;line-height:1.8">كل طابعة معرّفة بالويندوز تطلع هنا. اختر طابعة الفاتورة وطابعة كل قسم، وجرّبها بـ 🧪. الطباعة مباشرة بدون أي نافذة.</div>
-      <div class="dp-test">
+      ${featOn('printTest') ? `<div class="dp-test">
         <label class="set-check" style="margin:0"><input type="checkbox" id="dpTestChk" onchange="dpTestMode(this.checked)"> 🧪 <b>وضع تجربة الطابعات</b> — طابعات وهمية، والورق يطلع على شاشة «محاكي الطابعات» بدون أي طابعة حقيقية</label>
         <div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="btn-soft" style="flex:1" onclick="dpSample()">🧾 طلب تجريبي</button><button type="button" class="btn-soft" style="flex:1" onclick="SoraDesktop.openSimulator()">🖥️ فتح المحاكي</button></div>
-      </div>
+      </div>` : ''}
       <div id="dpStatus" class="dp-status"><span class="ac-sub">⏳ نجيب الطابعات…</span></div>
       <button type="button" class="btn-soft" style="width:100%;margin-top:6px" onclick="dpFind()">🔄 تحديث قائمة الطابعات</button>
       <div class="set-row" style="margin-top:8px"><div class="sec-cat">🧾 الفاتورة (الطابعة الرئيسية)</div><div style="display:flex;gap:6px"><select class="fsel" id="dpMain" style="flex:1"><option value="${esc(c.main)}" selected>${esc(c.main || '— الطابعة الافتراضية للويندوز —')}</option></select>${cp('dpRc', c.receiptCopies)}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('main')">🧪</button></div></div>
@@ -1253,6 +1253,19 @@
     dpFind(true);
     DESK.getAutoStart().then((v) => { const el = $('dpAutoChk'); if (el) el.checked = !!v; }).catch(() => {});
     if (DESK.getTestMode) DESK.getTestMode().then((v) => { const el = $('dpTestChk'); if (el) el.checked = !!v; }).catch(() => {});
+    dpEnforceTest();
+  }
+  function dpEnforceTest() {
+    if (!DESK || !DESK.getTestMode || featOn('printTest')) return;
+    DESK.getTestMode().then(async (on) => {
+      const c = dpCfg(), virt = (v) => String(v || '').startsWith(VPRE);
+      const usesVirt = virt(c.main) || Object.values(c.printers || {}).some(virt);
+      if (on) await DESK.setTestMode(false);
+      if (usesVirt) {
+        lsSet(dpKey(), { ...c, main: virt(c.main) ? '' : c.main, printers: Object.fromEntries(Object.entries(c.printers || {}).filter(([, v]) => !virt(v))) });
+      }
+      if (on || usesVirt) { toast('🧪 تجربة الطابعات انطفت من الإدارة — رجعنا للطابعات الحقيقية'); if ($('dpMain')) renderSettings(); }
+    }).catch(() => {});
   }
   // وضع التجربة: نختار الطابعات الوهمية تلقائياً (الكاشير + مطبخ 1/2/3 للأقسام) ونرجّع الحقيقية لما ينطفي
   const VPRE = '🧪 تجريبية — ';
@@ -1323,9 +1336,12 @@
   // ══════════ خدمات المطعم (يفتحها المدير الأعلى من لوحة الإدارة) ══════════
   function feat(k) { return !restData || !restData.features || restData.features[k] !== false; }
   window.posFeat = feat;
+  // خدمات مطفية إلا إذا شغّلها المدير الأعلى (مثل محاكي الطابعات)
+  function featOn(k) { return !!(restData && restData.features && restData.features[k] === true); }
   function applyFeatures() {
     document.querySelectorAll('.otype[onclick*="delivery"]').forEach((b) => { b.style.display = feat('captain') ? '' : 'none'; });
     renderPagers();
+    dpEnforceTest();
   }
   function listenRest() {
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', rid()), (s) => {

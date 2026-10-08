@@ -1,8 +1,8 @@
 // سرعة — كاشير المطعم: Service Worker (يعمل بدون إنترنت + إشعارات الخلفية)
-const CACHE_VERSION = 'rest2-v25';
+const CACHE_VERSION = 'rest2-v26';
 const CACHE_NAME = `app-cache-${CACHE_VERSION}`;
 const SCOPE = '/sora3a-rest2/';
-const PRECACHE = [SCOPE, SCOPE + 'index.html', SCOPE + 'pos-pro.js?v=20', SCOPE + 'pos-pro.css?v=15', SCOPE + 'manifest.json',
+const PRECACHE = [SCOPE, SCOPE + 'index.html', SCOPE + 'pos-pro.js?v=21', SCOPE + 'pos-pro.css?v=15', SCOPE + 'manifest.json',
   SCOPE + 'logo.svg', SCOPE + 'icon-192.png', SCOPE + 'icon-512.png'];
 // مكتبات Firebase تُخزَّن مسبقاً حتى يفتح الكاشير بدون إنترنت حتى لو أول مرة بعد التحديث
 const PRECACHE_CDN = ['app', 'auth', 'firestore'].map((m) => `https://www.gstatic.com/firebasejs/10.7.1/firebase-${m}.js`);
