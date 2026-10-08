@@ -1,5 +1,6 @@
-# يبني برنامج الكاشير للويندوز (Setup.exe) وينشره بصفحة Releases — والبرنامج يحدّث نفسه منها
-name: Windows cashier app
+# يبني برنامج الكاشير لكل الحاسبات (ويندوز، ماك، لينكس) وينشره بصفحة Releases — والبرنامج يحدّث نفسه منها
+# (اسم الملف يبقى windows-app.yml حتى يبقى ترقيم النسخ متسلسل والتحديث التلقائي يشتغل)
+name: Desktop cashier app
 
 on:
   push:
@@ -14,7 +15,17 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win nsis
+          - os: macos-latest
+            args: --mac dmg
+          - os: ubuntu-latest
+            args: --linux AppImage deb
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: desktop
@@ -28,19 +39,30 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm pkg set version=1.0.${{ github.run_number }}
-      - run: npx electron-builder --win nsis --publish never
+      - run: npx electron-builder ${{ matrix.args }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
         with:
-          name: sora3a-cashier-setup
-          path: desktop/dist/sora3a-cashier-setup.exe
-      - name: Publish release
-        if: github.event_name != 'pull_request'
-        uses: softprops/action-gh-release@v2
+          name: dist-${{ matrix.os }}
+          path: |
+            desktop/dist/sora3a-cashier-*
+            desktop/dist/latest*.yml
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - run: ls -la out
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: cashier-v1.0.${{ github.run_number }}
           name: برنامج الكاشير 1.0.${{ github.run_number }}
           make_latest: true
-          files: |
-            desktop/dist/sora3a-cashier-setup.exe
-            desktop/dist/sora3a-cashier-setup.exe.blockmap
-            desktop/dist/latest.yml
+          files: out/*

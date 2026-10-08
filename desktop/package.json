@@ -4,13 +4,16 @@
   "version": "1.0.0",
   "description": "سرعة — برنامج الكاشير للويندوز مع طباعة مباشرة لكل قسم",
   "main": "main.js",
-  "author": "Sora3a",
+  "author": {
+    "name": "Sora3a",
+    "email": "qaesar.thelove@gmail.com"
+  },
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --win nsis --publish never"
+    "dist": "electron-builder --publish never"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"
@@ -55,6 +58,35 @@
         "repo": "sora3a-rest2",
         "releaseType": "release"
       }
-    ]
-  }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.business",
+      "identity": "-",
+      "artifactName": "sora3a-cashier-mac.${ext}"
+    },
+    "dmg": {
+      "title": "Sora3a Cashier"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Office",
+      "maintainer": "Sora3a <qaesar.thelove@gmail.com>",
+      "artifactName": "sora3a-cashier-linux.${ext}",
+      "synopsis": "سرعة — برنامج الكاشير"
+    }
+  },
+  "homepage": "https://qaesartools-web.github.io/sora3a-admin/site/"
 }

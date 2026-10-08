@@ -8,6 +8,8 @@ const allowed = arg('sora-origins').split(',').filter(Boolean);
 if (allowed.includes(location.origin)) {
   contextBridge.exposeInMainWorld('SoraDesktop', {
     version: arg('sora-version'),
+    platform: arg('sora-platform'),
+    canAutoStart: arg('sora-platform') !== 'linux',
     printers: () => ipcRenderer.invoke('sora:printers'),
     print: (html, opts) => ipcRenderer.invoke('sora:print', String(html || ''), opts || {}),
     jobs: () => ipcRenderer.invoke('sora:jobs'),
