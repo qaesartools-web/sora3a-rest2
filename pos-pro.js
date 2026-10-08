@@ -829,6 +829,7 @@
         ${(s.sections || DEFAULTS.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join('')}
         <div class="flbl" style="margin-top:10px">كل فئة بالمنيو تابعة لأي قسم؟</div>
         ${menu.filter((c) => c && c.cat).map((c, i) => `<div class="set-row"><div class="sec-cat">${esc(c.emoji || '')} ${esc(c.cat)}</div><div><select class="fsel" id="stCat${i}" data-cat="${esc(c.cat)}"><option value="">— بدون قسم (لا تُطبع بالمطبخ) —</option>${(s.sections || []).filter((x) => x.name).map((x) => `<option value="${esc(x.id)}" ${(s.catSection || {})[c.cat] === x.id ? 'selected' : ''}>${esc(x.emoji || '')} ${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<div class="ac-sub">أضف فئات للمنيو أولاً</div>'}
+        <div id="secHealth" class="sec-health"></div>
         ${window.SoraDesktop ? dpSettingsHtml(s) : `${/Windows/i.test(navigator.userAgent) ? `<div class="dp-promo"><b>💻 برنامج الكاشير للويندوز</b> — يطبع كل قسم على طابعته مباشرة، بدون QZ Tray وبدون نافذة طباعة. <a href="${WIN_APP_URL}">⬇️ تنزيل</a></div>` : ''}
         <div class="flbl" style="margin-top:12px">🖨️ الطباعة على هذا الجهاز</div>
         <select class="fsel" id="stQzOn"><option value="0" ${qzCfgGet().on ? '' : 'selected'}>طابعة واحدة — كل قسم تذكرته بورقة منفصلة</option><option value="1" ${qzCfgGet().on ? 'selected' : ''}>طابعة لكل قسم — عبر برنامج QZ Tray</option></select>
@@ -861,6 +862,7 @@
         <button class="btn-soft" style="width:100%" onclick="enableRestPush()">🔔 تفعيل الإشعارات على هذا الجهاز</button></div>
       <div class="sh-card"><div class="sh-title">⌨️ اختصارات لوحة المفاتيح</div>
         <div class="ac-sub" style="line-height:2"><kbd>/</kbd> بحث عن صنف • <kbd>F9</kbd> ترحيل الطلب • <kbd>1</kbd>-<kbd>4</kbd> نوع الطلب • <kbd>Enter</kbd> تأكيد الدفع • <kbd>Esc</kbd> إغلاق</div></div>`;
+    renderSecHealth();
     if (window.SoraDesktop) dpAfterRender();
   }
   window.saveSettings = async () => {
@@ -1208,6 +1210,44 @@
       <details style="margin-top:8px" ontoggle="if(this.open)dpJobs()"><summary class="ac-sub" style="cursor:pointer">🧾 سجل الطباعة (آخر 30) — وإعادة الطباعة</summary><div id="dpJobs" class="dp-jobs"></div></details>
       <div class="ac-sub" style="margin-top:6px">برنامج الكاشير ${esc(DESK.version || '')}</div>`;
   }
+  // ── هل الأقسام مضبوطة؟ (من الخانات المعروضة حالياً، قبل الحفظ) ──
+  const normAr = (t) => String(t || '').replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .split(/\s+/).map((w) => w.replace(/^ال/, '')).join('').toLowerCase();
+  function secFormState() {
+    const on = !!($('stSecOn') || {}).checked;
+    const secs = [...document.querySelectorAll('[id^="stSecN"]')].map((el) => ({ id: (settings.sections || DEFAULTS.sections)[+el.id.slice(6)]?.id, name: el.value.trim() })).filter((x) => x.id && x.name);
+    const cats = [...document.querySelectorAll('[id^="stCat"]')].map((el) => ({ cat: el.dataset.cat, sid: el.value, el }));
+    return { on, secs, cats, unmapped: cats.filter((c) => !c.sid), empty: secs.filter((x) => !cats.some((c) => c.sid === x.id)) };
+  }
+  function renderSecHealth() {
+    const box = $('secHealth'); if (!box) return;
+    const st = secFormState();
+    const dirty = st.on !== !!settings.kSecOn || st.cats.some((c) => (c.sid || '') !== ((settings.catSection || {})[c.cat] || ''));
+    let h;
+    if (!st.on) h = `<div class="sh-warn">⚠️ <b>تقسيم الأقسام مطفي</b> — كل طلب يطبع <b>فاتورة بس</b>، وما تطلع تذكرة لأي قسم بالمطبخ.<button type="button" class="btn-soft" onclick="document.getElementById('stSecOn').click()">✅ فعّل التقسيم</button></div>`;
+    else if (!st.secs.length) h = `<div class="sh-warn">⚠️ ماكو أقسام — اكتب اسم قسم واحد على الأقل فوق.</div>`;
+    else if (st.unmapped.length) h = `<div class="sh-warn">⚠️ <b>${toA(st.unmapped.length)} فئة ما مربوطة بقسم</b> — أصنافها تطلع بالفاتورة بس، ما تنطبع بالمطبخ: ${st.unmapped.map((c) => esc(c.cat)).join('، ')}
+        <button type="button" class="btn-soft" onclick="secAutoMap()">🪄 ربط تلقائي حسب الاسم</button></div>`;
+    else h = `<div class="sh-ok">✅ كل الفئات مربوطة: ${st.secs.map((x) => `<b>${esc(x.name)}</b> (${toA(st.cats.filter((c) => c.sid === x.id).length)})`).join(' • ')}</div>`;
+    if (st.on && st.empty.length && st.secs.length) h += `<div class="ac-sub" style="margin-top:4px">ℹ️ أقسام ما بيها فئات (ما راح تطبع شي): ${st.empty.map((x) => esc(x.name)).join('، ')}</div>`;
+    if (dirty) h += `<div class="sh-save">💾 لا تنسى تضغط <b>✅ حفظ الإعدادات</b> تحت حتى تشتغل</div>`;
+    box.innerHTML = h;
+  }
+  window.renderSecHealth = renderSecHealth;
+  // يربط كل فئة بالقسم اللي اسمه يشبهها (شاورما ← الشاورما، وجبات برغر ← البرغر…)
+  window.secAutoMap = () => {
+    const st = secFormState(); let n = 0;
+    st.unmapped.forEach((c) => {
+      const cn = normAr(c.cat);
+      const hit = st.secs.find((x) => { const sn = normAr(x.name); return sn && (cn.includes(sn) || sn.includes(cn)); });
+      if (hit) { c.el.value = hit.id; n++; }
+    });
+    renderSecHealth();
+    toast(n ? '🪄 انربطت ' + toA(n) + ' فئة — راجعها واضغط حفظ' : 'ما لكينا تشابه بالأسماء — اختار القسم لكل فئة يدوياً');
+  };
+  document.addEventListener('change', (e) => { const id = (e.target && e.target.id) || ''; if (id === 'stSecOn' || id.startsWith('stCat')) renderSecHealth(); });
+  document.addEventListener('input', (e) => { if (((e.target && e.target.id) || '').startsWith('stSecN')) renderSecHealth(); });
+
   function dpAfterRender() {
     if (!DESK) return;
     dpFind(true);
@@ -1231,17 +1271,27 @@
     dpSave(); await dpFind(true);
     toast(on ? '🧪 وضع التجربة شغّال — اضغط «🧾 طلب تجريبي» وشوف الورق بالمحاكي' : '✅ رجعنا للطابعات الحقيقية');
   };
-  // طلب تجريبي: فاتورة + تذكرة لكل قسم، بدون ما ينحفظ طلب حقيقي
+  // طلب تجريبي من المنيو الحقيقي (صنف من كل فئة) وبنفس منطق الطلب الحقيقي — بدون ما ينحفظ طلب
   window.dpSample = async () => {
-    const secs = secList();
-    const items = secs.map((x, i) => ({ name: 'صنف تجريبي — ' + x.name, variant: 'وحدة', qty: 1 + (i % 2), price: 5000, sec: x.id, note: i === 0 ? 'بدون بصل' : '' }));
-    items.push({ name: 'بيبسي', variant: 'وحدة', qty: 2, price: 1000 });
+    const items = menu.filter((c) => c && c.cat && (c.items || []).length).slice(0, 8).map((c, i) => {
+      const it = c.items[0], v = (it.variants || [])[0] || { name: 'وحدة', price: it.price || 0 };
+      return { name: it.name, variant: v.name || 'وحدة', qty: 1 + (i % 2), price: v.price || 0, note: i === 0 ? 'بدون بصل' : '' };
+    });
+    if (!items.length) { toast('⚠️ المنيو فارغ — أضف أصناف أولاً'); return; }
     const total = items.reduce((t, i) => t + i.price * i.qty, 0);
-    const o = { id: 'TEST' + Date.now(), restaurantId: rid(), orderType: 'salon', salonNum: 99, ticketNo: 99, pager: 3, items,
-      kSec: Object.fromEntries(secs.map((x) => [x.id, { n: 1 }])), value: total, subtotal: total, discount: 0,
+    const o = { id: 'TEST' + Date.now(), restaurantId: rid(), orderType: 'salon', salonNum: 99, pager: 3, items, value: total, subtotal: total, discount: 0,
       createdAtMs: Date.now(), createdAt: nowT(), note: 'هذا طلب تجريبي — لا تحضّره' };
-    await printOrderAll(o, receiptHTML(o, null, { payment: { method: 'cash', cash: total, card: 0 } }, false));
-    toast('🧾 انطبع طلب تجريبي: فاتورة + ' + toA(secs.length) + ' تذكرة قسم');
+    o.ticketNo = 99; // ما ناخذ رقم من تسلسل اليوم
+    if (secOn()) {
+      const ks = {};
+      items.forEach((it) => { const sid = secOfItem(it.name); if (sid) { it.sec = sid; (ks[sid] = ks[sid] || { n: 0, readyAt: 0 }).n += it.qty; } });
+      if (Object.keys(ks).length) o.kSec = ks;
+    }
+    await printOrderAll(o, receiptHTML(o, null, { payment: { method: 'cash', cash: total, card: 0 } }, settings.printKitchen && !o.kSec));
+    const n = o.kSec ? Object.keys(o.kSec).length : 0;
+    if (!secOn()) toast('⚠️ انطبعت فاتورة بس — تقسيم الأقسام مطفي (فعّله فوق واحفظ)');
+    else if (!n) toast('⚠️ انطبعت فاتورة بس — ولا فئة مربوطة بقسم');
+    else toast('🧾 انطبع طلب تجريبي: فاتورة + ' + toA(n) + ' تذكرة قسم');
     dpJobs();
   };
   function dpSave() {
