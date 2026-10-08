@@ -1,0 +1,21 @@
+{
+  "id": "/sora3a-rest2/waiter.html",
+  "name": "سرعة — الويتر",
+  "short_name": "الويتر",
+  "description": "الويتر يطلب من الطاولة بالتلفون، والطلب ينطبع بالمطبخ مباشرة",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/sora3a-rest2/waiter.html?app=1",
+  "scope": "/sora3a-rest2/waiter",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A100D",
+  "theme_color": "#0A100D",
+  "categories": ["food", "business"],
+  "related_applications": [{ "platform": "webapp", "url": "https://qaesartools-web.github.io/sora3a-rest2/waiter.webmanifest" }],
+  "icons": [
+    { "src": "waiter-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "waiter-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "waiter-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
