@@ -4,29 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>طلبك جاهز — شاشة المطعم</title>
-<meta name="theme-color" content="#0A100D">
+<meta name="theme-color" content="#F5891F">
 <link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Reem+Kufi:wght@600;700&family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --ink:#0A100D; --saf:#FFB627;
-  /* ألوان تطبيقات سرعة كلها بنفس الشاشة: الأخضر = جاهز، البرتقالي = يتحضر، الأزرق = كود المنيو، التركوازي = مباشر */
-  --org:#FFB547; --org-rgb:255,181,71; --blu:#93A6FF; --blu-rgb:147,166,255; --tq:#3EE6CF; --tq-rgb:62,230,207;
-  --neon:#3DF08B; --neon-rgb:61,240,139; --t1:#63FFAA; --t2:#24CF6E; --t-rgb:34,201,107; --tfg:#0A100D;
-  --bg:#0A100D; --card:#121A15; --card2:#17221B; --line:#24342B; --text:#F1EFE8; --muted:#8E978F;
+  /* «برتقالي مشمس»: خلفية برتقالية زاهية، بطاقات بيضاء، الجاهز أخضر، التحضير برتقالي، كود المنيو أزرق — ألوان تطبيقات سرعة */
+  --org:#FFB547; --blu:#93A6FF; --tq:#3EE6CF;   /* ألوان نوع الطلب: سفري، صالة، دلفري */
+  --neon:#16A34A; --neon-rgb:22,163,74; --t1:#2BC46A; --t2:#0F7A3D; --t-rgb:15,122,61; --tfg:#fff;
+  --o1:#FFC14D; --o2:#F5891F; --o3:#D9480F; --odk:#C2410C;
+  --bg:#F5891F; --card:#FFFFFF; --card2:#FFF8EF; --line:#FFE1BD; --text:#2A1606; --muted:#7A5A3E;
   --font:'IBM Plex Sans Arabic',system-ui,'Segoe UI',Tahoma,sans-serif; --kufi:'Reem Kufi','IBM Plex Sans Arabic',sans-serif; --num:'Sora','IBM Plex Sans Arabic',system-ui,sans-serif;
 }
-/* الشاشة داكنة دائماً (تلفزيون بالمطعم)، والوضع الفاتح للتابلت عند الطلب (?theme=light) */
-:root[data-theme="light"]{--bg:#F4F1E8; --card:#FFFFFF; --card2:#FBF9F3; --line:#E3DCCB; --text:#0A100D; --muted:#676C64}
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
 html,body{height:100%}
 body{font-family:var(--font);color:var(--text);overflow:hidden;
-  background:#0A100D;background:var(--bg);
-  background:radial-gradient(900px 520px at 88% -8%,rgba(var(--neon-rgb),.13),transparent 62%),radial-gradient(800px 480px at -5% 108%,rgba(255,182,39,.07),transparent 60%),var(--bg)}
-:root[data-theme="light"] body{background:radial-gradient(900px 520px at 88% -8%,rgba(var(--neon-rgb),.18),transparent 62%),var(--bg)}
+  background:#F5891F;background:linear-gradient(135deg,var(--o1) 0%,var(--o2) 55%,var(--o3) 100%)}
+#gate.gate{background:linear-gradient(135deg,var(--o1) 0%,var(--o2) 55%,var(--o3) 100%)}
+#gate .gate-f{border:0;box-shadow:0 30px 60px -30px rgba(90,30,0,.6)}
+#gate .gate-i{background:var(--card2);border-color:var(--line)}
+#gate .gate-logo,#gate .gate-b{background:var(--o3);color:#fff}
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus{outline:3px solid var(--neon);outline-offset:3px}
 
@@ -38,34 +38,34 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 .top{display:flex;align-items:center;padding:1.6vw 2.4vw;padding:clamp(10px,1.6vw,22px) clamp(16px,2.4vw,40px)}
 .top>*+*{margin-right:16px}
 .mk{flex:none;width:4vw;height:4vw;width:clamp(38px,4vw,64px);height:clamp(38px,4vw,64px);border-radius:16px;
-  background:linear-gradient(145deg,var(--t1),var(--t2));color:var(--tfg);display:flex;align-items:center;justify-content:center;
-  font-family:var(--kufi);font-weight:700;font-size:2.2vw;font-size:clamp(20px,2.2vw,36px);box-shadow:0 10px 30px rgba(var(--neon-rgb),.25)}
+  background:#fff;color:var(--o3);display:flex;align-items:center;justify-content:center;
+  font-family:var(--kufi);font-weight:700;font-size:2.2vw;font-size:clamp(20px,2.2vw,36px);box-shadow:0 10px 30px rgba(120,40,0,.25)}
 .nmw{flex:1;min-width:0}
-.nm{font-family:var(--kufi);font-size:2.6vw;font-size:clamp(20px,2.6vw,42px);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.live{display:inline-flex;align-items:center;font-size:1vw;font-size:clamp(11px,1vw,16px);color:var(--muted);font-weight:600}
-.live i{width:9px;height:9px;border-radius:50%;background:var(--tq);margin-left:7px;box-shadow:0 0 0 0 rgba(var(--tq-rgb),.6);animation:dot 2s ease-out infinite}
-@keyframes dot{70%{box-shadow:0 0 0 9px rgba(var(--tq-rgb),0)}100%{box-shadow:0 0 0 0 rgba(var(--tq-rgb),0)}}
+.nm{color:#fff;font-family:var(--kufi);font-size:2.6vw;font-size:clamp(20px,2.6vw,42px);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live{display:inline-flex;align-items:center;font-size:1vw;font-size:clamp(11px,1vw,16px);color:rgba(255,255,255,.9);font-weight:600}
+.live i{width:9px;height:9px;border-radius:50%;background:#fff;margin-left:7px;box-shadow:0 0 0 0 rgba(255,255,255,.7);animation:dot 2s ease-out infinite}
+@keyframes dot{70%{box-shadow:0 0 0 9px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
 .when{text-align:left;flex:none}
-.clk{font-family:var(--num);font-weight:800;font-size:3vw;font-size:clamp(22px,3vw,52px);line-height:1;letter-spacing:.5px}
-.dt{font-size:1vw;font-size:clamp(11px,1vw,17px);color:var(--muted);margin-top:4px}
-.mb{flex:none;width:48px;height:48px;border-radius:14px;border:1px solid var(--line);background:var(--card);font-size:20px;display:flex;align-items:center;justify-content:center;position:relative}
+.clk{color:#fff;font-family:var(--num);font-weight:800;font-size:3vw;font-size:clamp(22px,3vw,52px);line-height:1;letter-spacing:.5px}
+.dt{font-size:1vw;font-size:clamp(11px,1vw,17px);color:rgba(255,255,255,.9);margin-top:4px}
+.mb{flex:none;width:48px;height:48px;border-radius:14px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.25);font-size:20px;display:flex;align-items:center;justify-content:center;position:relative}
 .mb small{position:absolute;bottom:-4px;left:-4px;font-size:13px}
 
 /* ── العمودين ── */
 .cols{flex:1;min-height:0;display:flex;padding:0 2.4vw;padding:0 clamp(16px,2.4vw,40px)}
-.col{min-height:0;display:flex;flex-direction:column;border-radius:28px;padding:1.8vw;padding:clamp(14px,1.8vw,30px)}
-.ready{flex:1.6;background:linear-gradient(180deg,rgba(var(--neon-rgb),.08),rgba(var(--neon-rgb),.02));border:1px solid rgba(var(--neon-rgb),.28)}
-.prep{flex:1;margin-right:20px;background:var(--card);background:linear-gradient(180deg,rgba(var(--org-rgb),.07),rgba(var(--org-rgb),.015)),var(--card);border:1px solid rgba(var(--org-rgb),.24)}
+.col{min-height:0;display:flex;flex-direction:column;border-radius:28px;background:#fff;box-shadow:0 26px 50px -26px rgba(90,30,0,.55);padding:1.8vw;padding:clamp(14px,1.8vw,30px)}
+.ready{flex:1.6}
+.prep{flex:1;margin-right:20px}
 .hd{display:flex;align-items:center;margin-bottom:1.4vw;margin-bottom:clamp(10px,1.4vw,22px)}
 .hd h2{font-family:var(--kufi);font-weight:700;font-size:2.5vw;font-size:clamp(20px,2.5vw,42px);line-height:1.2;flex:1}
-.ready .hd h2{color:var(--neon)}
-.prep .hd h2{color:var(--org)}
+.ready .hd h2{color:var(--t2)}
+.prep .hd h2{color:var(--o3)}
 .badge{flex:none;width:3.4vw;height:3.4vw;width:clamp(32px,3.4vw,56px);height:clamp(32px,3.4vw,56px);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-left:12px;font-size:1.8vw;font-size:clamp(16px,1.8vw,28px)}
-.ready .badge{background:var(--neon);color:var(--tfg);box-shadow:0 0 0 8px rgba(var(--neon-rgb),.12)}
-.prep .badge{background:rgba(var(--org-rgb),.14);border:1px solid rgba(var(--org-rgb),.35);box-shadow:0 0 0 8px rgba(var(--org-rgb),.07)}
+.ready .badge{background:var(--neon);color:#fff;box-shadow:0 0 0 8px rgba(var(--neon-rgb),.12)}
+.prep .badge{background:#FFF1E0;border:1px solid #FFD3A1}
 .cnt{flex:none;font-family:var(--num);font-weight:800;font-size:1.4vw;font-size:clamp(13px,1.4vw,24px);padding:4px 14px;border-radius:999px;background:var(--card2);border:1px solid var(--line);color:var(--muted)}
-.prep .cnt{background:rgba(var(--org-rgb),.12);border-color:rgba(var(--org-rgb),.32);color:var(--org)}
-.ready .cnt{background:rgba(var(--neon-rgb),.14);border-color:rgba(var(--neon-rgb),.35);color:var(--neon)}
+.prep .cnt{background:#FFF1E0;border-color:#FFD3A1;color:var(--odk)}
+.ready .cnt{background:#E8F7EE;border-color:#B7E6C8;color:var(--t2)}
 
 /* ── الأرقام ── */
 .nums{flex:1;min-height:0;overflow:hidden;display:flex;flex-wrap:wrap;align-content:flex-start;align-items:flex-start;margin:0 -10px 0 -24px;padding:10px 10px 12px 10px}
@@ -75,8 +75,8 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 .n .pg{display:block;font-family:var(--font);font-weight:700;font-size:1.15vw;font-size:clamp(11px,1.15vw,20px);margin-top:8px;opacity:.85}
 .n[data-t]::after{content:attr(data-t);font-family:var(--font);font-weight:700;font-size:.95vw;font-size:clamp(10px,.95vw,16px);margin-top:6px;padding:3px 10px;border-radius:999px}
 
-.ready .n{background:linear-gradient(160deg,var(--t1),var(--t2));color:var(--tfg);font-size:6vw;font-size:clamp(44px,6vw,108px);min-width:13vw;min-width:clamp(120px,13vw,240px);padding:1.6vw 1.6vw;padding:clamp(14px,1.6vw,28px) clamp(14px,1.6vw,26px);box-shadow:0 8px 22px rgba(var(--t-rgb),.2),inset 0 1px 0 rgba(255,255,255,.45)}
-.ready .n[data-t]::after{background:rgba(10,16,13,.12)}
+.ready .n{background:linear-gradient(160deg,var(--t1),var(--t2));color:var(--tfg);font-size:6vw;font-size:clamp(44px,6vw,108px);min-width:13vw;min-width:clamp(120px,13vw,240px);padding:1.6vw 1.6vw;padding:clamp(14px,1.6vw,28px) clamp(14px,1.6vw,26px);box-shadow:0 14px 28px -12px rgba(var(--t-rgb),.6),inset 0 1px 0 rgba(255,255,255,.3)}
+.ready .n[data-t]::after{background:rgba(255,255,255,.24);color:#fff}
 /* آخر طلب جاهز: بطاقة كبيرة بالأعلى */
 .ready .n.feat{width:calc(100% - 14px);font-size:13vw;font-size:clamp(96px,13vw,250px);padding:2vw 20px;padding:clamp(18px,2vw,34px) 20px;border-radius:30px}
 .ready .n.feat::before{content:'🔔 آخر طلب جاهز';font-family:var(--font);font-weight:700;font-size:1.4vw;font-size:clamp(13px,1.4vw,24px);margin-bottom:10px;opacity:.7}
@@ -84,42 +84,39 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 .ready .n.new{animation:pop 1s ease-in-out 6}
 @keyframes pop{50%{transform:scale(1.03);box-shadow:0 0 0 8px rgba(var(--neon-rgb),.25),0 8px 22px rgba(var(--t-rgb),.3)}}
 
-.prep .n{background:var(--card2);border:1px solid var(--line);color:var(--text);font-size:3.6vw;font-size:clamp(30px,3.6vw,64px);min-width:8.5vw;min-width:clamp(90px,8.5vw,160px);padding:1.2vw 1vw 1.5vw;padding:clamp(12px,1.2vw,20px) clamp(10px,1vw,16px) clamp(16px,1.5vw,24px);overflow:hidden}
+.prep .n{background:#FFF4E6;border:1px solid #FFD3A1;color:#9A3412;font-size:3.6vw;font-size:clamp(30px,3.6vw,64px);min-width:8.5vw;min-width:clamp(90px,8.5vw,160px);padding:1.2vw 1vw 1.5vw;padding:clamp(12px,1.2vw,20px) clamp(10px,1vw,16px) clamp(16px,1.5vw,24px);overflow:hidden}
 .prep .n[data-t]::after{background:var(--card);color:var(--muted)}
 .prep .n[data-t="سفري"]::after{background:var(--org);color:#1C0F03}
 .prep .n[data-t="صالة"]::after{background:var(--blu);color:#0A1030}
 .prep .n[data-t="دلفري"]::after{background:var(--tq);color:#032420}
-.ready .n[data-t="سفري"]::after{background:#C2570C;color:#fff}
-.ready .n[data-t="صالة"]::after{background:#3F5BE0;color:#fff}
-.ready .n[data-t="دلفري"]::after{background:#0F766E;color:#fff}
 /* شريط «يتحضر» يتحرك أسفل كل بطاقة */
-.prep .n::before{content:'';position:absolute;bottom:0;right:0;left:0;height:4px;background:linear-gradient(90deg,transparent,var(--org),transparent);background-size:200% 100%;animation:cook 2.4s linear infinite;opacity:.8}
+.prep .n::before{content:'';position:absolute;bottom:0;right:0;left:0;height:4px;background:linear-gradient(90deg,transparent,#EA7A0C,transparent);background-size:200% 100%;animation:cook 2.4s linear infinite;opacity:.8}
 @keyframes cook{from{background-position:200% 0}to{background-position:-200% 0}}
 
-.qrbox{flex:none;display:flex;align-items:center;margin-top:12px;padding:1.1vw;padding:clamp(10px,1.1vw,18px);border-radius:22px;background:var(--card2);background:linear-gradient(135deg,rgba(var(--blu-rgb),.16),rgba(var(--blu-rgb),.04)),var(--card2);border:1px solid rgba(var(--blu-rgb),.38)}
+.qrbox{flex:none;display:flex;align-items:center;margin-top:12px;padding:1.1vw;padding:clamp(10px,1.1vw,18px);border-radius:22px;background:#3F5BD0;background:linear-gradient(135deg,#6B86FF,#1E3A8A)}
 .qrc{flex:none;width:11vw;height:11vw;width:clamp(100px,11vw,190px);height:clamp(100px,11vw,190px);background:#fff;border-radius:14px;padding:8px}
 .qrc svg{width:100%;height:100%;display:block}
 .qrt{flex:1;min-width:0;margin-right:1.4vw;margin-right:clamp(12px,1.4vw,24px);overflow:hidden;word-wrap:break-word}
-.qrt b{display:block;font-family:var(--kufi);font-weight:700;font-size:1.7vw;font-size:clamp(14px,1.7vw,30px);line-height:1.55;color:var(--text)}
+.qrt b{display:block;font-family:var(--kufi);font-weight:700;font-size:1.7vw;font-size:clamp(14px,1.7vw,30px);line-height:1.55;color:#fff}
 .qrt b span{display:block}
-.qrt b span+span{color:var(--blu)}
-.qrt small{display:block;margin-top:.5vw;color:var(--muted);font-size:1.05vw;font-size:clamp(11px,1.05vw,18px);line-height:1.6}
+.qrt b span+span{color:#D4DCFF}
+.qrt small{display:block;margin-top:.5vw;color:rgba(255,255,255,.82);font-size:1.05vw;font-size:clamp(11px,1.05vw,18px);line-height:1.6}
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;margin:0 0 0 14px;padding:30px 10px;color:var(--muted);font-size:1.7vw;font-size:clamp(14px,1.7vw,28px);text-align:center}
 .empty b{font-size:5vw;font-size:clamp(36px,5vw,84px);margin-bottom:10px;opacity:.85}
 
 /* ── الأسفل ── */
-.foot{display:flex;align-items:center;justify-content:space-between;padding:1.2vw 2.4vw;padding:clamp(10px,1.2vw,18px) clamp(16px,2.4vw,40px);color:var(--muted);font-size:1.15vw;font-size:clamp(11px,1.15vw,19px)}
-.foot b{color:var(--neon)}
+.foot{display:flex;align-items:center;justify-content:space-between;padding:1.2vw 2.4vw;padding:clamp(10px,1.2vw,18px) clamp(16px,2.4vw,40px);color:rgba(255,255,255,.92);font-size:1.15vw;font-size:clamp(11px,1.15vw,19px)}
+.foot b{color:#fff}
 .foot .tip{display:flex;align-items:center}
-.foot .tip i{font-style:normal;width:30px;height:30px;border-radius:10px;background:rgba(var(--tq-rgb),.12);border:1px solid rgba(var(--tq-rgb),.35);display:inline-flex;align-items:center;justify-content:center;margin-left:10px}
+.foot .tip i{font-style:normal;width:30px;height:30px;border-radius:10px;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);display:inline-flex;align-items:center;justify-content:center;margin-left:10px}
 
 /* ── قائمة الإعدادات (تشتغل بالريموت) ── */
 .menu{position:fixed;top:84px;left:24px;z-index:30;width:300px;max-height:calc(100% - 100px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
 .menu .mt{font-size:13px;color:var(--muted);padding:4px 8px 10px}
 .menu button{display:block;width:100%;text-align:start;border:1px solid var(--line);background:var(--card2);border-radius:14px;padding:13px 14px;font-size:17px;font-weight:600;margin-top:8px}
-.menu button.warn{border-color:#FF4D2E;color:#FF8A70}
+.menu button.warn{border-color:var(--o3);color:var(--odk)}
 .menu .hintk{font-size:12px;color:var(--muted);padding:10px 8px 2px;line-height:1.7}
-.hint{position:fixed;right:50%;bottom:80px;transform:translateX(50%);background:var(--saf);color:var(--ink);border:none;border-radius:16px;padding:13px 20px;font-weight:700;font-size:16px;z-index:20;box-shadow:0 14px 40px rgba(0,0,0,.4)}
+.hint{position:fixed;right:50%;bottom:80px;transform:translateX(50%);background:#fff;color:var(--odk);border:none;border-radius:16px;padding:13px 20px;font-weight:700;font-size:16px;z-index:20;box-shadow:0 14px 40px rgba(90,30,0,.4)}
 
 @media (max-width:760px){
   body{overflow:auto}.scr{height:auto;min-height:100vh}
@@ -155,7 +152,7 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
       <div class="qrbox" id="qrBox" hidden><div class="qrc" id="qrCode"></div><div class="qrt"><b id="qrT"><span>📱 امسح الكود</span></b><small id="qrS"></small></div></div>
     </section>
   </main>
-  <footer class="foot"><span class="tip"><i>🧾</i>رقم طلبك على الفاتورة أو البيجر — أول ما يصير أخضر تفضل استلمه</span><span>مدعوم من <b>سرعة</b></span></footer>
+  <footer class="foot"><span class="tip"><i>🧾</i>رقم طلبك على الفاتورة أو البيجر — أول ما يطلع بـ«جاهز» تفضل استلمه</span><span>مدعوم من <b>سرعة</b></span></footer>
 </div>
 <div class="menu" id="menu" hidden role="dialog" aria-label="الإعدادات">
   <div class="mt">⚙️ إعدادات الشاشة</div>
@@ -177,8 +174,6 @@ const $ = (id) => document.getElementById(id);
 // داخل تطبيق التلفزيون: ملء الشاشة من التطبيق، والصوت مسموح بدون لمس
 const inApp = /SoraScreenApp/.test(navigator.userAgent);
 if (inApp) $('fsBtn').hidden = true;
-const P = new URLSearchParams(location.search);
-if (P.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
 const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 
 let orders = [], unsub = null, rid = '', day = '', first = true, sound = ls.get('scr_sound', true), audio = null;
