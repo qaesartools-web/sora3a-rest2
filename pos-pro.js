@@ -407,6 +407,19 @@
     openPay({ kind: 'collect', order: o, handover: true });
   };
   window.ordCollect = (id) => { const o = orders.find((x) => x.id === id); if (o) openPay({ kind: 'collect', order: o }); };
+  // «🤝 تم التسليم» للطلب المدفوع (سفري/صالة): الزبون استلم ← ينشال فوراً من شاشة «طلبك جاهز» ويتحرر البيجر
+  window.ordServed = async (id) => {
+    const o = orders.find((x) => x.id === id); if (!o) return;
+    if (o.held && o.status !== 'delivered') { ordHandover(id); return; }   // سفري ما انطلب حسابه: يتحاسب أول
+    const f = { servedAtMs: Date.now(), kitchen: 'ready' };
+    if (!o.kitchenReadyAt) f.kitchenReadyAt = Date.now();
+    if (o.pager) f.pagerDone = true;
+    try { await fb().updateDoc(fb().doc(fb().db, 'orders', id), f); toast('🤝 تم التسليم — انشال من شاشة «طلبك جاهز»'); }
+    catch (e) { toast('❌ تعذّر التحديث'); }
+  };
+  // طلب ينتظر الزبون (مدفوع وما تسلّم): يطلع على شاشة «طلبك جاهز» لحد «تم التسليم»
+  window.ordWaiting = (o) => !!o && o.orderType !== 'delivery' && o.status !== 'cancelled' && !!o.kitchen && !o.servedAtMs && !o.pagerDone
+    && !(o.held && o.status === 'delivered') && Date.now() - (o.createdAtMs || 0) < 12 * 3600000;
 
   // زر «تحصيل» للطلبات المؤجلة الدفع
   const _orderActions = orderActions;
@@ -769,6 +782,16 @@
     ['kdsPillD', 'kdsPillM'].forEach((id) => { const p = $(id); if (p) { p.textContent = list.length; p.classList.toggle('on', list.length > 0); } });
     if (!$('kitchenScreen').classList.contains('on')) return;
     $('kdsSub').textContent = list.length ? toA(list.length) + ' طلب قيد التحضير' : '';
+    // الجاهز اللي ينتظر الزبون (هو اللي يطلع بـ«جاهز» على التلفزيون): «تم التسليم» يشيله من الشاشة
+    const rdy = orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready') && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < 20 * 60000)
+      .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
+    const kr = $('kdsReady');
+    if (kr) {
+      kr.hidden = !rdy.length;
+      kr.innerHTML = rdy.length ? `<div class="kr-t">🔔 جاهز — ينتظر الزبون <small>اضغط «تم التسليم» أول ما يستلم، وينشال من الشاشة</small></div>
+        <div class="kr-row">${rdy.map((o) => { const t = getOrderType(o);
+          return `<button type="button" class="kr-b" onclick="ordServed('${esc(o.id)}')"><b>#${esc(kNum(o))}</b><span>${t === 'salon' ? '🪑 صالة' : '🥡 سفري'}${o.pager ? ' • 📟 ' + toA(o.pager) : ''}</span><em>🤝 تم التسليم</em></button>`; }).join('')}</div>` : '';
+    }
     renderKdsFilter();
     $('kdsGrid').innerHTML = list.length ? list.map((o) => {
       const m = Math.floor((Date.now() - (o.createdAtMs || Date.now())) / 60000), t = getOrderType(o);
