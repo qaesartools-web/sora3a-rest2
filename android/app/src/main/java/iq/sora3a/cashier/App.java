@@ -6,7 +6,7 @@ import android.webkit.WebView;
 public class App extends Application {
     @Override public void onCreate() {
         super.onCreate();
-        // لازم قبل أي WebView: حتى نرسم الفاتورة كاملة كصورة للطباعة
-        WebView.enableSlowWholeDocumentDraw();
+        // لازم قبل أي WebView: حتى نرسم الفاتورة كاملة كصورة للطباعة (الشاشة ما تطبع، وخدمتها الصغيرة ما تحمّل المتصفح)
+        if (!BuildConfig.SCREEN) WebView.enableSlowWholeDocumentDraw();
     }
 }
