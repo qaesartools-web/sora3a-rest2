@@ -104,6 +104,11 @@ button{cursor:pointer}
 .empty{text-align:center;color:var(--muted);padding:30px 10px}
 .toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-16px);background:var(--ink);color:#FAF7F0;padding:10px 18px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;transition:.2s;z-index:90;pointer-events:none;max-width:calc(100vw - 32px)}
 .toast.on{opacity:1;transform:translateX(-50%)}
+/* الخدمة موقوفة من الإدارة */
+.offw{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.offc{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:28px 22px;text-align:center;max-width:420px}
+.offc b{display:block;font-size:48px}.offc h2{font-size:21px;margin:8px 0 6px}.offc p{color:var(--muted);line-height:1.8;font-size:14.5px}
+.offc button{margin-top:14px;border:1px solid var(--line);background:var(--soft);border-radius:12px;padding:10px 20px;font-weight:700}
 /* تثبيت التطبيق */
 .inst{position:fixed;inset:calc(10px + env(safe-area-inset-top)) 10px auto 10px;z-index:150;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:12px;
   background:#0A100D;color:#FAF7F0;border:1px solid #2A3830;border-radius:20px;padding:12px 12px 12px 10px;box-shadow:0 18px 50px rgba(0,0,0,.35);animation:instIn .3s ease}
@@ -121,6 +126,7 @@ button{cursor:pointer}
 </head>
 <body>
 <div class="gate" id="gate" hidden></div>
+<div class="offw" id="off" hidden><div class="offc"><b>⛔</b><h2>تطبيق الويتر موقوف لهذا المطعم</h2><p>صاحب المطعم يتواصل ويا إدارة سرعة حتى يفعّلونه — وأول ما يتفعّل يرجع يشتغل وحده.</p><button type="button" id="offOut">خروج</button></div></div>
 <div id="app" hidden>
   <header class="hd"><div class="wrap">
     <div class="t"><b id="rName"></b><small id="wName"></small></div>
@@ -207,15 +213,19 @@ const stOf = (w) => (w.status === 'new' ? 'new' : w.status === 'rejected' ? 'rej
 staffGate($('gate'), {
   title: 'سرعة — الويتر', sub: 'سجّل دخول بحساب الكاشير اللي سوّاه إلك صاحب المطعم',
   onIn: (u) => { me = u; start(); },
-  onOut: () => { unsubs.forEach((f) => f()); unsubs = []; me = null; $('app').hidden = true; },
+  onOut: () => { unsubs.forEach((f) => f()); unsubs = []; me = null; $('app').hidden = true; $('off').hidden = true; },
 });
+$('offOut').onclick = () => logout();
+// خدمة «تطبيق الويتر» يشغّلها أو يوقفها المدير الأعلى — مباشرة بدون تحديث
+function svc(on) { $('app').hidden = !on; $('off').hidden = on; }
 $('outBtn').onclick = () => { if (!cart.length || confirm('عندك أصناف ما انرسلت — تطلع؟')) logout(); };
 
 function start() {
-  $('app').hidden = false;
+  svc(!(me.rest.features && me.rest.features.waiter === false));
   $('rName').textContent = me.rest.name || 'المطعم';
   $('wName').textContent = '🧑‍🍳 ' + (me.name || (me.role === 'restaurant' ? 'صاحب المطعم' : 'الويتر'));
   const R = (...p) => doc(db, 'restaurants', me.rid, ...p);
+  unsubs.push(onSnapshot(R(), (s) => { const f = (s.exists() && s.data().features) || {}; svc(f.waiter !== false); }, () => {}));
   unsubs.push(onSnapshot(R('menu', 'main'), (s) => { cats = s.exists() ? (s.data().cats || []).filter((c) => (c.items || []).length) : []; if (!$('vMenu').hidden) renderMenu(); }, () => {}));
   unsubs.push(onSnapshot(R('settings', 'main'), (s) => {
     const d = s.exists() ? s.data() : {};

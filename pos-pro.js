@@ -858,12 +858,8 @@
           </details>
         </div>`}`}
       </div>
-      <div class="sh-card"><div class="sh-title">📺 شاشة «طلبك جاهز»</div>
-        <div class="ac-sub" style="margin-bottom:6px;line-height:1.8">شنو يطلع على شاشة التلفزيون؟ طلبات السفري والطلبات اللي وياها بيجر تطلع دائماً.</div>
-        <label class="set-check"><input type="checkbox" id="stScrSalon" ${scrCfg().salon ? 'checked' : ''}> 🪑 طلبات الصالة حتى بدون بيجر</label>
-        <label class="set-check"><input type="checkbox" id="stScrDel" ${scrCfg().delivery ? 'checked' : ''}> 🏍️ طلبات الدلفري (لحد ما يستلمها الكابتن)</label>
-        <label class="set-check"><input type="checkbox" id="stScrQr" ${scrCfg().qr ? 'checked' : ''}> 📱 كود المنيو بزاوية الشاشة — الزبون يمسحه من مكانه (إذا المنيو الأونلاين شغّال)</label>
-      </div>
+      ${screenCardHtml()}
+      ${waiterCardHtml()}
       <div class="sh-card"><div class="sh-title">💰 الأسعار والضرائب</div>
         <div class="set-row"><div><div class="flbl">ضريبة ٪ (0 = بدون)</div><input class="finp" id="stTax" type="number" min="0" max="50" value="${s.taxPct || 0}"></div>
           <div><div class="flbl">خدمة الصالة ٪</div><input class="finp" id="stSvc" type="number" min="0" max="50" value="${s.servicePct || 0}"></div></div>
@@ -1415,6 +1411,7 @@
   function featOn(k) { return !!(restData && restData.features && restData.features[k] === true); }
   function applyFeatures() {
     document.querySelectorAll('.otype[onclick*="delivery"]').forEach((b) => { b.style.display = feat('captain') ? '' : 'none'; });
+    ['readyScrBtn', 'screenApkBtn'].forEach((id) => { const b = $(id); if (b) b.style.display = feat('screen') ? '' : 'none'; });
     renderPagers();
     dpEnforceTest();
   }
@@ -2029,10 +2026,31 @@
     if (dirty) { Object.keys(webSt).forEach((k) => { if (!live.has(k)) delete webSt[k]; }); lsSet('pos_webst_' + rid(), webSt); }
   }
 
-  // ── الإعدادات + QR الطاولات ──
+  // ── الإعدادات: خدمات الشاشة والويتر والباركود (كل وحدة يشغّلها أو يوقفها المدير الأعلى من لوحة الإدارة) ──
+  const svcOff = (title) => `<div class="sh-card">${title}<div class="ac-sub">⛔ الخدمة موقوفة لمطعمك — تواصل ويا إدارة سرعة لتفعيلها.</div></div>`;
+  function screenCardHtml() {
+    const title = '<div class="sh-title">📺 شاشة «طلبك جاهز»</div>';
+    if (!feat('screen')) return svcOff(title);
+    return `<div class="sh-card">${title}
+        <div class="ac-sub" style="margin-bottom:6px;line-height:1.8">شنو يطلع على شاشة التلفزيون؟ طلبات السفري والطلبات اللي وياها بيجر تطلع دائماً.</div>
+        <label class="set-check"><input type="checkbox" id="stScrSalon" ${scrCfg().salon ? 'checked' : ''}> 🪑 طلبات الصالة حتى بدون بيجر</label>
+        <label class="set-check"><input type="checkbox" id="stScrDel" ${scrCfg().delivery ? 'checked' : ''}> 🏍️ طلبات الدلفري (لحد ما يستلمها الكابتن)</label>
+        <label class="set-check"><input type="checkbox" id="stScrQr" ${scrCfg().qr ? 'checked' : ''}> 📱 كود المنيو بزاوية الشاشة — الزبون يمسحه من مكانه (إذا خدمة الباركود شغّالة)</label>
+        <div class="flbl" style="margin-top:10px">رابط الشاشة — افتحه على تلفزيون أو تابلت قدام الزبائن، أو نزّل تطبيق التيفي</div>
+        <div class="on-link"><input class="finp" id="stScreenLink" readonly dir="ltr" value="${esc(SITE + 'screen.html')}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink('${esc(SITE + 'screen.html')}')">📋 نسخ</button></div>
+      </div>`;
+  }
+  function waiterCardHtml() {
+    const title = '<div class="sh-title">🧑‍🍳 تطبيق الويتر</div>';
+    if (!feat('waiter')) return svcOff(title);
+    return `<div class="sh-card">${title}
+        <div class="ac-sub" style="margin-bottom:6px;line-height:1.8">الويتر يفتحه بتلفونه ويدخل بحساب كاشير (سوّيه من لوحة الإدارة)، يختار الطاولة ويطلب — وطلباته تدخل للمطبخ مباشرة.</div>
+        <div class="on-link"><input class="finp" id="stWaiterLink" readonly dir="ltr" value="${esc(SITE + 'waiter.html')}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink('${esc(SITE + 'waiter.html')}')">📋 نسخ</button></div>
+      </div>`;
+  }
   function onlineCardHtml() {
-    const title = '<div class="sh-title">📱 المنيو الأونلاين وطلبات QR</div>';
-    if (!feat('online')) return `<div class="sh-card">${title}<div class="ac-sub">⛔ الخدمة موقوفة لمطعمك — تواصل ويا إدارة سرعة لتفعيلها.</div></div>`;
+    const title = '<div class="sh-title">📱 الباركود والمنيو الأونلاين</div>';
+    if (!feat('online')) return svcOff(title);
     const oc = onlineCfg(), dl = feat('captain');
     return `<div class="sh-card" id="onCard">${title}
       <div class="ac-sub" style="margin-bottom:8px;line-height:1.8">الزبون يمسح QR الطاولة أو يفتح رابط المطعم من البيت، يختار ويطلب — والطلب يوصل هنا فوراً وينطبع بالمطبخ. الأسعار دائماً من منيو الكاشير.</div>
@@ -2046,10 +2064,6 @@
       <label class="set-check" style="margin-top:8px"><input type="checkbox" id="stOnDev" ${webAutoDev() ? 'checked' : ''}> 🖨️ هذا الجهاز يقبل الطلبات التلقائية ويطبعها (خليها على جهاز الكاشير بس)</label>
       <div class="on-link"><input class="finp" id="stOnLink" readonly dir="ltr" value="${esc(menuLink())}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink()">📋 نسخ</button><a class="btn-soft" href="${esc(menuLink())}" target="_blank" rel="noopener">👁️ فتح</a></div>
       <div class="on-qr"><button type="button" class="btn-soft" onclick="printTableQR()">🖨️ QR الطاولات (${toA(settings.tables || 0)})</button><button type="button" class="btn-soft" onclick="printTableQR(true)">🖨️ QR المطعم (استلام وتوصيل)</button></div>
-      <div class="flbl" style="margin-top:14px">🧑‍🍳 تطبيق الويتر — يفتحه بتلفونه ويدخل بحساب كاشير (سوّيه من لوحة الإدارة)، وطلباته تدخل للمطبخ مباشرة</div>
-      <div class="on-link"><input class="finp" id="stWaiterLink" readonly dir="ltr" value="${esc(SITE + 'waiter.html')}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink('${esc(SITE + 'waiter.html')}')">📋 نسخ</button></div>
-      <div class="flbl" style="margin-top:10px">📺 شاشة «طلبك جاهز» — افتحها على تلفزيون أو تابلت قدام الزبائن</div>
-      <div class="on-link"><input class="finp" id="stScreenLink" readonly dir="ltr" value="${esc(SITE + 'screen.html')}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink('${esc(SITE + 'screen.html')}')">📋 نسخ</button></div>
     </div>`;
   }
   function readOnlineForm() {
