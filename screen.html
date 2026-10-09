@@ -193,7 +193,7 @@ function render() {
   };
   $('ready').innerHTML = ready.map((o, i) => tile(o, i === 0 ? 'feat' : 'r')).join('')
     || '<div class="empty"><b>🍽️</b>ماكو طلبات جاهزة هسه</div>';
-  $('prep').innerHTML = prep.map((o) => tile(o, '')).join('') || '<div class="empty"><b>👨‍🍳</b>المطبخ فاضي</div>';
+  $('prep').innerHTML = prep.map((o) => tile(o, '')).join('') || '<div class="empty"><b>👨‍🍳</b>لا توجد طلبات</div>';
   $('rdN').textContent = ready.length;
   $('ppN').textContent = prep.length;
 }
