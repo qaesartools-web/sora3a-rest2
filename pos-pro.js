@@ -858,6 +858,11 @@
           </details>
         </div>`}`}
       </div>
+      <div class="sh-card"><div class="sh-title">📺 شاشة «طلبك جاهز»</div>
+        <div class="ac-sub" style="margin-bottom:6px;line-height:1.8">شنو يطلع على شاشة التلفزيون؟ طلبات السفري والطلبات اللي وياها بيجر تطلع دائماً.</div>
+        <label class="set-check"><input type="checkbox" id="stScrSalon" ${scrCfg().salon ? 'checked' : ''}> 🪑 طلبات الصالة حتى بدون بيجر</label>
+        <label class="set-check"><input type="checkbox" id="stScrDel" ${scrCfg().delivery ? 'checked' : ''}> 🏍️ طلبات الدلفري (لحد ما يستلمها الكابتن)</label>
+      </div>
       <div class="sh-card"><div class="sh-title">💰 الأسعار والضرائب</div>
         <div class="set-row"><div><div class="flbl">ضريبة ٪ (0 = بدون)</div><input class="finp" id="stTax" type="number" min="0" max="50" value="${s.taxPct || 0}"></div>
           <div><div class="flbl">خدمة الصالة ٪</div><input class="finp" id="stSvc" type="number" min="0" max="50" value="${s.servicePct || 0}"></div></div>
@@ -895,6 +900,7 @@
     };
     const onBefore = JSON.stringify(onlineCfg()), online = readOnlineForm();
     if (online) next.online = online;
+    next.screen = $('stScrSalon') ? { salon: $('stScrSalon').checked, delivery: $('stScrDel').checked } : scrCfg();
     if (online && online.on && !online.table && !online.pickup && !online.delivery) { toast('⚠️ اختار طريقة طلب وحدة على الأقل للمنيو الأونلاين'); return; }
     settings = { ...DEFAULTS, ...next };
     lsSet(setKey(), settings);
@@ -1798,6 +1804,8 @@
   const SITE = /^https?:$/.test(location.protocol) ? new URL('./', location.href.split(/[?#]/)[0]).href : 'https://qaesartools-web.github.io/sora3a-rest2/';
   const ONLINE_DEF = { on: false, table: true, pickup: true, delivery: false, autoTable: false, note: '' };
   const onlineCfg = () => ({ ...ONLINE_DEF, ...(settings.online || {}) });
+  // شاشة «طلبك جاهز»: الصالة بدون بيجر تطلع افتراضياً، والدلفري لا
+  const scrCfg = () => ({ salon: true, delivery: false, ...(settings.screen || {}) });
   const onlineOk = () => feat('online') && onlineCfg().on;
   const menuLink = (t) => SITE + 'menu.html?r=' + encodeURIComponent(rid() || '') + (t ? '&t=' + encodeURIComponent(t) : '');
   window.menuLink = menuLink;
