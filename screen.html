@@ -162,6 +162,34 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) keep
 function clock() { const d = new Date(); $('clk').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); }
 setInterval(() => { clock(); if (rid) { if (bagDay() !== day) listen(); else render(); } }, 30000);
 
+// ── التحديث التلقائي: أي تحديث للشاشة يوصل للتلفزيون وحده بدون ما أحد يلمس شي ──
+//  نراقب ملفات الصفحة كل دقيقة؛ إذا تغيّرت (ونتأكد مرتين) نحدّث بلحظة هادئة — مو وقت ما رقم جديد يومض
+(() => {
+  const AU_MS = window.__auMs || 60000, files = ['screen.html', 'staff.js'];
+  let base = null, cand = null;
+  const sig = (r) => r.headers.get('last-modified') || (r.headers.get('etag') || '').replace(/^W\//, '');
+  const quiet = () => ![...fresh.values()].some((t) => Date.now() - t < 15000);
+  async function check() {
+    if (!navigator.onLine) return;
+    try {
+      const rs = await Promise.all(files.map((f) => fetch(f + '?au=' + Date.now(), { method: 'HEAD', cache: 'no-store' })));
+      if (rs.some((r) => !r.ok)) return;
+      const s = rs.map(sig).join('|');
+      if (!s.replace(/\|/g, '')) return;
+      if (base === null) { base = s; return; }
+      if (s === base) { cand = null; return; }
+      if (cand !== s) { cand = s; return; }
+      if (quiet()) location.reload();
+    } catch (e) {}
+  }
+  setTimeout(check, Math.min(5000, AU_MS)); setInterval(check, AU_MS);
+  // وتحديث يومي الساعة ٥ الصبح بتوقيت بغداد: ذاكرة التلفزيون تبقى نظيفة لو بقى شغّال أيام
+  const started = Date.now();
+  setInterval(() => {
+    if (new Date(Date.now() + 3 * 3600000).getUTCHours() === 5 && Date.now() - started > 3 * 3600000 && quiet()) location.reload();
+  }, 60000);
+})();
+
 staffGate($('gate'), {
   title: 'شاشة «طلبك جاهز»', sub: 'افتحها على تلفزيون أو تابلت قدام الزبائن — سجّل دخول بحساب المطعم',
   onIn: async (u) => {
