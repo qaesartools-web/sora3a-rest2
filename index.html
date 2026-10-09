@@ -397,7 +397,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s;white-space:nowrap;}
 .toast.on{transform:translateX(-50%) translateY(0);}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=19">
+<link rel="stylesheet" href="pos-pro.css?v=20">
 </head>
 <body>
 
@@ -514,6 +514,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
         <a class="cact-b" id="screenApkBtn" href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/screen-android/sora3a-screen.apk" title="للتيفي بوكس أو تلفزيون أندرويد: تفتح وحدها مع تشغيل الجهاز">📲 تطبيق التيفي</a>
         <button class="cact-b" id="kdsSoundBtn" onclick="kdsToggleSound()">🔔 الصوت: يعمل</button></div>
       </div>
+      <div class="kds-ready" id="kdsReady" hidden></div>
       <div class="kds-grid" id="kdsGrid"></div>
     </div>
 
@@ -1418,6 +1419,8 @@ function orderActions(o){
     if(s==='preparing'||s==='ready')b.push(['🏍️ تحويل للكابتن','holdTransfer']);
     if(s==='preparing'||s==='ready')b.push(['🤝 تسليم للزبون','ordHandover']);
   }
+  // مدفوع وينتظر الزبون (يطلع على شاشة «طلبك جاهز»): «تم التسليم» يشيله من الشاشة
+  if(window.ordWaiting&&ordWaiting(o)&&s==='delivered'&&(!window.posFeat||posFeat('screen')))b.push(['🤝 تم التسليم','ordServed']);
   if(t==='delivery'&&['pending','accepted'].includes(s))b.push(['🔄 تغيير الكابتن','openChangeCapForOrder']);
   if(t==='delivery'&&['pending','accepted','pickup'].includes(s))b.push(['🥡 استلمه بنفسه','ordSelfPickup']);
   if(EDITABLE.includes(s))b.push(['✏️ تعديل / إضافة','ordEdit']);
@@ -1479,7 +1482,7 @@ function renderOrders(){
       ${items.length?`<div class="ac-sub" style="margin:4px 0">${items.map(i=>'• '+esc(i.name)+(i.variant&&i.variant!=='وحدة'?' ('+esc(i.variant)+')':'')+' ×'+toA(i.qty)).join('<br>')}</div>`:''}
       <div class="oinfo">💰 ${fmt(o.value)} د.ع${o.fee?` + ${fmt(o.fee)} توصيل`:''}</div>
       <div class="orow" style="margin-top:5px">
-        <span class="bdg ${stBadge[o.status]||'bp'}">${stLabel[o.status]||esc(o.status)}</span>
+        ${window.ordWaiting&&ordWaiting(o)&&o.status==='delivered'&&o.kitchen==='ready'?'<span class="bdg bd">🔔 جاهز — ينتظر الزبون</span>':`<span class="bdg ${stBadge[o.status]||'bp'}">${stLabel[o.status]||esc(o.status)}</span>`}
         <span style="font-size:11px;color:var(--muted)">${esc(o.captainName||'')}</span>
       </div>
       ${o.status==='cancelled'?`<div class="oinfo" style="color:#e11d48">❌ ${esc(o.cancelReason||'')}${o.cancelNote?' — '+esc(o.cancelNote):''}</div>`:''}
@@ -2714,7 +2717,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=29"></script>
+<script src="pos-pro.js?v=30"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
