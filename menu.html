@@ -207,6 +207,7 @@ function modes() {
   return ['pickup', 'delivery'].filter((k) => m[k]);
 }
 const canOrder = () => modes().length > 0;
+const viewOnly = () => !!(M && M.on && !['table', 'pickup', 'delivery'].some((k) => (M.modes || {})[k]));
 
 // ── تحميل المنيو (مباشر: أي تغيير بالكاشير يوصل فوراً) ──
 function start() {
@@ -234,6 +235,8 @@ function renderMenu() {
   $('state').hidden = true; $('menuView').hidden = false;
   const b = [];
   if (!M.on) b.push('<div class="banner warn">⏸️ المطعم مو مستقبل طلبات أونلاين هسه — تگدر تتصفح المنيو</div>');
+  // «عرض المنيو بس»: المطعم شغّل المنيو بدون طلب — الزبون يتصفح والمتوفر يبين
+  else if (viewOnly()) b.push('<div class="banner">📖 هذا منيو المطعم — الأصناف المتوفرة هسه. للطلب كلّم الكاشير أو الويتر 🙌</div>');
   else if (!canOrder()) b.push(`<div class="banner warn">${M.modes && M.modes.table ? '🪑 حتى تطلب، امسح كود الطاولة' : '⏸️ الطلب الأونلاين متوقف هسه'}</div>`);
   if (M.note) b.push(`<div class="banner">📢 ${esc(M.note)}</div>`);
   $('banners').innerHTML = b.join('');
