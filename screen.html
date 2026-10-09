@@ -23,28 +23,29 @@ html,body{height:100%}
 body{font-family:var(--font);background:var(--bg);color:var(--text);overflow:hidden}
 button{font:inherit;color:inherit;cursor:pointer}
 .scr{height:100vh;height:100dvh;display:grid;grid-template-rows:auto 1fr auto}
-.top{display:flex;align-items:center;gap:14px;padding:14px clamp(16px,3vw,36px);border-bottom:1px solid var(--line)}
-.top .nm{font-family:var(--kufi);font-size:clamp(20px,2.6vw,36px);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.top .clk{font-family:var(--num);font-weight:600;font-size:clamp(18px,2.2vw,30px);color:var(--muted)}
+.top{display:flex;align-items:center;gap:14px;padding:14px 24px;padding:14px clamp(16px,3vw,36px);border-bottom:1px solid var(--line)}
+.top .nm{font-family:var(--kufi);font-size:33px;font-size:clamp(20px,2.6vw,36px);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .clk{font-family:var(--num);font-weight:600;font-size:28px;font-size:clamp(18px,2.2vw,30px);color:var(--muted)}
 .ib{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:8px 12px;font-size:16px}
 .cols{display:grid;grid-template-columns:1fr 1.35fr;min-height:0}
-.col{padding:clamp(14px,2.4vw,32px);min-height:0;overflow:hidden;display:flex;flex-direction:column}
-.col h2{font-size:clamp(20px,2.6vw,38px);font-weight:700;margin-bottom:clamp(10px,1.6vw,22px);display:flex;align-items:center;gap:10px}
+.col{padding:31px;padding:clamp(14px,2.4vw,32px);min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.col h2{font-size:33px;font-size:clamp(20px,2.6vw,38px);font-weight:700;margin-bottom:20px;margin-bottom:clamp(10px,1.6vw,22px);display:flex;align-items:center;gap:10px}
 .col h2 small{font-family:var(--num);font-size:.6em;color:var(--muted);font-weight:600}
 .prep{border-inline-start:1px solid var(--line)}
 .prep h2{color:var(--muted)}
 .ready h2{color:var(--neon)}
-.nums{display:flex;flex-wrap:wrap;align-content:flex-start;gap:clamp(8px,1.2vw,16px);overflow:hidden}
-.n{font-family:var(--num);font-weight:800;border-radius:clamp(12px,1.4vw,22px);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
-.prep .n{background:var(--card);border:1px solid var(--line);color:var(--text);font-size:clamp(26px,3.6vw,60px);min-width:clamp(80px,9vw,160px);padding:clamp(10px,1.2vw,18px) clamp(12px,1.4vw,22px)}
-.ready .n{background:var(--neon);color:var(--ink);font-size:clamp(44px,7vw,130px);min-width:clamp(120px,15vw,280px);padding:clamp(14px,1.8vw,28px) clamp(16px,2vw,32px)}
-.n .pg{font-family:var(--font);font-size:clamp(12px,1.1vw,20px);font-weight:700;margin-top:6px;opacity:.75}
+.nums{display:flex;flex-wrap:wrap;align-content:flex-start;overflow:hidden;margin-left:-12px}
+.nums>*{margin:0 0 12px 12px}
+.n{font-family:var(--num);font-weight:800;border-radius:18px;border-radius:clamp(12px,1.4vw,22px);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.prep .n{background:var(--card);border:1px solid var(--line);color:var(--text);font-size:46px;font-size:clamp(26px,3.6vw,60px);min-width:115px;min-width:clamp(80px,9vw,160px);padding:15px;padding:clamp(10px,1.2vw,18px) clamp(12px,1.4vw,22px)}
+.ready .n{background:var(--neon);color:var(--ink);font-size:90px;font-size:clamp(44px,7vw,130px);min-width:192px;min-width:clamp(120px,15vw,280px);padding:23px;padding:clamp(14px,1.8vw,28px) clamp(16px,2vw,32px)}
+.n .pg{font-family:var(--font);font-size:14px;font-size:clamp(12px,1.1vw,20px);font-weight:700;margin-top:6px;opacity:.75}
 .ready .n.new{animation:pop 1s ease-in-out 6}
 @keyframes pop{50%{transform:scale(1.08);box-shadow:0 0 0 12px rgba(61,240,139,.25)}}
-.empty{color:var(--muted);font-size:clamp(16px,1.8vw,26px);margin-top:10px}
-.foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px clamp(16px,3vw,36px);border-top:1px solid var(--line);color:var(--muted);font-size:clamp(12px,1.2vw,17px)}
+.empty{color:var(--muted);font-size:23px;font-size:clamp(16px,1.8vw,26px);margin-top:10px}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 24px;padding:10px clamp(16px,3vw,36px);border-top:1px solid var(--line);color:var(--muted);font-size:15px;font-size:clamp(12px,1.2vw,17px)}
 .foot b{color:var(--neon)}
-.hint{position:fixed;inset:auto 50% 70px auto;transform:translateX(50%);background:var(--saf);color:var(--ink);border:none;border-radius:14px;padding:12px 18px;font-weight:700;font-size:16px;z-index:20}
+.hint{position:fixed;right:50%;bottom:70px;transform:translateX(50%);background:var(--saf);color:var(--ink);border:none;border-radius:14px;padding:12px 18px;font-weight:700;font-size:16px;z-index:20}
 @media (max-width:700px){body{overflow:auto}.scr{height:auto;min-height:100vh}.cols{grid-template-columns:1fr}.ready{order:-1}.prep{border-inline-start:none;border-top:1px solid var(--line)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
@@ -70,7 +71,11 @@ button{font:inherit;color:inherit;cursor:pointer}
 <script type="module">
 import { db, staffGate, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc, getDoc } from './staff.js';
 document.getElementById('gateCss').textContent = GATE_CSS;
+window.__scrOk = true;   // تطبيق «سرعة — الشاشة» يتأكد إن الصفحة اشتغلت (وإلا يطلب تحديث محرك الإنترنت)
 const $ = (id) => document.getElementById(id);
+// داخل تطبيق التلفزيون: ملء الشاشة من التطبيق، والصوت مسموح بدون لمس
+const inApp = /SoraScreenApp/.test(navigator.userAgent);
+if (inApp) document.getElementById('fsBtn').hidden = true;
 const P = new URLSearchParams(location.search);
 if (P.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
 const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
@@ -143,7 +148,10 @@ function soundUi() {
 }
 $('sndBtn').onclick = () => { sound = !sound; ls.set('scr_sound', sound); if (sound) chime(); soundUi(); };
 $('hint').onclick = () => { chime(); soundUi(); };
-document.addEventListener('click', () => { if (sound && (!audio || audio.state !== 'running')) { chime(); setTimeout(soundUi, 300); } }, { once: false });
+const unlock = () => { if (sound && (!audio || audio.state !== 'running')) { chime(); setTimeout(soundUi, 300); } };
+document.addEventListener('click', unlock);
+document.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') unlock(); });   // زر OK بالريموت
+if (inApp) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); audio.resume().then(() => soundUi(), () => {}); } catch (e) {} }
 $('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else d.documentElement.requestFullscreen && d.documentElement.requestFullscreen().catch(() => {}); };
 
 // الشاشة تبقى شغالة (ما تطفي)
