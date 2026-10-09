@@ -1,0 +1,44 @@
+# مجلد الفلاشة: كل تطبيقات سرعة بملف zip واحد مرتّب (الكاشير للويندوز + تطبيقات الأندرويد + الدليل + الروابط)
+#   رابط ثابت: releases/download/flash-kit/sora3a-apps.zip
+#   ينبني من جديد وحده بعد كل تحديث لتطبيقات الأندرويد أو برنامج الكاشير، أو يدوياً من Actions
+name: Flash kit
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Android cashier app', 'Desktop cashier app']
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  kit:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the apps
+        run: |
+          D='سرعة - التطبيقات'
+          W="$D/1 - الكاشير للابتوب (ويندوز)"; A="$D/2 - تطبيقات الأندرويد"
+          mkdir -p "$W" "$A" "$D/3 - روابط تنفتح من المتصفح"
+          GH=https://github.com/qaesartools-web
+          get() { curl -sSfL --retry 3 -o "$2" "$1"; }
+          get "$GH/sora3a-rest2/releases/latest/download/sora3a-cashier-setup.exe" "$W/سرعة - الكاشير (ويندوز).exe"
+          get "$GH/sora3a-captain/releases/latest/download/sora3a-captain.apk" "$A/سرعة - الكابتن.apk"
+          get "$GH/sora3a-rest2/releases/download/cashier-android/sora3a-cashier.apk" "$A/سرعة - الكاشير (أندرويد).apk"
+          get "$GH/sora3a-rest2/releases/download/line-android/sora3a-line.apk" "$A/سرعة - خط المطعم.apk"
+          get "$GH/sora3a-rest2/releases/download/screen-android/sora3a-screen.apk" "$A/سرعة - الشاشة (للتيفي).apk"
+          ls -la "$W" "$A"
+      - run: node tools/flash-kit/build.cjs 'سرعة - التطبيقات'
+      - run: python3 tools/flash-kit/zip.py 'سرعة - التطبيقات' sora3a-apps.zip
+      - name: Publish (fixed tag, not latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: flash-kit
+          name: كل تطبيقات سرعة (للفلاشة)
+          make_latest: false
+          body: مجلد واحد مرتّب بكل التطبيقات — نزّل sora3a-apps.zip، فكّه وانسخ المجلد للفلاشة، وافتح «اقرأني أولاً». ينبني من جديد وحده مع كل تحديث.
+          files: sora3a-apps.zip
