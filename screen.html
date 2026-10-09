@@ -81,14 +81,17 @@ if (P.get('theme') === 'light') document.documentElement.dataset.theme = 'light'
 const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 
 let orders = [], unsub = null, rid = '', day = '', first = true, sound = ls.get('scr_sound', true), audio = null;
+// شنو يطلع على الشاشة (يحدده المطعم من إعدادات الكاشير): السفري والبيجر دائماً
+let scr = { salon: true, delivery: false }, unsubSet = null;
 const seenReady = new Set(), fresh = new Map();   // fresh: رقم ← وقت صار جاهز (للوميض)
 const READY_KEEP = 20 * 60000;
 
-// أي طلب يطلع على الشاشة؟ الزبون اللي ينتظر بالمطعم: السفري، والصالة اللي وياها بيجر
+// أي طلب يطلع على الشاشة؟ السفري والبيجر دائماً، والصالة بدون بيجر والدلفري حسب إعدادات المطعم
 function where_(o) {
   if (o.status === 'cancelled' || Date.now() - (o.createdAtMs || 0) > 12 * 3600000) return null;
-  const t = o.orderType || (o.captainId ? 'delivery' : 'delivery');
-  if (t === 'delivery' || (t === 'salon' && !o.pager)) return null;
+  const t = o.orderType || 'delivery';
+  if (t === 'delivery' && (!scr.delivery || ['pickup', 'delivering', 'delivered'].includes(o.status))) return null;   // استلمه الكابتن
+  if (t === 'salon' && !o.pager && !scr.salon) return null;
   if (o.servedAtMs || o.pagerDone || (o.held && o.status === 'delivered')) return null;
   if (o.kitchen === 'ready' || o.status === 'ready') {
     const at = o.kitchenReadyAt || o.readyAt || 0;
@@ -194,12 +197,20 @@ staffGate($('gate'), {
   title: 'شاشة «طلبك جاهز»', sub: 'افتحها على تلفزيون أو تابلت قدام الزبائن — سجّل دخول بحساب المطعم',
   onIn: async (u) => {
     rid = u.rid; first = true; seenReady.clear();
-    let name = u.rest.name || '';
-    try { const s = await getDoc(doc(db, 'restaurants', rid, 'settings', 'main')); if (s.exists() && s.data().receiptTitle) name = s.data().receiptTitle; } catch (e) {}
-    $('nm').textContent = name; document.title = 'طلبك جاهز — ' + name;
+    const name0 = u.rest.name || '';
+    $('nm').textContent = name0; document.title = 'طلبك جاهز — ' + name0;
+    // الإعدادات مباشرة: أي تغيير من الكاشير ينطبق على الشاشة فوراً
+    if (unsubSet) unsubSet();
+    unsubSet = onSnapshot(doc(db, 'restaurants', rid, 'settings', 'main'), (s) => {
+      const d = s.exists() ? s.data() : {};
+      scr = { salon: true, delivery: false, ...(d.screen || {}) };
+      const name = d.receiptTitle || name0;
+      $('nm').textContent = name; document.title = 'طلبك جاهز — ' + name;
+      render();
+    }, () => {});
     $('scr').hidden = false; clock(); soundUi(); keepOn(); listen();
   },
-  onOut: () => { if (unsub) { unsub(); unsub = null; } rid = ''; $('scr').hidden = true; $('hint').hidden = true; },
+  onOut: () => { if (unsub) { unsub(); unsub = null; } if (unsubSet) { unsubSet(); unsubSet = null; } rid = ''; $('scr').hidden = true; $('hint').hidden = true; },
 });
 </script>
 </body>
