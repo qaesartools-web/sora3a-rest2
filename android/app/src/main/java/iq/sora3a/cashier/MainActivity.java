@@ -73,6 +73,11 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
                 Uri u = req.getUrl();
+                // الشاشة: زر «يفتح وحده مع التلفزيون» بقائمة ⚙️
+                if (BuildConfig.SCREEN && "sora3a".equals(u.getScheme())) {
+                    if ("autostart".equals(u.getHost())) { setAutoStart("1".equals(u.getQueryParameter("on"))); pushAuto(); }
+                    return true;
+                }
                 if ("https".equals(u.getScheme()) && "qaesartools-web.github.io".equals(u.getHost())) return false;
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (ActivityNotFoundException ignored) {}
                 return true;
@@ -81,7 +86,7 @@ public class MainActivity extends Activity {
                 pageUrl = url == null ? "" : url;
                 if (!BuildConfig.SCREEN && !early && pageOriginOk()) v.evaluateJavascript(Bridge.SHIM, null);
             }
-            @Override public void onPageFinished(WebView v, String url) { if (BuildConfig.SCREEN) checkPageWorks(); }
+            @Override public void onPageFinished(WebView v, String url) { if (BuildConfig.SCREEN) { checkPageWorks(); pushAuto(); } }
             @Override public void doUpdateVisitedHistory(WebView v, String url, boolean reload) { pageUrl = url == null ? "" : url; }
             @Override public void onReceivedError(WebView v, WebResourceRequest req, WebResourceError err) {
                 if (req.isForMainFrame()) v.loadDataWithBaseURL(null, OFFLINE, "text/html", "utf-8", null);
@@ -91,6 +96,7 @@ public class MainActivity extends Activity {
         if (BuildConfig.SCREEN) {
             if (webViewMajor() > 0 && webViewMajor() < MIN_WEBVIEW) webViewTooOld();
             web.postDelayed(this::askAutoStart, 4000);
+            ScreenWatch.sync(this, false);
         }
     }
 
@@ -173,6 +179,7 @@ public class MainActivity extends Activity {
     boolean autoStartOn() { return appPrefs().getBoolean("autoStart", true) && (Build.VERSION.SDK_INT < 29 || overlayOk()); }
     boolean setAutoStart(boolean on) {
         appPrefs().edit().putBoolean("autoStart", on).apply();
+        ScreenWatch.sync(this, false);
         if (on && Build.VERSION.SDK_INT >= 29 && !overlayOk()) openPerm("overlay");
         return autoStartOn();
     }
@@ -223,7 +230,13 @@ public class MainActivity extends Activity {
     private void notifyPage() {
         if (web != null && pageOriginOk()) web.evaluateJavascript("window.dispatchEvent(new Event('sora:resume'))", null);
     }
-    @Override protected void onResume() { super.onResume(); notifyPage(); }
+    @Override protected void onResume() { super.onResume(); notifyPage(); if (BuildConfig.SCREEN) pushAuto(); }
+    // الشاشة: نبلّغ الصفحة هل «يفتح وحده مع التلفزيون» شغّال (يطلع بقائمة ⚙️)
+    private void pushAuto() {
+        if (web == null || !pageUrl.startsWith(START_URL)) return;
+        boolean on = autoStartOn();
+        web.evaluateJavascript("window.__autoState=" + on + ";window.__setAuto&&window.__setAuto(" + on + ")", null);
+    }
     @Override public void onRequestPermissionsResult(int req, String[] perms, int[] res) { super.onRequestPermissionsResult(req, perms, res); notifyPage(); }
 
     @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); web.saveState(out); }

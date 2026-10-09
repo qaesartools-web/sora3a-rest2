@@ -25,12 +25,16 @@ const ERR = { 'auth/invalid-credential': 'الإيميل أو الرمز غلط'
   'auth/too-many-requests': 'محاولات كثيرة — انتظر شوية وجرّب', 'auth/network-request-failed': 'ماكو إنترنت' };
 
 // el: مكان نموذج الدخول — onIn({uid, role, name, rid, rest}) / onOut()
-export function staffGate(el, { title, sub, onIn, onOut }) {
+// remember: يحفظ آخر إيميل دخل بيه على هذا الجهاز (التلفزيون: بس يكتب الرمز بالريموت)
+const EMAIL_KEY = 'sora3a_staff_email';
+const lastEmail = () => { try { return localStorage.getItem(EMAIL_KEY) || ''; } catch (e) { return ''; } };
+export function staffGate(el, { title, sub, onIn, onOut, remember }) {
   let busy = false;
   const form = (msg) => {
+    const saved = remember ? lastEmail() : '';
     el.hidden = false;
     el.innerHTML = `<form class="gate-f" autocomplete="on"><div class="gate-logo">س</div><h1>${esc(title)}</h1><p>${esc(sub || 'سجّل دخول بحساب المطعم أو حساب الكاشير')}</p>
-      <input class="gate-i" id="gEmail" type="email" inputmode="email" dir="ltr" placeholder="الإيميل" autocomplete="username" required>
+      <input class="gate-i" id="gEmail" type="email" inputmode="email" dir="ltr" placeholder="الإيميل" autocomplete="username" value="${esc(saved)}" required>
       <input class="gate-i" id="gPass" type="password" dir="ltr" placeholder="الرمز" autocomplete="current-password" required>
       <button class="gate-b" id="gGo" type="submit">دخول</button><div class="gate-e" id="gErr">${esc(msg || '')}</div></form>`;
     // ريموت التلفزيون: ⬆️⬇️ تتنقل بين الخانات، و OK يكتب أو يدخل
@@ -40,7 +44,7 @@ export function staffGate(el, { title, sub, onIn, onOut }) {
       if (!d || i < 0) return;
       e.preventDefault(); keys[Math.max(0, Math.min(keys.length - 1, i + d))].focus();
     });
-    setTimeout(() => { try { keys[0].focus(); } catch (e) {} }, 300);
+    setTimeout(() => { try { keys[saved ? 1 : 0].focus(); } catch (e) {} }, 300);
     el.querySelector('form').onsubmit = async (e) => {
       e.preventDefault(); if (busy) return; busy = true;
       el.querySelector('#gGo').textContent = '⏳ …'; el.querySelector('#gErr').textContent = '';
@@ -67,6 +71,7 @@ export function staffGate(el, { title, sub, onIn, onOut }) {
         let saved = null; try { saved = localStorage.getItem('pos_branch_' + user.uid); } catch (e) {}
         if (saved && d.branches.includes(saved)) rid = saved;
       }
+      if (remember && user.email) { try { localStorage.setItem(EMAIL_KEY, user.email); } catch (e) {} }
       const r = await getDoc(doc(db, 'restaurants', rid));
       el.hidden = true; el.innerHTML = '';
       onIn({ uid: user.uid, role: d.role, name: d.name || '', rid, rest: r.exists() ? r.data() : {} });
