@@ -118,6 +118,13 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 .menu .hintk{font-size:12px;color:var(--muted);padding:10px 8px 2px;line-height:1.7}
 .hint{position:fixed;right:50%;bottom:80px;transform:translateX(50%);background:#fff;color:var(--odk);border:none;border-radius:16px;padding:13px 20px;font-weight:700;font-size:16px;z-index:20;box-shadow:0 14px 40px rgba(90,30,0,.4)}
 
+/* الخدمة موقوفة من الإدارة */
+.off{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;padding:20px;z-index:40}
+.off-c{background:#fff;border-radius:30px;padding:34px 30px;text-align:center;max-width:600px;box-shadow:0 30px 60px -30px rgba(90,30,0,.6)}
+.off-c b{display:block;font-size:56px;line-height:1.2}
+.off-c h1{font-family:var(--kufi);font-size:30px;color:var(--o3);margin:10px 0 8px}
+.off-c p{color:var(--muted);font-size:18px;line-height:1.8}
+.off-c button{margin-top:18px;border:1px solid var(--line);background:var(--card2);border-radius:14px;padding:12px 22px;font-size:17px;font-weight:700}
 @media (max-width:760px){
   body{overflow:auto}.scr{height:auto;min-height:100vh}
   .cols{flex-direction:column}.prep{margin:16px 0 0}.ready .n.feat{font-size:96px}
@@ -154,6 +161,7 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
   </main>
   <footer class="foot"><span class="tip"><i>🧾</i>رقم طلبك على الفاتورة أو البيجر — أول ما يطلع بـ«جاهز» تفضل استلمه</span><span>مدعوم من <b>سرعة</b></span></footer>
 </div>
+<div class="off" id="off" hidden><div class="off-c"><b>⛔</b><h1>خدمة الشاشة موقوفة لهذا المطعم</h1><p>تواصل ويا إدارة سرعة حتى يفعّلونها — وأول ما تتفعّل ترجع الشاشة تشتغل وحدها.</p><button type="button" id="offOut">🚪 تسجيل خروج</button></div></div>
 <div class="menu" id="menu" hidden role="dialog" aria-label="الإعدادات">
   <div class="mt">⚙️ إعدادات الشاشة</div>
   <button type="button" id="mSnd"></button>
@@ -179,6 +187,9 @@ const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSO
 let orders = [], unsub = null, rid = '', day = '', first = true, sound = ls.get('scr_sound', true), audio = null;
 // شنو يطلع على الشاشة (يحدده المطعم من إعدادات الكاشير): السفري والبيجر دائماً
 let scr = { salon: true, delivery: false, qr: true }, unsubSet = null, pm = null, unsubPm = null, qrUrl = '';
+// خدمات المطعم (يشغّلها أو يوقفها المدير الأعلى): الشاشة نفسها، والباركود (كود المنيو بالزاوية)
+let feats = {}, unsubRest = null;
+const svcOn = () => feats.screen !== false;
 const seenReady = new Set(), fresh = new Map();   // fresh: رقم ← وقت صار جاهز (للوميض)
 const READY_KEEP = 20 * 60000;
 const TYPE = { takeaway: 'سفري', salon: 'صالة', delivery: 'دلفري' };
@@ -226,7 +237,7 @@ function loadQR() {
   return new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js'; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
 }
 async function qrUi() {
-  const show = !!(rid && pm && pm.on && scr.qr !== false);
+  const show = !!(rid && pm && pm.on && scr.qr !== false && feats.online !== false);
   $('qrBox').hidden = !show;
   if (!show) return;
   const view = !['table', 'pickup', 'delivery'].some((k) => (pm.modes || {})[k]);
@@ -267,11 +278,11 @@ function speak(nums) {
     u.voice = v; u.lang = v.lang; u.rate = .9; s.speak(u);
   } catch (e) {}
 }
-function announce(nums) { if (!sound) return; chime(); setTimeout(() => speak(nums), 700); }
+function announce(nums) { if (!sound || !svcOn()) return; chime(); setTimeout(() => speak(nums), 700); }
 function soundUi() {
   $('sndIco').textContent = sound ? '🔊' : '🔇';
   $('mSnd').textContent = sound ? '🔊 صوت التنبيه: يشتغل' : '🔇 صوت التنبيه: مطفي';
-  $('hint').hidden = !sound || !!(audio && audio.state === 'running');
+  $('hint').hidden = !sound || !svcOn() || !!(audio && audio.state === 'running');
 }
 $('hint').onclick = () => { chime(); soundUi(); };
 const unlock = () => { if (sound && (!audio || audio.state !== 'running')) { chime(); setTimeout(soundUi, 300); } };
@@ -360,6 +371,15 @@ setInterval(() => { clock(); if (rid) { if (bagDay() !== day) listen(); else ren
   }, 60000);
 })();
 
+// الخدمة مطفية ← نخفي الشاشة ونطلّع رسالة؛ ترجع وحدها أول ما تتفعّل
+function svcUi() {
+  const on = svcOn();
+  $('scr').hidden = !rid || !on; $('off').hidden = !rid || on;
+  if (!on) { menu.hidden = true; $('hint').hidden = true; setTimeout(() => { try { $('offOut').focus(); } catch (e) {} }, 100); }
+  else soundUi();
+  qrUi();
+}
+$('offOut').onclick = () => logout();
 function setName(name) {
   $('nm').textContent = name; document.title = 'طلبك جاهز — ' + name;
   // حرف الشعار: أول حرف من الاسم بدون «مطعم/كافيه…» وبدون «ال»
@@ -383,10 +403,14 @@ staffGate($('gate'), {
     // المنيو العام (مفتوح للكل بالمعرّف): هل المنيو الأونلاين شغّال؟ وبيه طلب لو عرض بس؟
     if (unsubPm) unsubPm();
     unsubPm = onSnapshot(doc(db, 'publicMenus', rid), (s) => { pm = s.exists() ? s.data() : null; qrUi(); }, () => { pm = null; qrUi(); });
-    $('scr').hidden = false; clock(); soundUi(); keepOn(); listen();
+    feats = (u.rest && u.rest.features) || {};
+    if (unsubRest) unsubRest();
+    unsubRest = onSnapshot(doc(db, 'restaurants', rid), (s) => { feats = (s.exists() && s.data().features) || {}; svcUi(); }, () => {});
+    svcUi(); clock(); keepOn(); listen();
   },
   onOut: () => {
-    if (unsub) { unsub(); unsub = null; } if (unsubSet) { unsubSet(); unsubSet = null; } if (unsubPm) { unsubPm(); unsubPm = null; }
+    if (unsub) { unsub(); unsub = null; } if (unsubSet) { unsubSet(); unsubSet = null; } if (unsubPm) { unsubPm(); unsubPm = null; } if (unsubRest) { unsubRest(); unsubRest = null; }
+    feats = {}; $('off').hidden = true;
     pm = null; qrUrl = ''; $('qrBox').hidden = true;
     rid = ''; orders = []; $('scr').hidden = true; $('hint').hidden = true; menu.hidden = true;
   },
