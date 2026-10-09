@@ -862,6 +862,7 @@
         <div class="ac-sub" style="margin-bottom:6px;line-height:1.8">شنو يطلع على شاشة التلفزيون؟ طلبات السفري والطلبات اللي وياها بيجر تطلع دائماً.</div>
         <label class="set-check"><input type="checkbox" id="stScrSalon" ${scrCfg().salon ? 'checked' : ''}> 🪑 طلبات الصالة حتى بدون بيجر</label>
         <label class="set-check"><input type="checkbox" id="stScrDel" ${scrCfg().delivery ? 'checked' : ''}> 🏍️ طلبات الدلفري (لحد ما يستلمها الكابتن)</label>
+        <label class="set-check"><input type="checkbox" id="stScrQr" ${scrCfg().qr ? 'checked' : ''}> 📱 كود المنيو بزاوية الشاشة — الزبون يمسحه من مكانه (إذا المنيو الأونلاين شغّال)</label>
       </div>
       <div class="sh-card"><div class="sh-title">💰 الأسعار والضرائب</div>
         <div class="set-row"><div><div class="flbl">ضريبة ٪ (0 = بدون)</div><input class="finp" id="stTax" type="number" min="0" max="50" value="${s.taxPct || 0}"></div>
@@ -900,8 +901,8 @@
     };
     const onBefore = JSON.stringify(onlineCfg()), online = readOnlineForm();
     if (online) next.online = online;
-    next.screen = $('stScrSalon') ? { salon: $('stScrSalon').checked, delivery: $('stScrDel').checked } : scrCfg();
-    if (online && online.on && !online.table && !online.pickup && !online.delivery) { toast('⚠️ اختار طريقة طلب وحدة على الأقل للمنيو الأونلاين'); return; }
+    next.screen = $('stScrSalon') ? { salon: $('stScrSalon').checked, delivery: $('stScrDel').checked, qr: $('stScrQr').checked } : scrCfg();
+    if (online && online.on && !online.viewOnly && !online.table && !online.pickup && !online.delivery) { toast('⚠️ اختار طريقة طلب وحدة على الأقل، أو «عرض المنيو بس»'); return; }
     settings = { ...DEFAULTS, ...next };
     lsSet(setKey(), settings);
     // إعدادات الطابعات خاصة بهذا الجهاز (لا تُرفع للسحابة)
@@ -1802,10 +1803,10 @@
   // الزبون يمسح QR الطاولة أو يفتح رابط المطعم من البيت ويطلب (menu.html) — الطلب يوصل هنا فوراً وينطبع بالمطبخ.
   // المنيو المنشور نسخة عامة بدون كلفة ولا مخزون (publicMenus/{rid})، والطلبات بـ webOrders، والأسعار دائماً من منيو الكاشير.
   const SITE = /^https?:$/.test(location.protocol) ? new URL('./', location.href.split(/[?#]/)[0]).href : 'https://qaesartools-web.github.io/sora3a-rest2/';
-  const ONLINE_DEF = { on: false, table: true, pickup: true, delivery: false, autoTable: false, note: '' };
+  const ONLINE_DEF = { on: false, viewOnly: false, table: true, pickup: true, delivery: false, autoTable: false, note: '' };
   const onlineCfg = () => ({ ...ONLINE_DEF, ...(settings.online || {}) });
   // شاشة «طلبك جاهز»: الصالة بدون بيجر تطلع افتراضياً، والدلفري لا
-  const scrCfg = () => ({ salon: true, delivery: false, ...(settings.screen || {}) });
+  const scrCfg = () => ({ salon: true, delivery: false, qr: true, ...(settings.screen || {}) });
   const onlineOk = () => feat('online') && onlineCfg().on;
   const menuLink = (t) => SITE + 'menu.html?r=' + encodeURIComponent(rid() || '') + (t ? '&t=' + encodeURIComponent(t) : '');
   window.menuLink = menuLink;
@@ -1831,7 +1832,8 @@
     return {
       name: String(settings.receiptTitle || restData.name || '').slice(0, 80), area: String(settings.receiptSub || restData.area || '').slice(0, 120),
       phone: String(settings.receiptPhone || restData.phone || '').slice(0, 30), on: !!oc.on && feat('online'),
-      modes: { table: !!oc.table, pickup: !!oc.pickup, delivery: !!oc.delivery && feat('captain') },
+      // «عرض المنيو بس»: الزبون يتصفح والمتوفر يبين، بدون طلب (كل طرق الطلب مطفية)
+      modes: oc.viewOnly ? { table: false, pickup: false, delivery: false } : { table: !!oc.table, pickup: !!oc.pickup, delivery: !!oc.delivery && feat('captain') },
       fee: Number(settings.defaultFee) || 0, tables: Number(settings.tables) || 0, note: String(oc.note || '').slice(0, 300), autoTable: !!oc.autoTable, cats,
     };
   }
@@ -2039,6 +2041,7 @@
       <label class="set-check"><input type="checkbox" id="stOnPickup" ${oc.pickup ? 'checked' : ''}> 🛍️ يطلب ويستلم من المطعم</label>
       <label class="set-check"${dl ? '' : ' style="opacity:.55"'}><input type="checkbox" id="stOnDeliv" ${oc.delivery && dl ? 'checked' : ''} ${dl ? '' : 'disabled'}> 🏍️ توصيل للبيت ${dl ? '(ينرسل لكل الكباتن)' : '— يحتاج خدمة الكابتن'}</label>
       <label class="set-check"><input type="checkbox" id="stOnAuto" ${oc.autoTable ? 'checked' : ''}> ⚡ طلبات الطاولات تدخل للمطبخ مباشرة بدون تأكيد</label>
+      <label class="set-check"><input type="checkbox" id="stOnView" ${oc.viewOnly ? 'checked' : ''}> 📖 <b>عرض المنيو بس</b> — الزبون يشوف الأصناف والمتوفر بدون ما يطلب (يطلب من الكاشير أو الويتر)</label>
       <div class="flbl">ملاحظة تظهر للزبون (اختياري)</div><input class="finp" id="stOnNote" maxlength="300" value="${esc(oc.note || '')}" placeholder="مثال: التوصيل من ١٢ الظهر لحد ١٢ بالليل">
       <label class="set-check" style="margin-top:8px"><input type="checkbox" id="stOnDev" ${webAutoDev() ? 'checked' : ''}> 🖨️ هذا الجهاز يقبل الطلبات التلقائية ويطبعها (خليها على جهاز الكاشير بس)</label>
       <div class="on-link"><input class="finp" id="stOnLink" readonly dir="ltr" value="${esc(menuLink())}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink()">📋 نسخ</button><a class="btn-soft" href="${esc(menuLink())}" target="_blank" rel="noopener">👁️ فتح</a></div>
@@ -2052,7 +2055,7 @@
   function readOnlineForm() {
     if (!$('stOnOn')) return settings.online;
     if ($('stOnDev')) lsSet(webAutoKey(), $('stOnDev').checked);
-    return { on: $('stOnOn').checked, table: $('stOnTable').checked, pickup: $('stOnPickup').checked, delivery: $('stOnDeliv').checked && feat('captain'),
+    return { on: $('stOnOn').checked, viewOnly: $('stOnView').checked, table: $('stOnTable').checked, pickup: $('stOnPickup').checked, delivery: $('stOnDeliv').checked && feat('captain'),
       autoTable: $('stOnAuto').checked, note: $('stOnNote').value.trim().slice(0, 300) };
   }
   window.copyMenuLink = (link) => {
@@ -2071,8 +2074,9 @@
     try { await loadQR(); } catch (e) { toast('❌ تعذّر تحميل مولّد QR'); return; }
     const name = settings.receiptTitle || restData.name || '';
     const list = general ? [''] : Array.from({ length: n }, (_, i) => String(i + 1));
-    const cards = list.map((t) => `<div class="qc"><div class="qn">${esc(name)}</div><div class="qt">${t ? 'طاولة ' + toA(t) : 'اطلب أونلاين'}</div>${qrSvg(menuLink(t))}
-      <div class="qh">📱 وجّه كاميرا تلفونك على الكود واطلب</div><div class="qs">سرعة · sora3a</div></div>`).join('');
+    const view = onlineCfg().viewOnly;
+    const cards = list.map((t) => `<div class="qc"><div class="qn">${esc(name)}</div><div class="qt">${t ? 'طاولة ' + toA(t) : view ? 'المنيو' : 'اطلب أونلاين'}</div>${qrSvg(menuLink(t))}
+      <div class="qh">📱 وجّه كاميرا تلفونك على الكود ${view ? 'وشوف المنيو' : 'واطلب'}</div><div class="qs">سرعة · sora3a</div></div>`).join('');
     const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>QR — ${esc(name)}</title><style>@page{size:A4;margin:10mm}
       body{margin:0;font-family:Tajawal,Arial,sans-serif;color:#0A100D}.g{display:grid;grid-template-columns:repeat(2,1fr);gap:8mm}
       .qc{border:2px dashed #0A100D;border-radius:6mm;padding:6mm;text-align:center;break-inside:avoid;page-break-inside:avoid}

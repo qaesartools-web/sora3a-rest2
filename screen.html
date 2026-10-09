@@ -84,6 +84,12 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 .prep .n::before{content:'';position:absolute;bottom:0;right:0;left:0;height:4px;background:linear-gradient(90deg,transparent,var(--saf),transparent);background-size:200% 100%;animation:cook 2.4s linear infinite;opacity:.8}
 @keyframes cook{from{background-position:200% 0}to{background-position:-200% 0}}
 
+.qrbox{flex:none;display:flex;align-items:center;margin-top:12px;padding:14px;border-radius:22px;background:var(--card2);border:1px solid var(--line)}
+.qrc{flex:none;width:150px;height:150px;width:clamp(104px,11.5vw,190px);height:clamp(104px,11.5vw,190px);background:#fff;border-radius:16px;padding:9px}
+.qrc svg{width:100%;height:100%;display:block}
+.qrt{margin-inline-start:16px;min-width:0}
+.qrt b{display:block;font-family:var(--kufi);font-weight:700;font-size:22px;font-size:clamp(15px,1.8vw,30px);line-height:1.35;color:var(--text)}
+.qrt span{display:block;margin-top:6px;color:var(--muted);font-size:14px;font-size:clamp(11px,1.1vw,18px);line-height:1.6}
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;margin:0 0 0 14px;padding:30px 10px;color:var(--muted);font-size:20px;font-size:clamp(14px,1.7vw,28px);text-align:center}
 .empty b{font-size:54px;font-size:clamp(36px,5vw,84px);margin-bottom:10px;opacity:.85}
 
@@ -127,6 +133,7 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
     <section class="col prep">
       <div class="hd"><span class="badge">👨‍🍳</span><h2>قيد التحضير</h2><span class="cnt" id="ppN">0</span></div>
       <div class="nums" id="prep"></div>
+      <div class="qrbox" id="qrBox" hidden><div class="qrc" id="qrCode"></div><div class="qrt"><b id="qrT">📱 امسح الكود</b><span id="qrS"></span></div></div>
     </section>
   </main>
   <footer class="foot"><span class="tip"><i>🧾</i>رقم طلبك على الفاتورة أو البيجر — أول ما يصير أخضر تفضل استلمه</span><span>مدعوم من <b>سرعة</b></span></footer>
@@ -156,7 +163,7 @@ const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSO
 
 let orders = [], unsub = null, rid = '', day = '', first = true, sound = ls.get('scr_sound', true), audio = null;
 // شنو يطلع على الشاشة (يحدده المطعم من إعدادات الكاشير): السفري والبيجر دائماً
-let scr = { salon: true, delivery: false }, unsubSet = null;
+let scr = { salon: true, delivery: false, qr: true }, unsubSet = null, pm = null, unsubPm = null, qrUrl = '';
 const seenReady = new Set(), fresh = new Map();   // fresh: رقم ← وقت صار جاهز (للوميض)
 const READY_KEEP = 20 * 60000;
 const TYPE = { takeaway: 'سفري', salon: 'صالة', delivery: 'دلفري' };
@@ -196,6 +203,27 @@ function render() {
   $('prep').innerHTML = prep.map((o) => tile(o, '')).join('') || '<div class="empty"><b>👨‍🍳</b>لا توجد طلبات</div>';
   $('rdN').textContent = ready.length;
   $('ppN').textContent = prep.length;
+}
+
+// ── كود المنيو بزاوية الشاشة: الزبون بالصالة يمسحه ويشوف المنيو (أو يطلب) من تلفونه ──
+function loadQR() {
+  if (window.qrcode) return Promise.resolve();
+  return new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js'; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
+}
+async function qrUi() {
+  const show = !!(rid && pm && pm.on && scr.qr !== false);
+  $('qrBox').hidden = !show;
+  if (!show) return;
+  const view = !['table', 'pickup', 'delivery'].some((k) => (pm.modes || {})[k]);
+  $('qrT').textContent = view ? '📱 امسح الكود وشوف المنيو' : '📱 امسح الكود واطلب من تلفونك';
+  $('qrS').textContent = view ? 'الأصناف المتوفرة هسه — من كاميرا التلفون بدون تطبيق' : 'بدون تطبيق — وتابع طلبك لحد ما يصير رقمك أخضر هنا';
+  const url = new URL('menu.html?r=' + encodeURIComponent(rid), location.href.split(/[?#]/)[0]).href;
+  if (url === qrUrl) return;
+  try {
+    await loadQR();
+    const q = window.qrcode(0, 'M'); q.addData(url); q.make();
+    $('qrCode').innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); $('qrCode').dataset.url = qrUrl = url;
+  } catch (e) { $('qrBox').hidden = true; }
 }
 
 function listen() {
@@ -326,14 +354,18 @@ staffGate($('gate'), {
     if (unsubSet) unsubSet();
     unsubSet = onSnapshot(doc(db, 'restaurants', rid, 'settings', 'main'), (s) => {
       const d = s.exists() ? s.data() : {};
-      scr = { salon: true, delivery: false, ...(d.screen || {}) };
+      scr = { salon: true, delivery: false, qr: true, ...(d.screen || {}) };
       setName(d.receiptTitle || name0);
-      render();
+      render(); qrUi();
     }, () => {});
+    // المنيو العام (مفتوح للكل بالمعرّف): هل المنيو الأونلاين شغّال؟ وبيه طلب لو عرض بس؟
+    if (unsubPm) unsubPm();
+    unsubPm = onSnapshot(doc(db, 'publicMenus', rid), (s) => { pm = s.exists() ? s.data() : null; qrUi(); }, () => { pm = null; qrUi(); });
     $('scr').hidden = false; clock(); soundUi(); keepOn(); listen();
   },
   onOut: () => {
-    if (unsub) { unsub(); unsub = null; } if (unsubSet) { unsubSet(); unsubSet = null; }
+    if (unsub) { unsub(); unsub = null; } if (unsubSet) { unsubSet(); unsubSet = null; } if (unsubPm) { unsubPm(); unsubPm = null; }
+    pm = null; qrUrl = ''; $('qrBox').hidden = true;
     rid = ''; orders = []; $('scr').hidden = true; $('hint').hidden = true; menu.hidden = true;
   },
 });
