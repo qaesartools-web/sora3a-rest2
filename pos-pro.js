@@ -1041,6 +1041,7 @@
       const before = JSON.stringify(u.perms || {});
       u.perms = d.perms || {}; u.name = d.name || u.name;
       u.hours = d.hours && typeof d.hours.from === 'number' ? d.hours : null;
+      u.hoursExt = d.hoursExt && typeof d.hoursExt.untilMs === 'number' ? d.hoursExt : null;   // تمديد (من هذا الجهاز أو جهاز ثاني، أو صاحب المطعم لغاه)
       dutyCheck();
       if (before !== JSON.stringify(u.perms)) { applyPerms(); toast('🔄 تم تحديث صلاحياتك'); }
     }, () => {}));
@@ -1458,22 +1459,80 @@
     return h.from < h.to ? (n >= h.from && n < h.to) : (n >= h.from || n < h.to);
   }
   const minsLeft = (h) => ((h.to - bagNow()) + 1440) % 1440;
+  // ── تمديد الدوام: لما يخلص الوقت يطلع للكاشير «تمديد» (ساعة، ساعتين، ٣ ساعات، أو لنهاية اليوم) بدل ما يطلع مباشرة ──
+  const extUntil = (u) => (u.hoursExt && Number(u.hoursExt.untilMs)) || 0;
+  const extOn = (u) => extUntil(u) > Date.now();
+  const bagMinOf = (ms) => (Math.floor(ms / 60000) + 180) % 1440;
+  // نهاية اليوم بتوقيت بغداد: نص الليل (وإذا هسه بعد نص الليل: ٥ الصبح)
+  function endOfDayMs() {
+    const now = Date.now(), m = bagMinOf(now), target = m < 300 ? 300 : 1440;
+    return now - (now % 60000) + (target - m) * 60000;
+  }
+  // نفس شرط السيرفر: من نص ساعة قبل نهاية الدوام لحد ساعة بعدها، أو خلال تمديد (أو خلص قبل أقل من ساعة)
+  function canExtend(u) {
+    if (!u.hours) return false;
+    const e = u.hoursExt;
+    if (e && e.h === 'off' && Number(e.atMs) > Date.now() - 12 * 3600000) return false;   // صاحب المطعم لغى التمديد اليوم
+    const gap = (bagNow() - u.hours.to + 1440) % 1440;
+    return gap < 60 || gap >= 1410 || extUntil(u) > Date.now() - 3600000;
+  }
+  const dutyLeft = (u) => Math.max(onDutyNow(u.hours) ? minsLeft(u.hours) : 0, extOn(u) ? Math.ceil((extUntil(u) - Date.now()) / 60000) : 0);
+  let extAsk = false, extAskT = null;
   function dutyCheck() {
     const u = window.posUser; if (!u || u.role !== 'cashier' || !restData) return;
     const h = u.hours;
-    if (onDutyNow(h)) {
-      if (dutyLocked) { location.reload(); return; }       // بداية الدوام: تشغيل كامل من جديد
+    if (onDutyNow(h) || extOn(u)) {
+      if (dutyLocked) { location.reload(); return; }       // بداية الدوام أو تمدد: تشغيل كامل من جديد
+      if (extAsk) closeExtAsk();
       if (h) {
-        const left = minsLeft(h);
+        const left = dutyLeft(u);
         if (left <= 10 && dutyWarned !== 10 && left > 5) { dutyWarned = 10; toast('⏰ باقي ' + toA(left) + ' دقائق على نهاية دوامك — كمّل الطلبات المفتوحة'); }
-        if (left <= 5 && dutyWarned !== 5) { dutyWarned = 5; toast('⏰ باقي ' + toA(left) + ' دقائق — الوردية تُغلق وتنطبع تلقائياً'); }
+        if (left <= 5 && dutyWarned !== 5) { dutyWarned = 5; toast('⏰ باقي ' + toA(left) + ' دقائق — لما يخلص الوقت تكدر تمدد الدوام'); }
       }
       return;
     }
+    if (dutyLocked || extAsk) return;
+    // خلص الوقت: نسأله يمدد (السيرفر يسمح ١٥ دقيقة)، وإذا ما اختار شي ينقفل وحده
+    if (canExtend(u)) { askExtend(); return; }
+    endDuty();
+  }
+  function endDuty() {
+    closeExtAsk();
     if (dutyLocked) return;
     dutyLocked = true;
     dutyEndShift().finally(showDutyLock);
   }
+  window.dutyEndNow = endDuty;
+  const extBtns = () => {
+    const eod = endOfDayMs(), opts = [[1, '⏱️ ساعة'], [2, '⏱️ ساعتين'], [3, '⏱️ ٣ ساعات']].filter(([n]) => Date.now() + n * 3600000 < eod);
+    return `<div class="ext-grid">${opts.map(([n, l]) => `<button type="button" class="ext-b" onclick="dutyExtend(${n})">${l}</button>`).join('')}
+      <button type="button" class="ext-b eod" onclick="dutyExtend('day')">🌙 لنهاية اليوم <small>لغاية ${hm(bagMinOf(eod))}</small></button></div>`;
+  };
+  function askExtend() {
+    extAsk = true;
+    let el = $('extAsk');
+    if (!el) { el = document.createElement('div'); el.id = 'extAsk'; el.className = 'duty-lock'; document.body.appendChild(el); }
+    el.innerHTML = `<div class="duty-box"><div class="duty-i">⏰</div><b>خلص وقت دوامك</b>
+      <div class="duty-t">تريد تمدد الدوام؟</div>
+      ${extBtns()}
+      <button type="button" class="btn-soft" onclick="dutyEndNow()">🔒 إنهاء الدوام وإغلاق الوردية</button>
+      <div class="duty-s">إذا ما اخترت شي، الوردية تنغلق وحدها بعد ١٤ دقيقة</div></div>`;
+    el.classList.add('on');
+    clearTimeout(extAskT);
+    extAskT = setTimeout(() => { if (extAsk) endDuty(); }, 14 * 60000);
+  }
+  function closeExtAsk() { extAsk = false; clearTimeout(extAskT); const el = $('extAsk'); if (el) el.classList.remove('on'); }
+  window.dutyExtend = async (n) => {
+    const u = window.posUser; if (!u) return;
+    const untilMs = n === 'day' ? endOfDayMs() : Math.min(Date.now() + n * 3600000, endOfDayMs());
+    try {
+      await fb().updateDoc(fb().doc(fb().db, 'users', u.uid), { hoursExt: { untilMs, atMs: Date.now(), h: String(n) } });
+      u.hoursExt = { untilMs, atMs: Date.now(), h: String(n) };
+      dutyWarned = 0; closeExtAsk();
+      toast('✅ تمدد الدوام لغاية ' + hm(bagMinOf(untilMs)));
+      if (dutyLocked) setTimeout(() => location.reload(), 600);   // كان مقفول: يرجع يشتغل
+    } catch (e) { toast('⚠️ تعذّر التمديد' + (e && e.code === 'permission-denied' ? ' — انتهى وقت التمديد، كلّم صاحب المطعم' : ' — تأكد من الإنترنت')); }
+  };
   // نهاية الدوام: إغلاق وردية هذا الكاشير وطباعة فاتورة المبلغ الكلي
   async function dutyEndShift() {
     const u = window.posUser;
@@ -1498,6 +1557,7 @@
     el.innerHTML = `<div class="duty-box"><div class="duty-i">⏰</div><b>خارج وقت الدوام</b>
       <div class="duty-t">دوامك من ${hm(h.from)} إلى ${hm(h.to)}</div>
       <div class="duty-s">النظام يفتح تلقائياً عند بداية دوامك</div>
+      ${canExtend(window.posUser) ? `<div class="duty-t" style="margin-top:4px">أو مدّد الدوام:</div>${extBtns()}` : ''}
       ${closedShifts[0] && closedShifts[0].autoClosed && Date.now() - closedShifts[0].closedAtMs < 3600000 ? `<button type="button" class="btn-soft" onclick="shiftReprint('${esc(closedShifts[0].id)}')">🖨️ إعادة طباعة تقرير الوردية</button>` : ''}
       <button type="button" class="btn-main" onclick="dutyLogout()">🚪 تسجيل خروج</button></div>`;
     el.classList.add('on');
