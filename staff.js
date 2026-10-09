@@ -17,9 +17,9 @@ export const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistenc
 export const db = getFirestore(app);
 export const logout = () => signOut(auth);
 
-export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+export const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // يوم الطلب بتوقيت بغداد (نفس حقل day بطلبات الكاشير)
-export const bagDay = (ms) => new Date((ms ?? Date.now()) + 3 * 3600000).toISOString().slice(0, 10);
+export const bagDay = (ms) => new Date((ms == null ? Date.now() : ms) + 3 * 3600000).toISOString().slice(0, 10);
 
 const ERR = { 'auth/invalid-credential': 'الإيميل أو الرمز غلط', 'auth/wrong-password': 'الإيميل أو الرمز غلط', 'auth/user-not-found': 'الإيميل أو الرمز غلط',
   'auth/too-many-requests': 'محاولات كثيرة — انتظر شوية وجرّب', 'auth/network-request-failed': 'ماكو إنترنت' };
@@ -33,6 +33,14 @@ export function staffGate(el, { title, sub, onIn, onOut }) {
       <input class="gate-i" id="gEmail" type="email" inputmode="email" dir="ltr" placeholder="الإيميل" autocomplete="username" required>
       <input class="gate-i" id="gPass" type="password" dir="ltr" placeholder="الرمز" autocomplete="current-password" required>
       <button class="gate-b" id="gGo" type="submit">دخول</button><div class="gate-e" id="gErr">${esc(msg || '')}</div></form>`;
+    // ريموت التلفزيون: ⬆️⬇️ تتنقل بين الخانات، و OK يكتب أو يدخل
+    const keys = ['gEmail', 'gPass', 'gGo'].map((id) => el.querySelector('#' + id));
+    el.querySelector('form').addEventListener('keydown', (e) => {
+      const i = keys.indexOf(document.activeElement), d = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+      if (!d || i < 0) return;
+      e.preventDefault(); keys[Math.max(0, Math.min(keys.length - 1, i + d))].focus();
+    });
+    setTimeout(() => { try { keys[0].focus(); } catch (e) {} }, 300);
     el.querySelector('form').onsubmit = async (e) => {
       e.preventDefault(); if (busy) return; busy = true;
       el.querySelector('#gGo').textContent = '⏳ …'; el.querySelector('#gErr').textContent = '';
@@ -67,7 +75,7 @@ export function staffGate(el, { title, sub, onIn, onOut }) {
 }
 
 // أنماط نموذج الدخول (مشتركة)
-export const GATE_CSS = `.gate{position:fixed;inset:0;display:grid;place-items:center;padding:16px;z-index:100;background:var(--bg)}
+export const GATE_CSS = `.gate{position:fixed;top:0;right:0;bottom:0;left:0;display:grid;place-items:center;padding:16px;z-index:100;background:var(--bg)}
 .gate-f{width:min(380px,100%);background:var(--card);border:1px solid var(--line);border-radius:24px;padding:26px 22px;text-align:center}
 .gate-logo{width:56px;height:56px;margin:0 auto 10px;border-radius:16px;background:#0A100D;color:#3DF08B;display:grid;place-items:center;font-size:30px;font-weight:700}
 .gate-f h1{font-size:21px;margin-bottom:4px}.gate-f p{color:var(--muted);font-size:13.5px;margin-bottom:14px}

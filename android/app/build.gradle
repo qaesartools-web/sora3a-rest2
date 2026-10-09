@@ -11,20 +11,29 @@ android {
         versionName '1.' + (System.getenv('VERSION_CODE') ?: '0')
     }
     buildFeatures { buildConfig true }
-    // تطبيقين من نفس الكود: الكاشير (بيع + طباعة) وخط المطعم (يبعث رقم المتصل بس)
+    // ثلاث تطبيقات من نفس الكود: الكاشير (بيع + طباعة)، خط المطعم (يبعث رقم المتصل بس)، والشاشة (طلبك جاهز على التلفزيون)
     flavorDimensions 'app'
     productFlavors {
         cashier {
             dimension 'app'
             applicationId 'iq.sora3a.cashier'
             buildConfigField 'boolean', 'LINE', 'false'
+            buildConfigField 'boolean', 'SCREEN', 'false'
             buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/"'
         }
         line {
             dimension 'app'
             applicationId 'iq.sora3a.line'
             buildConfigField 'boolean', 'LINE', 'true'
+            buildConfigField 'boolean', 'SCREEN', 'false'
             buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/line.html"'
+        }
+        screen {
+            dimension 'app'
+            applicationId 'iq.sora3a.screen'
+            buildConfigField 'boolean', 'LINE', 'false'
+            buildConfigField 'boolean', 'SCREEN', 'true'
+            buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/screen.html"'
         }
     }
     signingConfigs {
