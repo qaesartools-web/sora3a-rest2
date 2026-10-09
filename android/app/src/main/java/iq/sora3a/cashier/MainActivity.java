@@ -95,7 +95,8 @@ public class MainActivity extends Activity {
     }
 
     // ── الشاشة: ملء الشاشة، محرك الإنترنت، والتشغيل مع الجهاز ──
-    private static final int MIN_WEBVIEW = 70;
+    // الصفحة تحتاج كروم 61 فما فوق (ES modules) — أندرويد 9 بالتلفزيونات يجي عادة بـ 66 أو أحدث
+    private static final int MIN_WEBVIEW = 61;
     private boolean warnedWv, reloadedOnce;
     private void immersive() {
         if (!BuildConfig.SCREEN) return;
@@ -130,7 +131,7 @@ public class MainActivity extends Activity {
         String pkg = p == null ? "com.google.android.webview" : p.packageName;
         new AlertDialog.Builder(this).setTitle("يحتاج تحديث بسيط بالجهاز")
             .setMessage("الشاشة تحتاج نسخة أحدث من «Android System WebView» (محرك الإنترنت بالجهاز).\nالنسخة الحالية: " + ver
-                + "\n\nحدّثه من Google Play، وبعدها سكّر التطبيق وافتحه من جديد.")
+                + "\n\nحدّثه من Google Play، وبعدها سكّر التطبيق وافتحه من جديد.\nإذا ما يتحدّث، صوّر هاي الرسالة ودزّها لفريق سرعة.")
             .setPositiveButton("تحديث من Google Play", (d, w) -> openStore(pkg))
             .setNegativeButton("لاحقاً", null).show();
     }
