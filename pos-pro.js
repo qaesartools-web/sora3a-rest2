@@ -575,6 +575,7 @@
     unsubs.push(f.onSnapshot(f.query(subCol('shifts'), f.where('status', '==', 'open')), (s) => {
       const list = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.openedAtMs - a.openedAtMs);
       shift = list[0] || null;
+      if (shift) ensureShiftOrders(shift);
       $('shiftWarn').classList.toggle('on', !shift);
       if ($('shiftScreen').classList.contains('on')) renderShift();
     }, (e) => console.warn('shift', e.code)));
@@ -586,10 +587,33 @@
       closedShifts = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.closedAtMs - a.closedAtMs).slice(0, 15);
     } catch (e) { closedShifts = []; }
   }
+  // وردية فتحت قبل الطلبات اللي ينزّلها الجهاز (من بداية أمس — نادر): نجيب طلباتها من السيرفر حتى التقرير يطلع كامل
+  const shiftOld = {};
+  function ensureShiftOrders(sh) {
+    const since = window.posOrdersSince ? window.posOrdersSince() : 0;
+    if (!sh || !since || !((sh.openedAtMs || 0) < since)) return Promise.resolve();
+    if (shiftOld[sh.id]) return shiftOld[sh.id].p;
+    const f = fb(), col = f.collection(f.db, 'orders'), map = (s) => s.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const e = shiftOld[sh.id] = { list: null };
+    e.p = Promise.all([
+      f.getDocs(f.query(col, f.where('restaurantId', '==', rid()), f.where('shiftId', '==', sh.id))).then(map),
+      f.getDocs(f.query(col, f.where('restaurantId', '==', rid()), f.where('payment.shiftId', '==', sh.id))).then(map),
+    ]).then(([a, b]) => { e.list = a.concat(b); if ($('shiftScreen').classList.contains('on')) renderShift(); })
+      .catch((err) => { delete shiftOld[sh.id]; console.warn('shift orders', err && err.code); });
+    return e.p;
+  }
+  function shiftOrders(sh) {
+    const x = sh && shiftOld[sh.id];
+    if (!x || !x.list) return orders;
+    const m = new Map(x.list.map((o) => [o.id, o]));
+    orders.forEach((o) => m.set(o.id, o));
+    return [...m.values()];
+  }
   function shiftCalc(sh) {
-    const mine = orders.filter((o) => o.shiftId === sh.id);
+    const all = shiftOrders(sh);
+    const mine = all.filter((o) => o.shiftId === sh.id);
     const live = mine.filter((o) => o.status !== 'cancelled'), canc = mine.filter((o) => o.status === 'cancelled');
-    const paidHere = orders.filter((o) => o.payment && o.payment.shiftId === sh.id);
+    const paidHere = all.filter((o) => o.payment && o.payment.shiftId === sh.id);
     const r = { orders: live.length, sales: 0, sub: 0, disc: 0, service: 0, tax: 0, byType: { salon: { n: 0, v: 0 }, takeaway: { n: 0, v: 0 }, delivery: { n: 0, v: 0 } },
       cash: 0, card: 0, later: 0, cod: 0, refunds: 0, cancelled: canc.length, cancelledV: canc.reduce((s, o) => s + (o.value || 0), 0) };
     live.forEach((o) => {
@@ -685,7 +709,9 @@
       renderShift(); toast('✅ تم التسجيل');
     });
   };
-  window.shiftClose = () => {
+  window.shiftClose = async () => {
+    await ensureShiftOrders(shift);
+    if (!shift) return;
     const r = shiftCalc(shift);
     acDialog('🔒 إغلاق الوردية', 'المتوقع بالدرج: ' + money(r.expected) + ' — عُدّ النقد وأدخل المبلغ الفعلي', [
       { id: 'c', label: '💵 النقد الفعلي بالدرج', type: 'number' }, { id: 'n', label: 'ملاحظة (اختياري)' }], (v) => {
@@ -1563,6 +1589,8 @@
     const u = window.posUser;
     if (!shift || dutyClosing || !(shift.uid === u.uid || shift.device === deviceId)) return;
     dutyClosing = true;
+    await ensureShiftOrders(shift);
+    if (!shift) { dutyClosing = false; return; }
     const report = shiftCalc(shift);
     const done = { status: 'closed', closedAtMs: Date.now(), countedCash: report.expected, expectedCash: report.expected, diff: 0,
       note: 'إغلاق تلقائي عند نهاية الدوام — يُرجى عدّ الدرج وتسليمه', autoClosed: true, report };
