@@ -349,12 +349,15 @@
     const t = totals(type), items = cartItemsForOrder(), now = nowT();
     const f = fb(), ref = f.doc(f.collection(f.db, 'orders'));
     const o = baseOrder(type, t, items);
+    // دلفري «بعد التجهيز» (طلب أونلاين): يروح للمطبخ أول، والكاشير يحوّله لكابتن لما يجهز — الكباتن ما يشوفونه قبل
+    const later = type === 'delivery' && captain && captain.later;
     if (type === 'delivery') {
       Object.assign(o, {
-        status: 'pending', customer: custInfo.name, phone: custInfo.phone, address: custInfo.addr,
-        fee: custInfo.fee ?? settings.defaultFee ?? 0, captainId: captain.id, captainName: captain.name,
+        status: later ? 'preparing' : 'pending', customer: custInfo.name, phone: custInfo.phone, address: custInfo.addr,
+        fee: custInfo.fee ?? settings.defaultFee ?? 0, captainId: later ? null : captain.id, captainName: later ? '' : captain.name,
         commission: Math.round(t.total * .1), deliveryProof: null, rejectedBy: [], payment: { method: 'cod' },
       });
+      if (later) o.awaitCap = true;
       if (disc.loyalty && t.disc) o.loyalty = { n: disc.loyalty.n, amount: t.disc };
     } else {
       const tbl = pay && pay.table ? Number(pay.table) : 0;
@@ -364,15 +367,15 @@
       else o.customer = 'سفري';
     }
     if (type !== 'delivery' && pagerSel && feat('pager')) { o.pager = pagerSel; pagerSel = 0; }
-    o.timeline = [{ status: o.status, time: now, text: 'تم إنشاء الطلب' }];
-    f.setDoc(ref, o).then(() => { if (type === 'delivery') notifyCaptain(ref.id); }).catch((e) => toast('❌ تعذّر حفظ الطلب: ' + (e.code || e.message)));
+    o.timeline = [{ status: o.status, time: now, text: later ? 'تم إنشاء الطلب — يتجهز بالمطبخ وبعدين يتحول لكابتن' : 'تم إنشاء الطلب' }];
+    f.setDoc(ref, o).then(() => { if (type === 'delivery' && !later) notifyCaptain(ref.id); }).catch((e) => toast('❌ تعذّر حفظ الطلب: ' + (e.code || e.message)));
     if (o.webId) webLink(o, ref.id);
     if (type === 'delivery') { syncTracking(ref.id, { ...o, captainName: '' }); saveCustomer(o); }
     curCust = null;
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
     if (o.webId && type === 'salon') webKitchenPrint({ id: ref.id, ...o }, items, t.total);
     else printOrderAll({ id: ref.id, ...o }, receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen && !o.kSec));
-    const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: '🏍️ دلفري — ' + (captain ? captain.name : '') };
+    const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: later ? '🏍️ دلفري للمطبخ — لما يجهز اختار الكابتن' : '🏍️ دلفري — ' + (captain ? captain.name : '') };
     toast('✅ تم — ' + names[type] + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : '') + (pay && pay.payment.change ? ' • الباقي ' + money(pay.payment.change) : ''));
     cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
   };
@@ -885,6 +888,7 @@
     renderKds();
     renderPagers();
     syncWebStages();
+    renderCapWait();
     // الشاشات المفتوحة تتحدث مباشرة مع كل طلب (بدون ما نلمس خانة يكتب بيها المستخدم)
     const typing = /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '');
     if (!typing && $('reportsScreen') && $('reportsScreen').classList.contains('on') && typeof renderRep === 'function') renderRep();
@@ -2129,7 +2133,7 @@
     try {
       if (w.mode === 'table') await finalOrder('salon', null, null, { table: w.table, payment: { method: 'later', cash: 0, card: 0, received: 0, change: 0 } });
       else if (w.mode === 'pickup') holdOrder({ name: w.customer || '', phone: w.phone || '', note: w.note || '' });
-      else await finalOrder('delivery', { id: null, name: '' }, { name: w.customer || '', phone: w.phone || '', addr: w.address || '', fee: settings.defaultFee || 0 });
+      else await finalOrder('delivery', { id: null, name: '', later: true }, { name: w.customer || '', phone: w.phone || '', addr: w.address || '', fee: settings.defaultFee || 0 });
     } finally {
       webAttach = null;
       cart = keep.cart; disc = keep.disc; pagerSel = keep.pagerSel; curCust = keep.curCust;
@@ -2183,6 +2187,24 @@
     if (o.servedAtMs || o.pagerDone || (t !== 'salon' && o.status === 'delivered') || (t === 'salon' && o.payment && o.payment.method !== 'later')) return 'done';
     return o.kitchen === 'ready' || o.status === 'ready' ? 'ready' : 'preparing';
   }
+  // ══════════ دلفري جاهز ينتظر كابتن ══════════
+  // طلب التوصيل الأونلاين يروح للمطبخ أول؛ أول ما يجهز يطلع هنا ← الكاشير يختار أي كابتن متوفر
+  const capWaitSeen = new Set();
+  function renderCapWait() {
+    const el = $('capWaitBox'); if (!el || !restData) return;
+    const list = orders.filter((o) => o.awaitCap && getOrderType(o) === 'delivery' && o.status !== 'cancelled' && !o.captainId && (o.kitchen === 'ready' || o.status === 'ready'))
+      .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
+    let fresh = false;
+    list.forEach((o) => { if (!capWaitSeen.has(o.id)) { capWaitSeen.add(o.id); fresh = true; } });
+    if (fresh) { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} try { kdsBeep(); } catch (e) {} }
+    el.innerHTML = list.slice(0, 3).map((o) => `<div class="call-card cap-wait">
+      <div class="call-top"><span class="call-pulse">🛵</span> دلفري جاهز — اختار الكابتن <span class="call-line">#${esc(kNum(o))}</span></div>
+      <div class="call-info"><b>${esc(o.customer || '')}</b>${o.phone ? ' • <span dir="ltr">' + esc(o.phone) + '</span>' : ''}${o.address ? '<div class="ac-sub">📍 ' + esc(o.address) + '</div>' : ''}
+        <div class="ac-sub">💰 ${money((o.value || 0) + (o.fee || 0))} مع التوصيل</div></div>
+      <div class="call-btns"><button type="button" class="call-go" onclick="openChangeCapForOrder('${esc(o.id)}')">🛵 اختيار كابتن</button></div></div>`).join('')
+      + (list.length > 3 ? `<div class="ac-sub" style="text-align:center">+ ${toA(list.length - 3)} طلبات ثانية جاهزة — من تبويب الطلبات</div>` : '');
+  }
+  window.renderCapWait = renderCapWait;
   function syncWebStages() {
     if (!restData) return;
     if (!webSt) webSt = lsGet('pos_webst_' + rid(), {});

@@ -773,6 +773,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 <!-- INCOMING CALLS -->
 <div class="calls" id="callsBox"></div>
 <div class="calls webs" id="webBox"></div>
+<div class="calls webs" id="capWaitBox"></div>
 
 <div class="toast" id="toast"></div>
 
@@ -1350,7 +1351,7 @@ window.confirmDelivery=async()=>{
   if(changingOrderId){
     try{
       await window._fb.updateDoc(window._fb.doc(window._fb.db,'orders',changingOrderId),{
-        captainId:cap.id,captainName:cap.name,status:'pending',rejectedBy:[],
+        captainId:cap.id,captainName:cap.name,status:'pending',rejectedBy:[],awaitCap:false,
         customer:name,phone,address:addr,fee:fee??((orders.find(x=>x.id===changingOrderId)||{}).fee??5000)
       });
       if(window.notifyCaptain)notifyCaptain(changingOrderId);
@@ -1500,8 +1501,11 @@ function orderActions(o){
   }
   // مدفوع وينتظر الزبون (يطلع على شاشة «طلبك جاهز»): «تم التسليم» يشيله من الشاشة
   if(window.ordWaiting&&ordWaiting(o)&&s==='delivered'&&(!window.posFeat||posFeat('screen')))b.push(['🤝 تم التسليم','ordServed']);
+  // دلفري أونلاين ينتظر التجهيز: الكاشير يختار الكابتن (والأفضل لما يجهز من المطبخ)
+  const waitCap=t==='delivery'&&o.awaitCap&&['preparing','ready'].includes(s);
+  if(waitCap)b.push(['🛵 اختيار كابتن','openChangeCapForOrder']);
   if(t==='delivery'&&['pending','accepted'].includes(s))b.push(['🔄 تغيير الكابتن','openChangeCapForOrder']);
-  if(t==='delivery'&&['pending','accepted','pickup'].includes(s))b.push(['🥡 استلمه بنفسه','ordSelfPickup']);
+  if(t==='delivery'&&(waitCap||['pending','accepted','pickup'].includes(s)))b.push(['🥡 استلمه بنفسه','ordSelfPickup']);
   if(EDITABLE.includes(s))b.push(['✏️ تعديل / إضافة','ordEdit']);
   b.push([s==='delivered'?'↩️ إلغاء / مردود':'❌ إلغاء','ordCancel']);
   return `<div class="ac-btns">${b.map(([l,fn])=>`<button class="ac-b ${fn==='ordCancel'?'del':''}" onclick="${fn}('${esc(o.id)}')">${l}</button>`).join('')}</div>`;
@@ -2801,7 +2805,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=34"></script>
+<script src="pos-pro.js?v=35"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
