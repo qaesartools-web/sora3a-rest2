@@ -400,6 +400,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 </style>
 <link rel="stylesheet" href="pos-pro.css?v=23">
 <script src="device.js?v=1"></script>
+<script src="ask.js?v=1"></script>
 </head>
 <body>
 
@@ -1014,8 +1015,8 @@ function pickBranch(uid,ids){
     ov.addEventListener('click',e=>{const b=e.target.closest('.br-b');if(!b||b.disabled)return;try{localStorage.setItem(k,b.dataset.id);}catch(_){}ov.remove();res(b.dataset.id);});
   });
 }
-window.switchBranch=()=>{
-  if(cart.length&&!confirm('السلة بيها أصناف — تتمسح إذا غيّرت الفرع. نكمل؟'))return;
+window.switchBranch=async()=>{
+  if(cart.length&&!(await askOk('السلة بيها أصناف — تتمسح إذا غيّرت الفرع. نكمل؟')))return;
   try{localStorage.removeItem('pos_branch_'+(window.posUser&&window.posUser.uid));}catch(e){}
   location.reload();
 };
@@ -1082,7 +1083,7 @@ window.doLogin=async()=>{
 };
 
 window.doLogout=async()=>{
-  if(!confirm('تسجيل الخروج؟'))return;
+  if(!(await askOk('تسجيل الخروج؟')))return;
   unsubs.forEach(u=>u&&u());unsubs=[];
   await window._fb.signOut(window._fb.auth);
 };
@@ -1358,7 +1359,7 @@ window.confirmDelivery=async()=>{
       const _o=orders.find(x=>x.id===changingOrderId)||{};
       syncTracking(changingOrderId,{status:'pending',value:_o.value,fee,captainId:cap.id,captainName:''});
       toast('✅ تم تحويل الطلب إلى '+cap.name);
-    }catch(e){alert('خطأ: '+e.message);}
+    }catch(e){askInfo('خطأ: '+e.message);}
     changingOrderId=null;
   }else{
     finalOrder('delivery',cap,{name,phone,addr,fee});
@@ -1803,8 +1804,8 @@ window.updImg=(ci,pi,input)=>{
   const file=input.files[0];if(!file)return;
   processImage(file,d=>{menu[ci].items[pi].img=d;saveMenu();toast('✅ تم تحديث الصورة');renderMList();if(activeCat===ci)renderMenu();});
 };
-window.delItem=(ci,pi)=>{
-  if(!confirm('حذف "'+menu[ci].items[pi].name+'"؟'))return;
+window.delItem=async(ci,pi)=>{
+  if(!(await askOk('حذف "'+menu[ci].items[pi].name+'"؟')))return;
   menu[ci].items.splice(pi,1);saveMenu();toast('🗑️ تم الحذف');renderMList();if(activeCat===ci)renderMenu();
 };
 
@@ -1850,17 +1851,17 @@ window.renderCatsList=()=>{
     </div>`).join('');
 };
 
-window.renameCat=(ci)=>{
-  const newName=prompt('اسم الفرع الجديد:',menu[ci].cat);
+window.renameCat=async(ci)=>{
+  const newName=await askText('اسم الفرع الجديد:',menu[ci].cat);
   if(!newName)return;
-  const newEmoji=prompt('إيموجي الفرع:',menu[ci].emoji);
+  const newEmoji=await askText('إيموجي الفرع:',menu[ci].emoji);
   menu[ci].cat=newName;
   menu[ci].emoji=newEmoji||menu[ci].emoji;
   saveMenu();renderCatsList();renderMenu();toast('✅ تم تعديل الفرع');
 };
 
-window.delCat=(ci)=>{
-  if(!confirm(`حذف فرع "${menu[ci].cat}" وكل أصنافه؟`))return;
+window.delCat=async(ci)=>{
+  if(!(await askOk(`حذف فرع "${menu[ci].cat}" وكل أصنافه؟`)))return;
   menu.splice(ci,1);
   if(activeCat>=menu.length)activeCat=0;
   saveMenu();renderCatsList();renderMenu();toast('🗑️ تم حذف الفرع');
@@ -2221,8 +2222,8 @@ window.matEdit=id=>{if(!ownerOnly())return;const m=matById(id);if(!m)return;
     acc.moves.forEach(e=>{if(e.mid===m.id){e.name=name;e.unit=v.unit;}});
     saveAcc();renderAcc();toast('✅ تم التعديل');
   });};
-window.matDel=id=>{if(!ownerOnly())return;const m=matById(id);if(!m)return;
-  if(!confirm('حذف "'+m.name+'"؟ راح تنشال من كل الوصفات (سجل حركاتها يبقى).'))return;
+window.matDel=async id=>{if(!ownerOnly())return;const m=matById(id);if(!m)return;
+  if(!(await askOk('حذف "'+m.name+'"؟ راح تنشال من كل الوصفات (سجل حركاتها يبقى).')))return;
   acc.materials=acc.materials.filter(x=>x.id!==id);
   Object.keys(acc.recipes).forEach(k=>{acc.recipes[k]=acc.recipes[k].filter(r=>r.mid!==id);if(!acc.recipes[k].length)delete acc.recipes[k];});
   saveAcc();renderAcc();toast('🗑️ تم الحذف');};
@@ -2344,7 +2345,7 @@ window.expAdd=()=>{
   fb.setDoc(fb.doc(fb.db,'accounting',restData.id,'expenses',id),e).catch(err=>toast('❌ تعذّر حفظ المصروف: '+(err.code||err.message)));
   renderAcc();toast('✅ تم تسجيل المصروف');
 };
-window.expDel=id=>{if(!ownerOnly())return;if(!confirm('حذف هذا المصروف؟'))return;
+window.expDel=async id=>{if(!ownerOnly())return;if(!(await askOk('حذف هذا المصروف؟')))return;
   const fb=window._fb;
   if(accExp.some(e=>e.id===id)){accExp=accExp.filter(e=>e.id!==id);fb.deleteDoc(fb.doc(fb.db,'accounting',restData.id,'expenses',id)).catch(err=>toast('❌ '+(err.code||err.message)));}
   else{acc.expenses=acc.expenses.filter(e=>e.id!==id);saveAcc();}
@@ -2469,11 +2470,11 @@ window.bkExport=()=>{
 window.bkImport=input=>{
   const f=input.files[0];if(!f)return;
   const r=new FileReader();
-  r.onload=ev=>{
+  r.onload=async ev=>{
     try{
       const d=JSON.parse(ev.target.result);
       if(!d||!Array.isArray(d.menu))throw new Error('ملف غير صالح');
-      if(!confirm('استرجاع النسخة راح يستبدل المنيو والمخزون والحسابات الحالية. متأكد؟'))return;
+      if(!(await askOk('استرجاع النسخة راح يستبدل المنيو والمخزون والحسابات الحالية. متأكد؟')))return;
       menu=d.menu;acc=normAcc(d.acc);saveMenu();saveAcc();activeCat=0;renderMenu();initMenuManage();renderAcc();toast('✅ تم استرجاع النسخة');
     }catch(e){toast('❌ '+e.message);}
   };
@@ -2535,7 +2536,7 @@ window.ordReady=async id=>{try{await orderUpdate(id,{status:'ready',readyAt:Date
 window.ordHandover=async id=>{const o=orders.find(x=>x.id===id);try{await orderUpdate(id,{status:'delivered',deliveredAt:Date.now()},'سُلّم للزبون','delivered');if(o)printOrderReceipt(o,'takeaway',null);toast('🤝 تم التسليم للزبون');}catch(e){toast('❌ '+e.message);}};
 window.ordSelfPickup=async id=>{
   const o=orders.find(x=>x.id===id);if(!o)return;
-  if(!confirm('الزبون استلم الطلب بنفسه؟\nيتحول من دلفري إلى سفري، يتحرر الكابتن، وتنلغي أجور التوصيل.'))return;
+  if(!(await askOk('الزبون استلم الطلب بنفسه؟\nيتحول من دلفري إلى سفري، يتحرر الكابتن، وتنلغي أجور التوصيل.')))return;
   try{
     await orderUpdate(id,{orderType:'takeaway',status:'delivered',fee:0,prevFee:o.fee||0,commission:0,captainId:null,captainName:'',releasedCaptain:{id:o.captainId||null,name:o.captainName||''},deliveredAt:Date.now()},'الزبون استلم الطلب بنفسه (تحوّل من دلفري إلى سفري) — أجور التوصيل أُلغيت','delivered');
     syncTracking(id,{status:'delivered',value:o.value,fee:0,captainId:'',captainName:''});
@@ -2805,7 +2806,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=35"></script>
+<script src="pos-pro.js?v=36"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
