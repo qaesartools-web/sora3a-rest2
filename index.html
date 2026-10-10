@@ -397,7 +397,8 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s,opacity .3s,visibility .3s;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;}
 .toast.on{transform:translateX(-50%) translateY(0);opacity:1;visibility:visible;}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=21">
+<link rel="stylesheet" href="pos-pro.css?v=22">
+<script src="device.js?v=1"></script>
 </head>
 <body>
 
@@ -777,7 +778,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, updateDoc as _updateDoc, deleteDoc as _deleteDoc, getDoc, getDocs, setDoc as _setDoc, arrayUnion, increment, query, where, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, updateDoc as _updateDoc, deleteDoc as _deleteDoc, getDoc, getDocFromServer, getDocs, setDoc as _setDoc, arrayUnion, increment, query, where, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
   apiKey:"AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ",
@@ -799,14 +800,15 @@ function settle(p){
   return new Promise((res,rej)=>{
     const t=setTimeout(()=>{done=true;res();},1200);
     p.then(v=>{if(!done){clearTimeout(t);done=true;res(v);}},
-      e=>{if(!done){clearTimeout(t);done=true;rej(e);}else{console.warn('write',e);try{window.toast&&toast('❌ تعذّر حفظ تغيير: '+(e.code||e.message));}catch(_){}}});
+      e=>{if(e&&e.code==='permission-denied'&&window.posDenied)try{posDenied();}catch(_){}
+        if(!done){clearTimeout(t);done=true;rej(e);}else{console.warn('write',e);try{window.toast&&toast('❌ تعذّر حفظ تغيير: '+(e.code||e.message));}catch(_){}}});
   });
 }
 const setDoc=(...a)=>settle(_setDoc(...a));
 const updateDoc=(...a)=>settle(_updateDoc(...a));
 const deleteDoc=(...a)=>settle(_deleteDoc(...a));
 const addDoc=(col,data)=>{const ref=doc(col);return settle(_setDoc(ref,data)).then(()=>ref);};
-window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,deleteDoc,getDoc,getDocs,setDoc,arrayUnion,increment,query,where,onSnapshot,runTransaction,app};
+window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,deleteDoc,getDoc,getDocs,setDoc,arrayUnion,increment,query,where,onSnapshot,runTransaction,app,rawSetDoc:_setDoc,rawUpdateDoc:_updateDoc,getDocFromServer};
 window.dispatchEvent(new Event('fbReady'));
 </script>
 
@@ -971,6 +973,11 @@ window.addEventListener('fbReady',()=>{
         if(rd.active===false){await denyLogin('⏸️ حساب المطعم موقوف — تواصل مع الإدارة'+brMsg);return;}
         if(rd.expiryMs&&rd.expiryMs<Date.now()){await denyLogin('⛔ انتهى الاشتراك — تواصل مع الإدارة للتجديد'+brMsg);return;}
         restData={id:rs.id,...rd};
+        // الأجهزة المعتمدة: الكاشير يسجّل جلسته على هذا الجهاز؛ إذا الجهاز مو معتمد لمطعمه (والخدمة شغّالة) ما يفتح
+        if(isCashierAcc&&window.SoraDev){
+          const fsx={db:fb.db,doc:fb.doc,getDoc:fb.getDoc,setDoc:fb.rawSetDoc,updateDoc:fb.rawUpdateDoc,onSnapshot:fb.onSnapshot};
+          if(await SoraDev.claim(fsx,user,{...ud,restaurantId:restId},rd)==='blocked'){showDevBlock(fsx,restId);return;}
+        }
         // من يستخدم الكاشير: صاحب المطعم (كل الصلاحيات) أو كاشير بصلاحيات يحددها صاحب المطعم
         window.posUser={uid:user.uid,role:isCashierAcc?'cashier':'owner',name:(ud&&ud.name)||'',perms:isCashierAcc?(ud.perms||{}):null,branches:branches.length>0};
         try{localStorage.setItem(sessKey,JSON.stringify({rest:restData,user:window.posUser,at:Date.now()}));}catch(e){}
@@ -1009,6 +1016,17 @@ window.switchBranch=()=>{
   try{localStorage.removeItem('pos_branch_'+(window.posUser&&window.posUser.uid));}catch(e){}
   location.reload();
 };
+// الجهاز مو معتمد: رمز الجهاز يقراه الكاشير لإدارة سرعة، ويفتح وحده أول ما يعتمدونه
+function showDevBlock(fsx,rid){
+  const d=SoraDev.info();
+  if(!document.getElementById('devCss')){const st=document.createElement('style');st.id='devCss';st.textContent=SoraDev.CSS;document.head.appendChild(st);}
+  let el=document.getElementById('devLock');
+  if(!el){el=document.createElement('div');el.id='devLock';el.className='duty-lock';document.body.appendChild(el);}
+  el.innerHTML=SoraDev.blockHtml(d);el.classList.add('on');
+  document.getElementById('splash').classList.add('hide');
+  document.getElementById('devOut').onclick=async()=>{try{await window._fb.signOut(window._fb.auth);}catch(e){}location.reload();};
+  SoraDev.watch(fsx,d,()=>location.reload(),rid);
+}
 async function denyLogin(msg){
   try{await window._fb.signOut(window._fb.auth);}catch(e){}
   const err=document.getElementById('errBox');
@@ -1096,7 +1114,7 @@ function startListeners(){
       });
       orders=newOrders;
       renderOrders();renderHold();
-    }),
+    },e=>{if(e&&e.code==='permission-denied'&&window.posSessionLost)posSessionLost();}),
     fb.onSnapshot(fb.query(fb.collection(fb.db,'captains'),fb.where('restaurantId','==',restData.id)),snap=>{
       captains=snap.docs.map(d=>({id:d.id,...d.data()}));
     })
@@ -2717,7 +2735,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=31"></script>
+<script src="pos-pro.js?v=32"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
