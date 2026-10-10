@@ -6,6 +6,7 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 
 // مكالمة واتساب واردة (من إشعار الواتساب) ← اسم/رقم المتصل يطلع بكاشير المطعم
+//  واتساب وواتساب أعمال ممكن يكونون رقمين مختلفين — كل واحد يوصل لخط رقمه
 public class WaListener extends NotificationListenerService {
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
@@ -17,7 +18,7 @@ public class WaListener extends NotificationListenerService {
             CharSequence text = x == null ? null : x.getCharSequence(Notification.EXTRA_TEXT);
             String caller = CallLine.whatsappCaller(sbn.getPackageName(), n.category,
                 title == null ? null : title.toString(), text == null ? null : text.toString());
-            if (caller != null) LineStore.report(this, caller, true, null);
+            if (caller != null) LineStore.reportWa(this, caller, sbn.getPackageName());
         } catch (Throwable ignored) {}
     }
 }

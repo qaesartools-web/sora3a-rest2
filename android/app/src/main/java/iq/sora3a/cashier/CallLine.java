@@ -5,6 +5,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 // خط المطعم: أول ما يرن التلفون (شريحة أو واتساب) يوصل رقم المتصل لكاشير المطعم — بدل MacroDroid
@@ -14,12 +15,44 @@ public final class CallLine {
     public static final String URL_CALLS = "https://firestore.googleapis.com/v1/projects/sora3a-system/databases/(default)/documents/incomingCalls?key=AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ";
     public static final String[] WA_PACKAGES = {"com.whatsapp", "com.whatsapp.w4b"};
 
+    // رقم مربوط على هذا التلفون (التلفون يكدر يحمل أكثر من رقم: شريحتين، واتساب، واتساب أعمال)
+    //  sim: مكالمات الشريحة — slot/subId تحدد أي شريحة (-1 = أي شريحة)
+    //  wa: مكالمات الواتساب — pkg يحدد أي تطبيق (com.whatsapp أو com.whatsapp.w4b؛ فارغ = أي واتساب)
     public static final class Config {
-        public final String token, restaurantId, line, label; public final boolean sim, wa;
+        public final String token, restaurantId, line, label, pkg; public final boolean sim, wa; public final int slot, subId;
         public Config(String token, String restaurantId, String line, String label, boolean sim, boolean wa) {
+            this(token, restaurantId, line, label, sim, wa, -1, -1, "");
+        }
+        public Config(String token, String restaurantId, String line, String label, boolean sim, boolean wa, int slot, int subId, String pkg) {
             this.token = token; this.restaurantId = restaurantId; this.line = line; this.label = label; this.sim = sim; this.wa = wa;
+            this.slot = slot; this.subId = subId; this.pkg = pkg == null ? "" : pkg;
         }
         public boolean valid() { return token != null && token.length() >= 24 && restaurantId != null && !restaurantId.isEmpty() && line != null && !line.isEmpty(); }
+        boolean anySim() { return slot < 0 && subId < 0; }
+        // نفس المصدر (ما يصير رقمين على نفس الشريحة أو نفس تطبيق الواتساب)
+        public boolean sameSource(Config o) {
+            if (sim && o.sim) { if (anySim() || o.anySim() || (subId >= 0 && subId == o.subId) || (slot >= 0 && slot == o.slot)) return true; }
+            if (wa && o.wa) { if (pkg.isEmpty() || o.pkg.isEmpty() || pkg.equals(o.pkg)) return true; }
+            return false;
+        }
+    }
+
+    // مكالمة شريحة رنّت (subId/slot من الأندرويد، -1 إذا الجهاز ما يكول): أي رقم يستلمها؟
+    //  الاشتراك ← الخانة ← «أي شريحة»؛ وإذا الجهاز ما يميّز الشريحة: أول رقم شريحة.
+    //  شريحة مو مربوطة (مثلاً شريحة شخصية بنفس التلفون) ← null: ما توصل للكاشير
+    public static Config pickSim(List<Config> list, int subId, int slot) {
+        Config first = null;
+        for (Config c : list) if (c.sim) { if (first == null) first = c; if (subId >= 0 && c.subId == subId) return c; }
+        for (Config c : list) if (c.sim && slot >= 0 && c.slot == slot) return c;
+        for (Config c : list) if (c.sim && c.anySim()) return c;
+        return subId < 0 && slot < 0 ? first : null;
+    }
+
+    // مكالمة واتساب: الرقم المربوط بنفس التطبيق، أو «أي واتساب»
+    public static Config pickWa(List<Config> list, String pkg) {
+        for (Config c : list) if (c.wa && !c.pkg.isEmpty() && c.pkg.equals(pkg)) return c;
+        for (Config c : list) if (c.wa && c.pkg.isEmpty()) return c;
+        return null;
     }
 
     // نفس الحقول اللي تقبلها قواعد الحماية (incomingCalls)؛ خط الواتساب اسمه يحتوي «واتساب»

@@ -1,13 +1,18 @@
 package iq.sora3a.cashier;
 
-import android.content.SharedPreferences;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -44,7 +49,7 @@ public class Bridge {
 
     // كل تطبيق يشوف بس دواله: الخط ما يطبع، والكاشير ما يربط خط
     private static final java.util.Set<String> LINE_METHODS = new java.util.HashSet<>(java.util.Arrays.asList(
-        "getCallLine", "setCallLine", "clearCallLine", "testCall", "openPerm"));
+        "getCallLine", "setCallLine", "addCallLine", "removeCallLine", "clearCallLine", "testCall", "openPerm"));
 
     private Object handle(String m, JSONArray a) throws Exception {
         if (BuildConfig.LINE != LINE_METHODS.contains(m)) return errorJson("unknown");
@@ -98,9 +103,31 @@ public class Bridge {
                 if (c.sim && act.hasSim() && !act.phoneOk()) act.openPerm("phone");
                 return lineStatus();
             }
+            // رقم (خط) بمصادره على هذا التلفون: {token, restaurantId, line, label, sources:[{kind:'sim',slot,subId}|{kind:'wa',pkg}]}
+            case "addCallLine": {
+                JSONObject o = a.optJSONObject(0); if (o == null) o = new JSONObject();
+                JSONArray src = o.optJSONArray("sources"); if (src == null) src = new JSONArray();
+                String token = o.optString("token", "");
+                List<CallLine.Config> list = new ArrayList<>();
+                boolean anySim = false;
+                for (int i = 0; i < src.length(); i++) {
+                    JSONObject s = src.optJSONObject(i); if (s == null) continue;
+                    boolean isSim = "sim".equals(s.optString("kind"));
+                    anySim |= isSim;
+                    list.add(new CallLine.Config(token, o.optString("restaurantId", ""), o.optString("line", ""), o.optString("label", ""),
+                        isSim, !isSim, isSim ? s.optInt("slot", -1) : -1, isSim ? s.optInt("subId", -1) : -1, isSim ? "" : s.optString("pkg", "")));
+                }
+                if (list.isEmpty() || !list.get(0).valid()) return errorJson("بيانات الخط ناقصة");
+                LineStore.put(act, token, list);
+                if (anySim && act.hasSim() && !act.phoneOk()) act.openPerm("phone");
+                return lineStatus();
+            }
+            case "removeCallLine": LineStore.remove(act, a.optString(0, "")); return lineStatus();
             case "clearCallLine": LineStore.clear(act); return lineStatus();
             case "testCall": {
-                CallLine.Config c = LineStore.load(act);
+                String token = a.optString(0, "");
+                CallLine.Config c = null;
+                for (CallLine.Config x : LineStore.loadAll(act)) if (c == null && (token.isEmpty() || x.token.equals(token))) c = x;
                 if (c == null) return errorJson("التلفون مو مربوط");
                 String err = LineStore.send(act, c, "07700000000", !c.sim && c.wa);
                 return err.isEmpty() ? new JSONObject().put("ok", true) : errorJson(err);
@@ -111,16 +138,52 @@ public class Bridge {
     }
 
     private JSONObject lineStatus() throws Exception {
-        CallLine.Config c = LineStore.load(act);
-        SharedPreferences p = LineStore.prefs(act);
+        List<CallLine.Config> all = LineStore.loadAll(act);
+        CallLine.Config c = all.isEmpty() ? null : all.get(0);
         JSONObject perms = new JSONObject().put("phone", act.phoneOk()).put("notif", act.notifOk()).put("battery", act.batteryOk())
             .put("overlay", act.overlayOk()).put("sim", act.hasSim());
         JSONObject o = new JSONObject().put("linked", c != null).put("perms", perms).put("android", android.os.Build.VERSION.SDK_INT)
             .put("maker", String.valueOf(android.os.Build.MANUFACTURER).toLowerCase());
-        if (c != null) o.put("token", c.token).put("restaurantId", c.restaurantId).put("line", c.line).put("label", c.label).put("sim", c.sim).put("wa", c.wa)
-            .put("lastAt", p.getLong("lastAt", 0)).put("lastNumber", p.getString("lastNumber", "")).put("lastErr", p.getString("lastErr", ""))
-            .put("lastKind", p.getString("lastKind", ""));
+        // كل الأرقام (كل مصدر سطر) + الشرائح والواتساب الموجودة بالتلفون
+        JSONArray entries = new JSONArray();
+        for (CallLine.Config x : all) {
+            JSONObject l = LineStore.last(act, x.token);
+            entries.put(new JSONObject().put("token", x.token).put("restaurantId", x.restaurantId).put("line", x.line).put("label", x.label)
+                .put("kind", x.sim ? "sim" : "wa").put("sim", x.sim).put("wa", x.wa).put("slot", x.slot).put("subId", x.subId).put("pkg", x.pkg)
+                .put("lastAt", l.optLong("at", 0)).put("lastNumber", l.optString("number", "")).put("lastErr", l.optString("err", ""))
+                .put("lastKind", l.optString("kind", "")).put("lastSlot", l.optInt("slot", -1)));
+        }
+        o.put("entries", entries).put("sims", sims()).put("waApps", new JSONObject()
+            .put("com.whatsapp", installed("com.whatsapp")).put("com.whatsapp.w4b", installed("com.whatsapp.w4b")));
+        // الحقول القديمة (أول رقم) حتى الصفحة القديمة تشتغل
+        if (c != null) {
+            JSONObject l = LineStore.last(act, c.token);
+            boolean sim = false, wa = false;
+            for (CallLine.Config x : all) if (x.token.equals(c.token)) { sim |= x.sim; wa |= x.wa; }
+            o.put("token", c.token).put("restaurantId", c.restaurantId).put("line", c.line).put("label", c.label).put("sim", sim).put("wa", wa)
+                .put("lastAt", l.optLong("at", 0)).put("lastNumber", l.optString("number", "")).put("lastErr", l.optString("err", ""))
+                .put("lastKind", l.optString("kind", ""));
+        }
         return o;
+    }
+
+    // الشرائح بالتلفون (تحتاج إذن الهاتف): رقم الخانة + اسم الشبكة
+    private JSONArray sims() {
+        JSONArray out = new JSONArray();
+        if (act.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return out;
+        try {
+            SubscriptionManager sm = act.getSystemService(SubscriptionManager.class);
+            List<SubscriptionInfo> l = sm == null ? null : sm.getActiveSubscriptionInfoList();
+            if (l != null) for (SubscriptionInfo i : l) {
+                CharSequence name = i.getDisplayName() != null ? i.getDisplayName() : i.getCarrierName();
+                out.put(new JSONObject().put("slot", i.getSimSlotIndex()).put("subId", i.getSubscriptionId()).put("name", name == null ? "" : name.toString()));
+            }
+        } catch (Exception ignored) {}   // بدون إذن الهاتف
+        return out;
+    }
+
+    private boolean installed(String pkg) {
+        try { act.getPackageManager().getPackageInfo(pkg, 0); return true; } catch (PackageManager.NameNotFoundException e) { return false; }
     }
 
     private static JSONObject result(PrintEngine.Result r) throws Exception {
@@ -145,7 +208,8 @@ public class Bridge {
         + "removePrinter:function(n){return call('removePrinter',[n])}};})();";
     private static final String LINE = "canCallLine:true,"
         + "getCallLine:function(){return call('getCallLine')},setCallLine:function(c){return call('setCallLine',[c||{}])},"
-        + "clearCallLine:function(){return call('clearCallLine')},testCall:function(){return call('testCall')},"
+        + "canMultiLine:true,addCallLine:function(c){return call('addCallLine',[c||{}])},removeCallLine:function(t){return call('removeCallLine',[String(t||'')])},"
+        + "clearCallLine:function(){return call('clearCallLine')},testCall:function(t){return call('testCall',[String(t||'')])},"
         + "openPerm:function(k){return call('openPerm',[String(k||'app')])}};})();";
     public static final String SHIM = HEAD + (BuildConfig.LINE ? LINE : CASHIER);
 }

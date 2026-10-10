@@ -42,6 +42,14 @@ input.in{width:100%;font:inherit;font-size:16px;padding:12px;border:1px solid va
 .steps{margin:6px 0 0;padding-inline-start:20px}
 .steps li{margin:4px 0}
 .foot{text-align:center;color:var(--muted);font-size:12.5px;margin-top:8px}
+.num{border:1px solid var(--line);border-radius:14px;padding:11px 12px;margin-top:10px}
+.num-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:800}
+.num-h .ln{background:var(--green);color:#fff;border-radius:999px;padding:1px 10px;font-size:13px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12.5px}
+.num .row2 .btn{margin-top:8px;padding:8px;font-size:13.5px}
+.upd{background:#EEF4FF;border:1px solid #B6CCFF;border-radius:14px;padding:10px 12px;font-size:13.5px;margin-bottom:12px;color:#1E3A8A}
+@media (prefers-color-scheme:dark){.upd{background:#14213D;border-color:#2B4A8A;color:#C7D7FF}}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(120px);background:#10231A;color:#fff;padding:11px 16px;border-radius:12px;font-size:14px;max-width:92vw;transition:transform .25s;z-index:9}
 .toast.on{transform:translateX(-50%) translateY(0)}
 </style>
@@ -77,6 +85,9 @@ const toast = (m) => { const t = $('toast'); t.textContent = m; t.classList.add(
 const newToken = () => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(40)), (x) => a[x % a.length]).join(''); };
 
 let user = null, rest = null, authReady = false, loginErr = '', st = null;
+// التطبيق الجديد: أكثر من رقم على نفس التلفون (شريحتين، واتساب، واتساب أعمال). التطبيق القديم: رقم واحد + تنبيه تحديث
+const MULTI = !!(DESK && DESK.canMultiLine);
+let adding = false, editNum = '';
 const feat = (k) => !rest || !rest.features || rest.features[k] !== false;
 
 // ── الحساب: لازم صاحب المطعم (هو بس يكدر يضيف خط حسب قواعد الحماية) ──
@@ -103,10 +114,12 @@ async function render() {
   if (!DESK) { box.innerHTML = notAppHtml(); return; }
   try { st = await DESK.getCallLine(); } catch (e) { st = null; }
   st = st || { linked: false, perms: {} };
-  if (st.linked) { box.innerHTML = linkedHtml(); return; }
+  if (MULTI) { box.innerHTML = multiHtml(); return; }
+  if (st.linked) { box.innerHTML = updHtml() + linkedHtml(); return; }
   if (!authReady) return;
-  box.innerHTML = user ? linkHtml() : loginHtml();
+  box.innerHTML = user ? updHtml() + linkHtml() : loginHtml();
 }
+const updHtml = () => `<div class="upd">📲 <b>فد تحديث:</b> حدّث تطبيق خط المطعم حتى تكدر تربط <b>أكثر من رقم</b> على نفس التلفون (شريحتين، واتساب، واتساب أعمال). <a href="${APK}">⬇️ تنزيل التحديث</a></div>`;
 
 function notAppHtml() {
   return `<div class="card"><h2>📲 هذي الصفحة تشتغل داخل تطبيق «سرعة — خط المطعم»</h2>
@@ -115,9 +128,9 @@ function notAppHtml() {
     <a class="btn" href="${APK}">⬇️ تنزيل تطبيق خط المطعم</a></div>`;
 }
 
-function loginHtml() {
+function loginHtml(sub) {
   return `<div class="card"><h2>🔐 سجّل دخول بحساب صاحب المطعم</h2>
-    <div class="muted">مرة وحدة بس، حتى ننضيف الخط لمطعمك.</div>
+    <div class="muted">${sub || 'مرة وحدة بس، حتى ننضيف الخط لمطعمك.'}</div>
     <label class="f" for="lnEmail">الإيميل</label><input class="in" id="lnEmail" type="email" dir="ltr" autocomplete="username">
     <label class="f" for="lnPass">كلمة المرور</label><input class="in" id="lnPass" type="password" dir="ltr" autocomplete="current-password" onkeydown="if(event.key==='Enter')lnLogin()">
     <div class="err" id="lnErr">${esc(loginErr)}</div>
@@ -163,6 +176,150 @@ function linkedHtml() {
       <div class="foot">تكدر تسكّر التطبيق — الخط يشتغل وحده بالخلفية.</div></div>`;
 }
 
+// ══════════ أكثر من رقم على نفس التلفون ══════════
+const PKG = { 'com.whatsapp': '🟢 واتساب', 'com.whatsapp.w4b': '💼 واتساب أعمال' };
+function simName(e) {
+  const s = (st.sims || []).find((x) => (e.subId >= 0 && x.subId === e.subId) || (e.slot >= 0 && x.slot === e.slot));
+  return e.slot >= 0 ? `📱 شريحة ${e.slot + 1}${s && s.name ? ' — ' + s.name : ''}` : '📱 الشريحة';
+}
+const srcName = (e) => (e.kind === 'sim' ? simName(e) : e.pkg ? PKG[e.pkg] || '🟢 واتساب' : '🟢 الواتساب');
+// كل مصدر سطر: الرقم القديم (شريحة + واتساب بنفس السطر) ينقسم لمصدرين
+const flat = () => (st.entries || []).flatMap((e) => e.sim && e.wa ? [{ ...e, kind: 'sim', slot: -1, subId: -1 }, { ...e, kind: 'wa', pkg: '' }] : [{ ...e, kind: e.sim ? 'sim' : 'wa' }]);
+// الأرقام: كل رقم (توكن = خط) بمصادره
+function groups() {
+  const m = new Map();
+  for (const e of flat()) {
+    const g = m.get(e.token) || { token: e.token, line: e.line, label: e.label, restaurantId: e.restaurantId, src: [], last: null };
+    g.src.push(e);
+    if (e.lastAt && (!g.last || e.lastAt > g.last.lastAt)) g.last = e;
+    m.set(e.token, g);
+  }
+  return [...m.values()].sort((a, b) => (+a.line || 0) - (+b.line || 0));
+}
+const when = (t) => new Date(t).toLocaleString('ar-IQ-u-nu-latn', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+function multiHtml() {
+  const nums = groups();
+  if (!nums.length) {
+    if (!authReady) return '<div class="card muted">⏳ لحظة…</div>';
+    return user ? addHtml(true) : loginHtml();
+  }
+  const mine = rest && nums.every((n) => n.restaurantId === rest.id);
+  const list = nums.map((n) => {
+    const l = n.last;
+    const lastTxt = !l ? '<div class="hint">ما وصلت مكالمة بعد</div>' : l.lastErr
+      ? `<div class="hint" style="color:var(--bad)">❌ آخر مكالمة (<span dir="ltr">${esc(l.lastNumber)}</span>) ما وصلت: ${esc(l.lastErr)}</div>`
+      : `<div class="hint">آخر مكالمة: <b dir="ltr">${esc(l.lastNumber)}</b>${l.lastKind === 'wa' ? ' (واتساب)' : ''} • ${esc(when(l.lastAt))}</div>`;
+    return `<div class="num" data-token="${esc(n.token)}"><div class="num-h"><span class="ln">خط ${esc(n.line)}</span><span dir="ltr">${esc(n.label)}</span></div>
+      <div class="chips">${n.src.map((e) => `<span class="chip">${esc(srcName(e))}</span>`).join('')}</div>${lastTxt}
+      <div class="row2"><button type="button" class="btn" onclick="lnTest('${esc(n.token)}')">🧪 تجربة</button>
+        <button type="button" class="btn soft" onclick="lnEdit('${esc(n.token)}')">✏️ تعديل</button>
+        <button type="button" class="btn soft" onclick="lnRemove('${esc(n.token)}')">❌ إلغاء</button></div></div>`;
+  }).join('');
+  // جهاز بشريحتين ما يكول أي شريحة رنّت ← المكالمات تروح لأول رقم شريحة
+  const simNums = new Set(flat().filter((e) => e.kind === 'sim').map((e) => e.token));
+  const noSlot = simNums.size > 1 && flat().some((e) => e.kind === 'sim' && e.lastAt && e.lastKind === 'sim' && e.lastSlot < 0);
+  return `<div class="card"><h2>📞 أرقام هذا التلفون${mine ? ` — ${esc(rest.name)}` : ''}</h2>
+      <div class="muted">كل رقم يطلع بالكاشير بخطه. المكالمات على شريحة أو واتساب مو مربوط ما توصل للكاشير.</div>${list}
+      ${noSlot ? '<div class="warn" style="margin-top:10px">⚠️ هذا الجهاز ما يكول أي شريحة رنّت — مكالمات الشريحتين تطلع على خط أول شريحة.</div>' : ''}
+      ${adding ? '' : '<button type="button" class="btn" id="lnAddBtn" onclick="lnAddOpen()">➕ إضافة رقم ثاني</button>'}</div>
+    ${adding ? (user ? addHtml(false) : loginHtml('حتى تضيف رقم، سجّل دخول بحساب صاحب المطعم.')) : ''}
+    ${permsHtml()}
+    <div class="foot">تكدر تسكّر التطبيق — الخطوط تشتغل وحدها بالخلفية.</div>`;
+}
+// مصادر هذا التلفون: كل شريحة بخانتها، وواتساب، وواتساب أعمال
+function sources() {
+  const pm = st.perms || {}, out = [];
+  if (st.sims && st.sims.length) st.sims.slice().sort((a, b) => a.slot - b.slot).forEach((s) => out.push({ kind: 'sim', slot: s.slot, subId: s.subId, name: simName(s) }));
+  else if (pm.sim !== false) out.push({ kind: 'sim', slot: -1, subId: -1, name: '📱 مكالمات الشريحة', hint: pm.phone ? '' : 'noperm' });
+  const wa = st.waApps || {}, known = 'com.whatsapp' in wa;
+  if (!known || wa['com.whatsapp'] || !wa['com.whatsapp.w4b']) out.push({ kind: 'wa', pkg: 'com.whatsapp', name: PKG['com.whatsapp'] });
+  if (!known || wa['com.whatsapp.w4b']) out.push({ kind: 'wa', pkg: 'com.whatsapp.w4b', name: PKG['com.whatsapp.w4b'] });
+  return out;
+}
+const sameSrc = (a, e) => a.kind === e.kind && (a.kind === 'sim' ? a.slot < 0 || e.slot < 0 || a.slot === e.slot : !a.pkg || !e.pkg || a.pkg === e.pkg);
+function addHtml(first) {
+  const simF = feat('calls'), waF = feat('whatsapp'), pm = st.perms || {};
+  if (!simF && !waF) return `<div class="card"><div class="warn">⛔ خدمة المكالمات مطفية لمطعم <b>${esc(rest.name)}</b> — تواصل ويا الإدارة.</div>
+    <button class="btn soft" onclick="lnLogout()">تسجيل خروج</button></div>`;
+  const editing = groups().find((g) => g.label === editNum);
+  const src = sources();
+  const offOf = (x) => (x.kind === 'sim' ? !simF : !waF), all = flat();
+  const freeIdx = src.findIndex((y) => !offOf(y) && !all.some((e) => sameSrc(y, e)));   // رقم ثاني: أول مصدر فاضي
+  const rows = src.map((x, i) => {
+    const off = offOf(x);
+    const owner = all.find((e) => sameSrc(x, e) && (!editing || e.token !== editing.token));
+    const on = !off && (editing ? editing.src.some((e) => sameSrc(x, e)) : first ? (x.kind === 'wa' ? x.pkg === 'com.whatsapp' : i === 0) : i === freeIdx);
+    return `<label class="chk"><input type="checkbox" class="lnSrc" data-i="${i}" ${on ? 'checked' : ''} ${off ? 'disabled' : ''}> ${esc(x.name)}
+      ${off ? '<small>(مطفية من الإدارة)</small>' : owner ? `<small>(هسه على خط ${esc(owner.line)} — ينتقل لهذا الرقم)</small>` : ''}</label>`;
+  }).join('');
+  const needPerm = src.some((x) => x.hint === 'noperm') && st.android >= 22;
+  return `<div class="card"><h2>${first ? `🍽️ ${esc(rest.name || '')}` : editing ? '✏️ تعديل الرقم' : '➕ رقم ثاني على هذا التلفون'}</h2>
+    <div class="muted">${first ? 'اكتب رقم المطعم اللي على هذا التلفون، واختار وين يرن.' : 'مثلاً الشريحة الثانية، أو رقم الواتساب أعمال.'}</div>
+    <label class="f" for="lnNum">رقم المطعم</label>
+    <input class="in" id="lnNum" type="tel" dir="ltr" inputmode="tel" maxlength="20" placeholder="07xxxxxxxxx" value="${esc(editing ? editing.label : '')}" ${editing ? 'readonly' : ''}>
+    <label class="f">هذا الرقم يرن على:</label>${rows}
+    ${needPerm ? `<div class="hint">📌 بالتلفون أبو شريحتين: <button type="button" class="link" onclick="lnPerm('phone')">اسمح بإذن الهاتف</button> حتى تطلع الشريحتين وتختار.</div>` : ''}
+    <button class="btn" id="lnLinkBtn" onclick="lnAdd()">🔗 ${editing ? 'احفظ' : 'اربط هذا الرقم بالمطعم'}</button>
+    ${first ? '<button class="btn soft" onclick="lnLogout()">تسجيل خروج</button>' : '<button class="btn soft" onclick="lnAddClose()">رجوع</button>'}</div>`;
+}
+function permsHtml() {
+  const pm = st.perms || {}, es = flat();
+  const anySim = es.some((e) => e.kind === 'sim'), anyWa = es.some((e) => e.kind === 'wa');
+  const appLink = `<button type="button" class="link" onclick="lnPerm('app')">معلومات التطبيق</button>`;
+  const row = (ok, txt, kind, hint) => `<div class="perm ${ok ? 'ok' : 'bad'}"><span>${ok ? '✅' : '⚠️'} ${txt}${!ok && hint ? hint : ''}</span>${ok ? '' : `<button type="button" class="btn" onclick="lnPerm('${kind}')">اسمح</button>`}</div>`;
+  const rows = [];
+  if (anySim) rows.push(row(pm.phone, 'إذن الهاتف وسجل المكالمات — حتى يوصل رقم المتصل', 'phone'));
+  if (anyWa) rows.push(row(pm.notif, 'الوصول للإشعارات — حتى توصل مكالمات الواتساب', 'notif',
+    st.android >= 33 ? `<small class="hint">إذا الخيار رمادي: افتح ${appLink} ← ⋮ فوق ← «السماح بالإعدادات المقيّدة»، وارجع اضغط «اسمح».</small>` : ''));
+  rows.push(row(pm.battery, 'إيقاف توفير البطارية — حتى ما ينام التطبيق', 'battery'));
+  const allOk = (!anySim || pm.phone) && (!anyWa || pm.notif) && pm.battery;
+  const oem = /xiaomi|redmi|poco|oppo|realme|vivo|huawei|honor|oneplus|tecno|infinix|itel/.test(st.maker || '');
+  return `<div class="card"><h2>${allOk ? '✅ الأذونات كاملة' : '⚠️ اسمح بالأذونات حتى تشتغل الخطوط'}</h2>${rows.join('')}
+    ${oem ? `<div class="hint" style="margin-top:8px">📌 بأجهزة <span dir="ltr">${esc(st.maker)}</span>: من ${appLink} فعّل «التشغيل التلقائي» (Autostart) حتى تبقى الخطوط شغّالة بعد إعادة تشغيل التلفون.</div>` : ''}</div>`;
+}
+window.lnAddOpen = () => { adding = true; editNum = ''; render(); };
+window.lnAddClose = () => { adding = false; editNum = ''; render(); };
+window.lnEdit = (token) => { const g = groups().find((x) => x.token === token); if (!g) return; adding = true; editNum = g.label; render(); };
+window.lnAdd = async () => {
+  const num = cleanNum($('lnNum').value), src = sources();
+  const picked = [...document.querySelectorAll('.lnSrc:checked')].map((i) => src[+i.dataset.i]).filter(Boolean)
+    .map((x) => x.kind === 'sim' ? { kind: 'sim', slot: x.slot, subId: x.subId } : { kind: 'wa', pkg: x.pkg });
+  if (num.replace(/\D/g, '').length < 7) { toast('⚠️ اكتب رقم المطعم كامل'); return; }
+  if (!picked.length) { toast('⚠️ اختار وين يرن هذا الرقم (شريحة أو واتساب)'); return; }
+  const b = $('lnLinkBtn'); b.disabled = true; b.textContent = '⏳ نربط…';
+  try {
+    const ln = await lineFor(num);
+    const r = await DESK.addCallLine({ token: ln.id, restaurantId: rest.id, line: String(ln.line), label: num, sources: picked });
+    if (r && r.ok === false) throw new Error(r.error);
+    toast('✅ انربط ' + num + ' — خط ' + ln.line);
+    adding = false; editNum = '';
+  } catch (e) { toast('❌ ما انربط: ' + (e.message || e.code || e)); }
+  render();
+};
+// خط الرقم بالمطعم: نفس الرقم مربوط من قبل ← نفس الخط؛ وإلا خط جديد (حد أقصى ١٠)
+async function lineFor(num) {
+  const qs = await getDocs(query(collection(db, 'lineTokens'), where('restaurantId', '==', rest.id)));
+  const lines = qs.docs.map((d) => ({ id: d.id, ...d.data() }));
+  let ln = lines.find((l) => cleanNum(l.label) === num);
+  if (ln && !ln.active) throw new Error('هذا الخط موقوف من الإدارة');
+  if (!ln) {
+    const used = new Set(lines.map((l) => String(l.line))); let n = 1; while (used.has(String(n))) n++;
+    if (n > 10) throw new Error('وصلت الحد الأقصى (10 خطوط) — احذف خط قديم من لوحة الإدارة');
+    ln = { id: newToken(), line: String(n) };
+    await setDoc(doc(db, 'lineTokens', ln.id), { restaurantId: rest.id, line: ln.line, label: num, active: true, createdAtMs: Date.now() });
+  }
+  return ln;
+}
+window.lnRemove = async (token) => {
+  const g = groups().find((x) => x.token === token); if (!g) return;
+  if (!confirm(`تلغي ربط الرقم ${g.label} (خط ${g.line}) من هذا التلفون؟ مكالماته ما راح تطلع بالكاشير بعد.`)) return;
+  let gone = false;
+  if (user && rest && rest.id === g.restaurantId) { try { await deleteDoc(doc(db, 'lineTokens', token)); gone = true; } catch (e) {} }
+  await DESK.removeCallLine(token);
+  toast(gone ? 'انلغى الربط وانحذف الخط من المطعم' : 'انلغى الربط من هذا التلفون — الخط بعده بلوحة الإدارة، تكدر تحذفه من هناك');
+  render();
+};
+
 window.lnLogin = async () => {
   const email = ($('lnEmail').value || '').trim(), pass = $('lnPass').value || '';
   if (!email || !pass) { $('lnErr').textContent = '⚠️ اكتب الإيميل وكلمة المرور'; return; }
@@ -205,9 +362,9 @@ window.lnKinds = async () => {
   render();
 };
 window.lnPerm = (k) => { DESK.openPerm(k); };
-window.lnTest = async () => {
+window.lnTest = async (token) => {
   const b = $('lnTestBtn'); if (b) { b.disabled = true; b.textContent = '⏳ نرسل…'; }
-  const r = await DESK.testCall().catch(() => null);
+  const r = await (token ? DESK.testCall(token) : DESK.testCall()).catch(() => null);
   toast(r && r.ok ? '📞 وصلت — لازم تطلع هسه بشاشة الكاشير (الرقم 07700000000)' : '❌ ما وصلت: ' + ((r && r.error) || 'خطأ'));
   render();
 };
