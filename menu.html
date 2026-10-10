@@ -452,7 +452,7 @@ function renderStatus(w) {
   else if (w.status === 'new') { ic = '⏳'; h = 'وصل طلبك — بانتظار تأكيد المطعم'; p = 'خلي الصفحة مفتوحة، راح تتحدث لوحدها'; }
   else if (st === 'done') { ic = '🎉'; h = w.mode === 'delivery' ? 'وصلك الطلب — بالعافية!' : 'بالعافية!'; p = 'شكراً لطلبك'; }
   else if (w.mode === 'delivery' && st === 'on_way') { ic = '🏍️'; h = 'الكابتن بالطريق إلك'; }
-  else if (st === 'ready') { ic = '✅'; h = 'طلبك جاهز!'; p = w.mode === 'table' ? 'راح يوصلك للطاولة هسه' : w.mode === 'pickup' ? 'تفضل استلمه من الكاونتر' : 'ينتظر الكابتن يستلمه'; }
+  else if (st === 'ready') { ic = '✅'; h = 'طلبك جاهز!'; p = w.mode === 'table' ? 'راح يوصلك للطاولة هسه' : w.mode === 'pickup' ? 'تفضل استلمه من الكاونتر' : 'يتم تحويل طلبك إلى الكابتن'; }
   else { ic = '👨‍🍳'; h = 'طلبك يتحضر'; p = 'المطبخ شغّال عليه هسه'; }
   if (st === 'ready' && lastStage && lastStage !== 'ready') { try { navigator.vibrate && navigator.vibrate([250, 120, 250]); } catch (e) {} ding(); }
   lastStage = w.status === 'new' ? 'new' : st;
