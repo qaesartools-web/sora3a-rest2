@@ -1503,6 +1503,31 @@
     dutyEndShift().finally(showDutyLock);
   }
   window.dutyEndNow = endDuty;
+  // الأجهزة المعتمدة: السيرفر رفض هذا الجهاز وهو شغّال (الحساب انفتح بجهاز ثاني، أو الإدارة لغت اعتماد الجهاز)
+  window.posSessionLost = () => {
+    const u = window.posUser;
+    if (!u || u.role !== 'cashier' || !restData || !(restData.features && restData.features.devices === true)) return;
+    if (dutyLocked || extAsk || $('devLost')) return;
+    if (!(onDutyNow(u.hours) || extOn(u))) return;   // خارج الدوام: قفل الدوام يتكفل
+    const el = document.createElement('div'); el.id = 'devLost'; el.className = 'duty-lock on';
+    el.innerHTML = `<div class="duty-box"><div class="duty-i">⛔</div><b>ما تكدر تشتغل على هذا الجهاز هسه</b>
+      <div class="duty-t">يا إما حسابك انفتح بجهاز ثاني، أو الإدارة لغت اعتماد هذا الجهاز</div>
+      <button type="button" class="btn-main" onclick="location.reload()">🔄 دخول من جديد على هذا الجهاز</button>
+      <button type="button" class="btn-soft" onclick="dutyLogout()">🚪 تسجيل خروج</button></div>`;
+    document.body.appendChild(el);
+  };
+  // نسأل السيرفر إذا هذا الجهاز بعده مسموح: لما كتابة تنرفض (حتى ما نقفل بسبب صلاحية وحدة ناقصة)، وكل ٣ دقايق
+  //  (مستند ما يسمعه أحد، حتى السيرفر يفحص من جديد — مو جواب من مستمع مفتوح)
+  let deniedAt = 0;
+  window.posDenied = async () => {
+    const u = window.posUser, fb = window._fb;
+    if (!u || u.role !== 'cashier' || !restData || !(restData.features && restData.features.devices === true) || !fb.getDocFromServer) return;
+    if (Date.now() - deniedAt < 15000 || $('devLost')) return;
+    deniedAt = Date.now();
+    try { await fb.getDocFromServer(fb.doc(fb.db, 'restaurants', restData.id, 'probe', 'device')); }
+    catch (e) { if (e && e.code === 'permission-denied') window.posSessionLost(); }
+  };
+  setInterval(() => { if (!document.hidden && navigator.onLine) window.posDenied(); }, 180000);
   const extBtns = () => {
     const eod = endOfDayMs(), opts = [[1, '⏱️ ساعة'], [2, '⏱️ ساعتين'], [3, '⏱️ ٣ ساعات']].filter(([n]) => Date.now() + n * 3600000 < eod);
     return `<div class="ext-grid">${opts.map(([n, l]) => `<button type="button" class="ext-b" onclick="dutyExtend(${n})">${l}</button>`).join('')}

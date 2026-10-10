@@ -123,6 +123,7 @@ button{cursor:pointer}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 <style id="gateCss"></style>
+<script src="device.js?v=1"></script>
 </head>
 <body>
 <div class="gate" id="gate" hidden></div>
@@ -211,7 +212,7 @@ function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on
 const stOf = (w) => (w.status === 'new' ? 'new' : w.status === 'rejected' ? 'rejected' : w.stage || 'preparing');
 
 staffGate($('gate'), {
-  title: 'سرعة — الويتر', sub: 'سجّل دخول بحساب الكاشير اللي سوّاه إلك صاحب المطعم',
+  title: 'سرعة — الويتر', sub: 'سجّل دخول بحساب الكاشير الخاص بيك', device: 'claim',
   onIn: (u) => { me = u; start(); },
   onOut: () => { unsubs.forEach((f) => f()); unsubs = []; me = null; $('app').hidden = true; $('off').hidden = true; },
 });

@@ -2,7 +2,7 @@
 // نفس حساب الكاشير ونفس الجلسة: الجهاز اللي مسجّل دخول بالكاشير يفتحها مباشرة.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, collection, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 export * from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 export const app = initializeApp({
@@ -26,9 +26,11 @@ const ERR = { 'auth/invalid-credential': 'الإيميل أو الرمز غلط'
 
 // el: مكان نموذج الدخول — onIn({uid, role, name, rid, rest}) / onOut()
 // remember: يحفظ آخر إيميل دخل بيه على هذا الجهاز (التلفزيون: بس يكتب الرمز بالريموت)
+// device: 'claim' — حساب الكاشير يسجّل جلسته على هذا الجهاز (الأجهزة المعتمدة)، مثل الويتر.
+//   بدونه (الشاشة): لما الخدمة شغّالة الكاشيرية ما يدخلون — الشاشة تدخل بحساب صاحب المطعم
 const EMAIL_KEY = 'sora3a_staff_email';
 const lastEmail = () => { try { return localStorage.getItem(EMAIL_KEY) || ''; } catch (e) { return ''; } };
-export function staffGate(el, { title, sub, onIn, onOut, remember }) {
+export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
   let busy = false;
   const form = (msg) => {
     const saved = remember ? lastEmail() : '';
@@ -72,9 +74,22 @@ export function staffGate(el, { title, sub, onIn, onOut, remember }) {
         if (saved && d.branches.includes(saved)) rid = saved;
       }
       if (remember && user.email) { try { localStorage.setItem(EMAIL_KEY, user.email); } catch (e) {} }
-      const r = await getDoc(doc(db, 'restaurants', rid));
+      const r = await getDoc(doc(db, 'restaurants', rid)), rest = r.exists() ? r.data() : {};
+      // الأجهزة المعتمدة (حساب كاشير)
+      const SD = window.SoraDev;
+      if (d.role === 'cashier' && SD && device !== 'claim' && SD.devicesOn(rest)) return deny('🔐 هذي الصفحة تدخل بحساب صاحب المطعم — حسابات الكاشيرية بس على أجهزة الكاشير المعتمدة');
+      if (d.role === 'cashier' && SD && device === 'claim') {
+        const fsx = { db, doc, getDoc, setDoc, updateDoc, onSnapshot };
+        if (await SD.claim(fsx, user, { ...d, restaurantId: rid }, rest) === 'blocked') {
+          if (!document.getElementById('devCss')) { const st = document.createElement('style'); st.id = 'devCss'; st.textContent = SD.CSS; document.head.appendChild(st); }
+          el.hidden = false; el.innerHTML = SD.blockHtml(SD.info());
+          el.querySelector('#devOut').onclick = async () => { await signOut(auth).catch(() => {}); location.reload(); };
+          SD.watch(fsx, SD.info(), () => location.reload(), rid);
+          return;
+        }
+      }
       el.hidden = true; el.innerHTML = '';
-      onIn({ uid: user.uid, role: d.role, name: d.name || '', rid, rest: r.exists() ? r.data() : {} });
+      onIn({ uid: user.uid, role: d.role, name: d.name || '', rid, rest });
     } catch (e) { deny(e.code === 'permission-denied' ? '⛔ الحساب موقوف أو خارج وقت الدوام' : '📶 تعذّر الاتصال — تأكد من الإنترنت'); }
   });
 }
