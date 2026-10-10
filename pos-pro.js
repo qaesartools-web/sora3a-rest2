@@ -580,11 +580,16 @@
       if ($('shiftScreen').classList.contains('on')) renderShift();
     }, (e) => console.warn('shift', e.code)));
   }
+  // آخر ١٠٠ وردية مسكّرة (لإعادة طباعة تقاريرها)
+  const KEEP_REPORTS = 100;
   async function loadClosedShifts() {
     const f = fb();
     try {
-      const s = await f.getDocs(f.query(subCol('shifts'), f.where('status', '==', 'closed')));
-      closedShifts = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.closedAtMs - a.closedAtMs).slice(0, 15);
+      const s = f.orderBy && f.limit
+        ? await f.getDocs(f.query(subCol('shifts'), f.orderBy('closedAtMs', 'desc'), f.limit(KEEP_REPORTS)))
+        : await f.getDocs(f.query(subCol('shifts'), f.where('status', '==', 'closed')));
+      closedShifts = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => x.status === 'closed')
+        .sort((a, b) => b.closedAtMs - a.closedAtMs).slice(0, KEEP_REPORTS);
     } catch (e) { closedShifts = []; }
   }
   // وردية فتحت قبل الطلبات اللي ينزّلها الجهاز (من بداية أمس — نادر): نجيب طلباتها من السيرفر حتى التقرير يطلع كامل
@@ -635,7 +640,7 @@
   function renderShift() {
     const el = $('shiftBody');
     // نحافظ على ما يكتبه الكاشير إذا أُعيد الرسم أثناء الكتابة
-    const keep = {}; ['shOpenCash', 'shCashier'].forEach((id) => { const i = $(id); if (i) keep[id] = i.value; });
+    const keep = {}; ['shOpenCash', 'shCashier', 'shDay'].forEach((id) => { const i = $(id); if (i) keep[id] = i.value; });
     const restore = () => Object.entries(keep).forEach(([id, v]) => { const i = $(id); if (i) i.value = v; });
     if (!shift) {
       // النموذج موجود: نحدّث قائمة الورديات السابقة فقط ولا نلمس ما يكتبه الكاشير
@@ -678,13 +683,31 @@
         <button class="btn-danger" onclick="shiftClose()">🔒 إغلاق الوردية</button>
       </div></div>` + closedHTML();
   }
+  // تقارير يوم سابق (لحد ١٠٠ يوم) + تقارير الورديات المسكّرة (لحد ١٠٠) — الكاشير يشوف ورديّاته بس
+  function dayPickHTML() {
+    const ymd = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const t = new Date(), min = new Date(t.getTime() - (KEEP_REPORTS - 1) * 86400000);
+    return `<div class="sh-card"><div class="sh-title">🧾 تقرير مبيعات يوم سابق</div>
+      <div class="sh-day"><input type="date" class="dinp" id="shDay" value="${ymd(t)}" min="${ymd(min)}" max="${ymd(t)}">
+      <button class="btn-soft" onclick="printDayPicked()">🖨️ طباعة</button></div>
+      <div class="ac-sub">تكدر تطبع تقرير أي يوم من آخر ${toA(KEEP_REPORTS)} يوم</div></div>`;
+  }
+  window.printDayPicked = () => {
+    const v = ($('shDay') || {}).value; if (!v) return;
+    const d = new Date(v + 'T00:00:00').getTime();
+    if (isNaN(d) || d > Date.now() || Date.now() - d > KEEP_REPORTS * 86400000) { toast('⚠️ اختار يوم من آخر ' + KEEP_REPORTS + ' يوم'); return; }
+    printDaily(d);
+  };
   function closedHTML() {
-    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
-    const list = isCashierRole() ? closedShifts.filter((x) => (x.closedAtMs || 0) >= d0.getTime()) : closedShifts;
-    if (!list.length) return '';
-    return `<div class="sh-card"><div class="sh-title">📜 ${isCashierRole() ? 'ورديات اليوم' : 'الورديات السابقة'}</div>${list.map((s) => `
+    const me = window.posUser && window.posUser.uid;
+    const list = isCashierRole() ? closedShifts.filter((x) => (me && x.uid === me) || x.device === deviceId) : closedShifts;
+    if (!list.length) return dayPickHTML();
+    const row = (s) => `
       <div class="sh-line"><span>${esc(new Date(s.closedAtMs).toLocaleString('ar-IQ-u-nu-latn'))}${s.cashier ? ' • ' + esc(s.cashier) : ''}<div class="ac-sub">مبيعات ${money(s.report && s.report.sales)} • فرق ${money(s.diff)}</div></span>
-      <button class="ac-b" style="flex:0 0 auto" onclick="shiftReprint('${esc(s.id)}')">🖨️</button></div>`).join('')}</div>`;
+      <button class="ac-b" style="flex:0 0 auto" onclick="shiftReprint('${esc(s.id)}')">🖨️</button></div>`;
+    return dayPickHTML() + `<div class="sh-card"><div class="sh-title">📜 ${isCashierRole() ? 'تقارير ورديّاتي' : 'تقارير الورديات'} <small>(آخر ${toA(list.length)})</small></div>
+      ${list.slice(0, 5).map(row).join('')}
+      ${list.length > 5 ? `<details class="sh-more"><summary>عرض الكل (${toA(list.length)})</summary>${list.slice(5).map(row).join('')}</details>` : ''}</div>`;
   }
   window.shiftOpen = async () => {
     const cash = num($('shOpenCash').value), cashier = ($('shCashier').value || '').trim().slice(0, 40);
@@ -721,7 +744,7 @@
       const closed = { ...shift, ...done };
       fb().updateDoc(sub('shifts', shift.id), done).catch(() => toast('❌ تعذّر الحفظ'));
       printShift(closed, 'z');
-      closedShifts = [closed, ...closedShifts].slice(0, 15);
+      closedShifts = [closed, ...closedShifts].slice(0, KEEP_REPORTS);
       shift = null; $('shiftWarn').classList.add('on'); renderShift();
       toast(done.diff === 0 ? '✅ أُغلقت الوردية — الدرج مطابق' : (done.diff > 0 ? '⚠️ زيادة ' : '⚠️ عجز ') + money(Math.abs(done.diff)));
     }, '🔒 إغلاق وطباعة التقرير');
@@ -729,8 +752,8 @@
   window.shiftPrint = () => { if (shift) printShift({ ...shift, report: shiftCalc(shift) }, 'x'); };
   window.shiftReprint = (id) => { const s = closedShifts.find((x) => x.id === id); if (s) printShift(s, 'z'); };
   // ── التقرير اليومي: وصل بالأرقام فقط (بدون أسماء زبائن) — اليوم الحالي فقط من الكاشير
-  function dailyCalc(from, to) {
-    const os = orders.filter((o) => (o.createdAtMs || 0) >= from && (o.createdAtMs || 0) < to);
+  function dailyCalc(from, to, list) {
+    const os = (list || orders).filter((o) => (o.createdAtMs || 0) >= from && (o.createdAtMs || 0) < to);
     const live = os.filter((o) => o.status !== 'cancelled'), canc = os.filter((o) => o.status === 'cancelled');
     const r = { n: live.length, sales: 0, disc: 0, fees: 0, byType: { salon: { n: 0, v: 0 }, takeaway: { n: 0, v: 0 }, delivery: { n: 0, v: 0 } },
       cash: 0, card: 0, later: 0, cod: 0, cancN: canc.length, cancV: canc.reduce((s, o) => s + (o.value || 0), 0), items: 0 };
@@ -758,11 +781,18 @@
       ${row('مجموع المبيعات', fmt(r.sales) + ' د.ع', true)}${r.exp ? row('💸 المصروفات', '-' + fmt(r.exp)) : ''}
       <div class="div"></div><div style="text-align:center;font-size:10px">طُبع ${esc(new Date().toLocaleString('ar-IQ-u-nu-latn'))}${window.posUser && window.posUser.name ? ' • ' + esc(window.posUser.name) : ''}</div></body></html>`;
   }
-  window.printDaily = () => {
-    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
-    const r = dailyCalc(d0.getTime(), d0.getTime() + 86400000);
-    printHTML(dailyReceipt(r, '🧾 التقرير اليومي', esc(d0.toLocaleDateString('ar-IQ-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' }))));
-    toast('🖨️ طباعة تقرير اليوم');
+  // تقرير مبيعات يوم (اليوم، أو يوم سابق — طلباته القديمة تنجاب من السيرفر وقت الطلب)
+  window.printDaily = (dayMs) => {
+    const d0 = new Date(dayMs || Date.now()); d0.setHours(0, 0, 0, 0);
+    const from = d0.getTime(), to = from + 86400000, today = from === new Date().setHours(0, 0, 0, 0);
+    const go = (list) => {
+      printHTML(dailyReceipt(dailyCalc(from, to, list), '🧾 التقرير اليومي', esc(d0.toLocaleDateString('ar-IQ-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' }))));
+      toast('🖨️ طباعة تقرير ' + (today ? 'اليوم' : 'يوم ' + d0.toLocaleDateString('ar-IQ-u-nu-latn')));
+    };
+    if (!window.posOrdersIn) { go(); return; }
+    let done = false;
+    const r = window.posOrdersIn(from, to, () => { if (!done) { done = true; go(window.posOrdersIn(from, to).list); } });
+    if (!r.loading) { done = true; go(r.list); } else toast('⏳ دا ينجاب طلبات ذاك اليوم…');
   };
   window.dailyCalc = dailyCalc;
   function printShift(sh, kind) {
@@ -1566,8 +1596,8 @@
     el.innerHTML = `<div class="duty-box"><div class="duty-i">⏰</div><b>خلص وقت دوامك</b>
       <div class="duty-t">تريد تمدد الدوام؟</div>
       ${extBtns()}
-      <button type="button" class="btn-soft" onclick="dutyEndNow()">🔒 إنهاء الدوام وإغلاق الوردية</button>
-      <div class="duty-s">إذا ما اخترت شي، الوردية تنغلق وحدها بعد ١٤ دقيقة</div></div>`;
+      <button type="button" class="btn-soft" onclick="dutyEndNow()">🔒 إنهاء الدوام وطباعة تقرير المبيعات</button>
+      <div class="duty-s">إذا مدّدت، التقرير ينطبع لما يخلص التمديد. وإذا ما اخترت شي، الدوام ينتهي وينطبع التقرير وحده بعد ١٤ دقيقة</div></div>`;
     el.classList.add('on');
     clearTimeout(extAskT);
     extAskT = setTimeout(() => { if (extAsk) endDuty(); }, 14 * 60000);
@@ -1585,9 +1615,16 @@
     } catch (e) { toast('⚠️ تعذّر التمديد' + (e && e.code === 'permission-denied' ? ' — انتهى وقت التمديد، كلّم صاحب المطعم' : ' — تأكد من الإنترنت')); }
   };
   // نهاية الدوام: إغلاق وردية هذا الكاشير وطباعة فاتورة المبلغ الكلي
+  // نهاية الدوام: وردية مفتوحة ← تنسد وينطبع تقريرها (Z)؛ ماكو وردية ← ينطبع تقرير مبيعات اليوم
+  let dutyPrinted = null;
   async function dutyEndShift() {
     const u = window.posUser;
-    if (!shift || dutyClosing || !(shift.uid === u.uid || shift.device === deviceId)) return;
+    if (dutyClosing) return;
+    if (!shift || !(shift.uid === u.uid || shift.device === deviceId)) {
+      toast('🖨️ انتهى الدوام — دا ينطبع تقرير مبيعات اليوم');
+      const day = Date.now(); printDaily(day); dutyPrinted = { kind: 'daily', day };
+      return;
+    }
     dutyClosing = true;
     await ensureShiftOrders(shift);
     if (!shift) { dutyClosing = false; return; }
@@ -1597,10 +1634,10 @@
     try {
       await fb().updateDoc(sub('shifts', shift.id), done);
       const closed = { ...shift, ...done };
-      printShift(closed, 'z');
-      closedShifts = [closed, ...closedShifts].slice(0, 15);
+      printShift(closed, 'z'); dutyPrinted = { kind: 'z', id: closed.id };
+      closedShifts = [closed, ...closedShifts].slice(0, KEEP_REPORTS);
       shift = null;
-      toast('🔒 انتهى الدوام — أُغلقت الوردية وانطبع التقرير');
+      toast('🔒 انتهى الدوام — أُغلقت الوردية وانطبع تقرير المبيعات');
     } catch (e) { toast('⚠️ تعذّر إغلاق الوردية تلقائياً — صاحب المطعم يغلقها'); }
   }
   function showDutyLock() {
@@ -1611,7 +1648,7 @@
       <div class="duty-t">دوامك من ${hm(h.from)} إلى ${hm(h.to)}</div>
       <div class="duty-s">النظام يفتح تلقائياً عند بداية دوامك</div>
       ${canExtend(window.posUser) ? `<div class="duty-t" style="margin-top:4px">أو مدّد الدوام:</div>${extBtns()}` : ''}
-      ${closedShifts[0] && closedShifts[0].autoClosed && Date.now() - closedShifts[0].closedAtMs < 3600000 ? `<button type="button" class="btn-soft" onclick="shiftReprint('${esc(closedShifts[0].id)}')">🖨️ إعادة طباعة تقرير الوردية</button>` : ''}
+      ${dutyPrinted ? `<button type="button" class="btn-soft" onclick="${dutyPrinted.kind === 'z' ? `shiftReprint('${esc(dutyPrinted.id)}')` : `printDaily(${Number(dutyPrinted.day) || 0})`}">🖨️ إعادة طباعة تقرير المبيعات</button>` : ''}
       <button type="button" class="btn-main" onclick="dutyLogout()">🚪 تسجيل خروج</button></div>`;
     el.classList.add('on');
   }

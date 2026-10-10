@@ -140,6 +140,8 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 .sh-stat b{display:block;font-size:17px;font-weight:900;color:var(--orange);}
 .sh-stat span{font-size:11px;color:var(--muted);}
 .sh-line{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.sh-day{display:flex;gap:8px;align-items:center;margin-bottom:6px}.sh-day .dinp{flex:1;margin:0}.sh-day .btn-soft{flex:0 0 auto;width:auto;margin:0;padding:10px 16px}
+.sh-more summary{cursor:pointer;color:var(--muted);font-weight:700;font-size:12.5px;padding:8px 0}
 .sh-line:last-child{border-bottom:none;}
 .sh-line b.pos{color:#16a34a;}.sh-line b.neg{color:#e11d48;}
 .sh-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
