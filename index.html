@@ -341,6 +341,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 /* ── REPORTS ── */
 #reportsScreen{padding:10px;padding-bottom:60px;overflow-y:auto;}
 #reportsScreen::-webkit-scrollbar{width:0;}
+.rep-loading{background:rgba(79,107,237,.1);border:1px solid rgba(79,107,237,.35);color:#3b4fc4;border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:700;margin:6px 0 10px;}
 .rcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;}
 .rtitle{font-size:13px;font-weight:900;margin-bottom:10px;}
 .drow{display:flex;gap:8px;margin-bottom:8px;}
@@ -582,6 +583,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
         <button class="printbtn" onclick="printRep()">🖨️ طباعة التقرير</button>
       </div>
 
+      <div id="repLoading" class="rep-loading" hidden>⏳ دا ينجاب طلبات الفترة القديمة من السيرفر…</div>
       <div id="repFin"></div>
       <div id="repList"></div>
     </div>
@@ -1094,11 +1096,72 @@ function enterApp(){
   showThemeSwitcher();
 }
 
+// ═══ الطلبات: الجهاز ينزّل بس الجديدة (من بداية أمس) + المفتوحة والآجلة من أي يوم ═══
+// قبل كان كل جهاز ينزّل كل طلبات المطعم من أول يوم (يكبر كل يوم ويكلّف قراءات). التقارير لفترة قديمة تنجاب وقت الطلب.
+// يحتاج فهرس orders (restaurantId + createdAtMs)؛ إذا مو موجود يرجع للطريقة القديمة حتى ما يوقف شي
+const ORD_OPEN=['pending','accepted','pickup','delivering','preparing','ready'];
+let ordSets={},ordUnsubs=[],ordSince=0,ordLegacy=false,ordTimer=0;
+const ordWinStart=()=>{const d=new Date();d.setHours(0,0,0,0);return d.getTime()-86400000;};
+window.posOrdersSince=()=>ordLegacy?0:ordSince;
+function ordApply(){
+  // الأحدث يغلب: المفتوحة/الآجلة أول، وبعدها نافذة الأيام (أحدث نسخة من السيرفر)
+  const m=new Map();['open','later','win','all'].forEach(k=>(ordSets[k]||[]).forEach(o=>m.set(o.id,o)));
+  onOrdersSnap([...m.values()].sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0)));
+}
+function ordSub(){
+  ordUnsubs.forEach(u=>u&&u());ordUnsubs=[];ordSets={};
+  const fb=window._fb,col=fb.collection(fb.db,'orders'),rid=restData.id;
+  const on=k=>snap=>{ordSets[k]=snap.docs.map(d=>({id:d.id,...d.data()}));ordApply();};
+  const err=k=>e=>{
+    if(e&&e.code==='permission-denied'){if(window.posSessionLost)posSessionLost();return;}
+    if(k==='win'&&e&&e.code==='failed-precondition'&&!ordLegacy){console.warn('orders: index missing, loading all',e.message);ordLegacy=true;histCache.clear();ordSub();return;}
+    console.warn('orders '+k,e&&e.code);
+  };
+  if(ordLegacy||window.__ordLegacy){ordLegacy=true;ordUnsubs.push(fb.onSnapshot(fb.query(col,fb.where('restaurantId','==',rid)),on('all'),err('all')));return;}
+  ordSince=ordWinStart();
+  ordUnsubs.push(fb.onSnapshot(fb.query(col,fb.where('restaurantId','==',rid),fb.where('createdAtMs','>=',ordSince)),on('win'),err('win')));
+  ordUnsubs.push(fb.onSnapshot(fb.query(col,fb.where('restaurantId','==',rid),fb.where('status','in',ORD_OPEN)),on('open'),err('open')));
+  ordUnsubs.push(fb.onSnapshot(fb.query(col,fb.where('restaurantId','==',rid),fb.where('payment.method','==','later')),on('later'),err('later')));
+}
+// طلبات فترة (للتقارير والحسابات): الجزء الجديد من الذاكرة، والقديم من السيرفر مرة وحدة وينحفظ
+const histCache=new Map();let histAll=null;
+window.posOrdersIn=(from,to,rerender)=>{
+  const inR=o=>{const t=o.createdAtMs||0;return t>=from&&t<to;};
+  const since=window.posOrdersSince();
+  if(from>=since)return{list:orders.filter(inR),loading:false};
+  const hi=Math.min(to,since),k=from+'|'+hi,c=histCache.get(k);
+  const recent=to>since?orders.filter(o=>inR(o)&&(o.createdAtMs||0)>=since):[];
+  if(c&&c.list){const ids=new Set(recent.map(o=>o.id));return{list:c.list.filter(o=>!ids.has(o.id)).concat(recent).sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0)),loading:false};}
+  if(!c){
+    const e={list:null};histCache.set(k,e);
+    const fb=window._fb,col=fb.collection(fb.db,'orders'),rid=restData.id;
+    const map=s=>s.docs.map(d=>({id:d.id,...d.data()}));
+    fb.getDocs(fb.query(col,fb.where('restaurantId','==',rid),fb.where('createdAtMs','>=',from),fb.where('createdAtMs','<',hi))).then(map)
+      .catch(err=>{
+        if(err&&err.code!=='failed-precondition')throw err;
+        // بدون الفهرس: كل طلبات المطعم مرة وحدة (مثل قبل)، وبعدها من الذاكرة
+        return (histAll||(histAll=fb.getDocs(fb.query(col,fb.where('restaurantId','==',rid))).then(map))).then(a=>a.filter(o=>{const t=o.createdAtMs||0;return t>=from&&t<hi;}));
+      })
+      .then(list=>{e.list=list;},err=>{histCache.delete(k);console.warn('history',err&&err.code);try{toast('📶 تعذّر تحميل الطلبات القديمة — تأكد من الإنترنت');}catch(_){}})
+      .finally(()=>{try{rerender&&rerender();}catch(_){}});
+  }
+  return{list:orders.filter(inR),loading:true};
+};
 function startListeners(){
   const fb=window._fb;
+  ordSub();
+  clearInterval(ordTimer);
+  ordTimer=setInterval(()=>{if(!ordLegacy&&restData&&ordWinStart()!==ordSince)ordSub();},60000);   // يوم جديد: النافذة تمشي
+  unsubs.push(()=>{clearInterval(ordTimer);ordUnsubs.forEach(u=>u&&u());ordUnsubs=[];});
   unsubs.push(
-    fb.onSnapshot(fb.query(fb.collection(fb.db,'orders'),fb.where('restaurantId','==',restData.id)),snap=>{
-      const newOrders=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0));
+    fb.onSnapshot(fb.query(fb.collection(fb.db,'captains'),fb.where('restaurantId','==',restData.id)),snap=>{
+      captains=snap.docs.map(d=>({id:d.id,...d.data()}));
+    })
+  );
+  startListeners2();
+}
+function onOrdersSnap(newOrders){
+  const fb=window._fb;
       // Check for captain reject/cancel notifications
       newOrders.forEach(o=>{
         const rn=o.rejectNotice;
@@ -1114,11 +1177,9 @@ function startListeners(){
       });
       orders=newOrders;
       renderOrders();renderHold();
-    },e=>{if(e&&e.code==='permission-denied'&&window.posSessionLost)posSessionLost();}),
-    fb.onSnapshot(fb.query(fb.collection(fb.db,'captains'),fb.where('restaurantId','==',restData.id)),snap=>{
-      captains=snap.docs.map(d=>({id:d.id,...d.data()}));
-    })
-  );
+}
+function startListeners2(){
+  const fb=window._fb;
   unsubs.push(fb.onSnapshot(fb.collection(fb.db,'accounting',restData.id,'expenses'),snap=>{
     accExp=snap.docs.map(d=>({id:d.id,...d.data()}));
     const scr=document.getElementById('accScreen');if(scr&&scr.classList.contains('on')&&!document.getElementById('acOv').classList.contains('on'))renderAcc();
@@ -1551,12 +1612,18 @@ window.setPreset=p=>{
   renderRep();
 };
 
-function getRepOrders(){
+// طلبات فترة التقرير (القديمة تنجاب من السيرفر وقت الطلب)
+function repRangeOrders(){
   const from=document.getElementById('repFrom')?.value;
   const to=document.getElementById('repTo')?.value;
   const start=from?new Date(from+'T00:00:00').getTime():0;
   const end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
-  let fil=orders.filter(o=>{const t=o.createdAtMs||0;return t>=start&&t<end;});
+  const r=posOrdersIn(start,end,()=>{if(document.getElementById('reportsScreen')?.classList.contains('on'))renderRep();});
+  const el=document.getElementById('repLoading');if(el)el.hidden=!r.loading;
+  return r.list;
+}
+function getRepOrders(){
+  let fil=repRangeOrders();
   if(repType==='delivery')fil=fil.filter(o=>getOrderType(o)==='delivery');
   else if(repType==='salon')fil=fil.filter(o=>getOrderType(o)==='salon');
   else if(repType==='takeaway')fil=fil.filter(o=>getOrderType(o)==='takeaway');
@@ -1584,13 +1651,7 @@ window.renderRep=()=>{
   // Captain report
   if(repType==='captains'){
     const capMap={};
-    orders.filter(o=>{
-      const from=document.getElementById('repFrom')?.value;
-      const to=document.getElementById('repTo')?.value;
-      const start=from?new Date(from+'T00:00:00').getTime():0;
-      const end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
-      return(o.createdAtMs||0)>=start&&(o.createdAtMs||0)<end;
-    }).forEach(o=>{
+    repRangeOrders().forEach(o=>{
       if(!o.captainId)return;
       if(!capMap[o.captainId])capMap[o.captainId]={name:o.captainName||o.captainId,total:0,count:0,delivered:0};
       capMap[o.captainId].count++;
@@ -2054,6 +2115,8 @@ function renderAcc(){
   const body=document.getElementById('acBody');if(!body)return;
   const fn={mat:tabMat,mov:tabMov,rec:tabRec,exp:tabExp,fin:tabFin,tools:tabTools}[acCur]||tabMat;
   body.innerHTML=fn();
+  if(acLoadingNow)body.insertAdjacentHTML('afterbegin','<div class="rep-loading">⏳ دا ينجاب طلبات الفترة القديمة من السيرفر…</div>');
+  acLoadingNow=false;
   if(acCur==='mat')renderMatList();
   // الكاشير: الوصفات للمشاهدة فقط
   if(!isOwnerPOS()&&acCur==='rec')body.querySelectorAll('input,select,button[onclick^="rec"]').forEach(el=>{el.disabled=true;});
@@ -2304,7 +2367,10 @@ function finCalc(os,start,end){
   return{orders:done.length,activeN,sales,cogs,gross:sales-cogs,exp,waste:-sv('waste'),count:sv('count'),purch:sv('purchase'),pret:-sv('purchase_return'),
     byType,soldList,noCost:soldList.filter(s=>s.cost===0).length,cancelled:{n:canc.length,v:canc.reduce((s,o)=>s+(o.value||0),0),reasons}};
 }
-function accOrders(){const{start,end}=rangeMs();return{start,end,os:orders.filter(o=>{const t=o.createdAtMs||0;return t>=start&&t<end;})};}
+let acLoadingNow=false;
+function accOrders(){const{start,end}=rangeMs(),r=posOrdersIn(start,end,()=>{const scr=document.getElementById('accScreen');if(scr&&scr.classList.contains('on')&&!document.getElementById('acOv').classList.contains('on'))renderAcc();});
+  if(r.loading)acLoadingNow=true;
+  return{start,end,os:r.list,loading:r.loading};}
 function stmtHTML(f,extra){
   const net=f.gross-f.exp-f.waste+f.count,pct=(a,b)=>b?Math.round(a/b*1000)/10:0;
   const ln=(t,v,c)=>`<div class="ac-line"><span>${t}</span><b class="${c||''}">${v}</b></div>`;
@@ -2735,7 +2801,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=32"></script>
+<script src="pos-pro.js?v=33"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
