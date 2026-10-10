@@ -186,8 +186,8 @@
     }).join('') : `<div class="prod-empty"><div class="i">🔍</div>لا توجد نتائج لـ «${esc(prodQuery)}»</div>`;
   };
   window.clearProdSearch = () => { prodQuery = ''; $('prodSearch').value = ''; renderMenu(); };
-  window.importSampleMenu = () => {
-    if (!confirm('استيراد منيو تجريبي؟ يمكنك تعديله أو حذفه لاحقاً.')) return;
+  window.importSampleMenu = async () => {
+    if (!(await askOk('استيراد منيو تجريبي؟ يمكنك تعديله أو حذفه لاحقاً.'))) return;
     menu = JSON.parse(JSON.stringify(defaultMenu)); activeCat = 0; saveMenu(); renderMenu(); toast('✅ تم استيراد المنيو التجريبي');
   };
 
@@ -256,9 +256,9 @@
       renderCart();
     }, '✅ حفظ');
   };
-  window.clearCart = () => {
+  window.clearCart = async () => {
     if (!cart.length && !disc.value) return;
-    if (cart.length && !confirm('تفريغ السلة؟')) return;
+    if (cart.length && !(await askOk('تفريغ السلة؟'))) return;
     cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
   };
   window.openDiscount = () => {
@@ -1311,7 +1311,7 @@
     dpFind(true);
   };
   window.dpRemoveNet = async (name) => {
-    if (!confirm('تشيل الطابعة «' + name + '»؟')) return;
+    if (!(await askOk('تشيل الطابعة «' + name + '»؟'))) return;
     await DESK.removePrinter(name); toast('🗑️ انشالت الطابعة'); dpFind(true);
   };
   window.dpTest = async (sid) => {
@@ -2269,7 +2269,7 @@
   }
   window.copyMenuLink = (link) => {
     const u = link || menuLink();
-    (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast(link ? '📋 انسخ الرابط' : '📋 انسخ رابط المنيو — دزّه للزبائن أو حطه بالانستغرام'), () => prompt('انسخ الرابط:', u));
+    (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast(link ? '📋 انسخ الرابط' : '📋 انسخ رابط المنيو — دزّه للزبائن أو حطه بالانستغرام'), () => askText('انسخ الرابط:', u));
   };
   function loadQR() {
     if (window.qrcode) return Promise.resolve();

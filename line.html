@@ -59,6 +59,7 @@ input.in{width:100%;font:inherit;font-size:16px;padding:12px;border:1px solid va
 <main id="app"><div class="card muted">⏳ لحظة…</div></main>
 <div class="toast" id="toast"></div>
 
+<script src="ask.js?v=1"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -312,7 +313,7 @@ async function lineFor(num) {
 }
 window.lnRemove = async (token) => {
   const g = groups().find((x) => x.token === token); if (!g) return;
-  if (!confirm(`تلغي ربط الرقم ${g.label} (خط ${g.line}) من هذا التلفون؟ مكالماته ما راح تطلع بالكاشير بعد.`)) return;
+  if (!(await askOk(`تلغي ربط الرقم ${g.label} (خط ${g.line}) من هذا التلفون؟ مكالماته ما راح تطلع بالكاشير بعد.`))) return;
   let gone = false;
   if (user && rest && rest.id === g.restaurantId) { try { await deleteDoc(doc(db, 'lineTokens', token)); gone = true; } catch (e) {} }
   await DESK.removeCallLine(token);
@@ -369,7 +370,7 @@ window.lnTest = async (token) => {
   render();
 };
 window.lnUnlink = async () => {
-  if (!confirm('تلغي ربط هذا التلفون؟ مكالماته ما راح تطلع بالكاشير بعد.')) return;
+  if (!(await askOk('تلغي ربط هذا التلفون؟ مكالماته ما راح تطلع بالكاشير بعد.'))) return;
   let gone = false;
   if (user && rest && rest.id === st.restaurantId) { try { await deleteDoc(doc(db, 'lineTokens', st.token)); gone = true; } catch (e) {} }
   await DESK.clearCallLine();

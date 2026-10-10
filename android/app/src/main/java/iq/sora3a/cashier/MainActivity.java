@@ -17,11 +17,16 @@ import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.JsPromptResult;
+import android.webkit.JsResult;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 
 import androidx.webkit.WebViewCompat;
@@ -40,6 +45,19 @@ public class MainActivity extends Activity {
     private volatile String pageUrl = "";
 
     boolean pageOriginOk() { return pageUrl.startsWith(Bridge.ORIGIN + "/"); }
+
+    private static final int FILE_REQ = 4242;
+    private ValueCallback<Uri[]> fileCb;
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        if (req == FILE_REQ) {
+            if (fileCb != null) fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
+            fileCb = null;
+            return;
+        }
+        super.onActivityResult(req, res, data);
+    }
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
@@ -69,6 +87,39 @@ public class MainActivity extends Activity {
             web.addJavascriptInterface(new Bridge(this, web, backend, renderer, sim), "SoraPOS");
             if (early) WebViewCompat.addDocumentStartJavaScript(web, Bridge.SHIM, Collections.singleton(Bridge.ORIGIN));
         }
+
+        // نوافذ الصفحة (تأكيد/تنبيه/إدخال) + اختيار صورة — بدون هذا الأندرويد يتجاهلها ويرجّع «لا» وحده
+        //  (زر «خروج» ما كان يشتغل، وكل «متأكد؟»، ورفع صور المنيو)
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onJsAlert(WebView v, String url, String msg, JsResult r) {
+                if (isFinishing()) { r.cancel(); return true; }
+                new AlertDialog.Builder(MainActivity.this).setMessage(msg).setPositiveButton("تمام", (d, w) -> r.confirm())
+                    .setOnCancelListener((d) -> r.cancel()).show();
+                return true;
+            }
+            @Override public boolean onJsConfirm(WebView v, String url, String msg, JsResult r) {
+                if (isFinishing()) { r.cancel(); return true; }
+                new AlertDialog.Builder(MainActivity.this).setMessage(msg).setPositiveButton("نعم", (d, w) -> r.confirm())
+                    .setNegativeButton("لا", (d, w) -> r.cancel()).setOnCancelListener((d) -> r.cancel()).show();
+                return true;
+            }
+            @Override public boolean onJsPrompt(WebView v, String url, String msg, String def, JsPromptResult r) {
+                if (isFinishing()) { r.cancel(); return true; }
+                final EditText in = new EditText(MainActivity.this);
+                in.setText(def == null ? "" : def); in.setSingleLine(true); in.selectAll();
+                new AlertDialog.Builder(MainActivity.this).setMessage(msg).setView(in)
+                    .setPositiveButton("تمام", (d, w) -> r.confirm(in.getText().toString()))
+                    .setNegativeButton("إلغاء", (d, w) -> r.cancel()).setOnCancelListener((d) -> r.cancel()).show();
+                return true;
+            }
+            @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams params) {
+                if (fileCb != null) fileCb.onReceiveValue(null);
+                fileCb = cb;
+                try { startActivityForResult(params.createIntent(), FILE_REQ); }
+                catch (ActivityNotFoundException e) { fileCb = null; cb.onReceiveValue(null); return false; }
+                return true;
+            }
+        });
 
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
