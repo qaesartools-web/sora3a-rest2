@@ -1502,9 +1502,11 @@
   function listenRest() {
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', rid()), (s) => {
       if (!s.exists() || !restData) return;
-      const before = JSON.stringify(restData.features || {});
+      const before = JSON.stringify(restData.features || {}), beforeH = JSON.stringify(restData.hours || null);
       restData.features = s.data().features || null;
+      restData.hours = s.data().hours || null;   // ساعات الدوام (من برج سرعة) — تنشر ويا المنيو الأونلاين
       if (before !== JSON.stringify(restData.features || {})) { applyFeatures(); pubSoon(); toast('🔄 تم تحديث خدمات المطعم'); }
+      else if (beforeH !== JSON.stringify(restData.hours || null)) pubSoon();
     }, () => {}));
   }
 
@@ -2009,7 +2011,13 @@
       // «عرض المنيو بس»: الزبون يتصفح والمتوفر يبين، بدون طلب (كل طرق الطلب مطفية)
       modes: oc.viewOnly ? { table: false, pickup: false, delivery: false } : { table: !!oc.table, pickup: !!oc.pickup, delivery: !!oc.delivery && feat('captain') },
       fee: Number(settings.defaultFee) || 0, tables: Number(settings.tables) || 0, note: String(oc.note || '').slice(0, 300), autoTable: !!oc.autoTable, cats,
+      ...pubHours(),
     };
+  }
+  // ساعات الدوام: خارجها الزبون يتصفح المنيو بس (menu.html)
+  function pubHours() {
+    const h = restData && restData.hours;
+    return h && h.on && Number.isInteger(h.open) && Number.isInteger(h.close) && h.open !== h.close ? { hours: { on: true, open: h.open, close: h.close } } : {};
   }
   async function publishMenu(force) {
     if (!rid() || !restData) return;
@@ -2029,7 +2037,12 @@
         catch (e) { console.warn('pub img', e.code); }
       }
       lsSet(imgKey_, sent);
-      await f.setDoc(f.doc(f.db, 'publicMenus', myRid), { ...d, updatedAtMs: Date.now() });
+      try { await f.setDoc(f.doc(f.db, 'publicMenus', myRid), { ...d, updatedAtMs: Date.now() }); }
+      catch (e) {
+        // قواعد قديمة ما تعرف «hours» بعد ← ننشر المنيو بدونها حتى ما يوقف
+        if (!(d.hours && e && e.code === 'permission-denied')) throw e;
+        const { hours, ...d2 } = d; await f.setDoc(f.doc(f.db, 'publicMenus', myRid), { ...d2, updatedAtMs: Date.now() });
+      }
       lsSet(sigKey, sig);
     } catch (e) { console.warn('publish menu', e.code || e); }
     finally { pubBusy = false; if (pubAgain) { pubAgain = false; pubSoon(); } }

@@ -206,7 +206,15 @@ function modes() {
   if (T && m.table) return ['table'];
   return ['pickup', 'delivery'].filter((k) => m[k]);
 }
-const canOrder = () => modes().length > 0;
+// ساعات الدوام (يحددها برج سرعة، وتنشر ويا المنيو): خارجها المنيو يتصفح بس — بتوقيت بغداد، والإغلاق ممكن بعد نص الليل
+const bagMin = () => (Math.floor(Date.now() / 60000) + 180) % 1440;
+const closedNow = () => {
+  const h = M && M.hours; if (!h || !h.on || h.open === h.close) return false;
+  const n = bagMin();
+  return h.open < h.close ? !(n >= h.open && n < h.close) : !(n >= h.open || n < h.close);
+};
+const hm12 = (n) => { const h = Math.floor(n / 60), m = n % 60; return ((h % 12) || 12) + ':' + String(m).padStart(2, '0') + (h < 12 ? ' صباحاً' : ' مساءً'); };
+const canOrder = () => !closedNow() && modes().length > 0;
 const viewOnly = () => !!(M && M.on && !['table', 'pickup', 'delivery'].some((k) => (M.modes || {})[k]));
 
 // ── تحميل المنيو (مباشر: أي تغيير بالكاشير يوصل فوراً) ──
@@ -222,6 +230,9 @@ function start() {
   }, () => showState('📶', 'تعذّر تحميل المنيو — تأكد من الإنترنت وحدّث الصفحة'));
   const last = ls.get(LAST, null);
   if (last && last.id && Date.now() - last.at < 6 * 3600000) watchOrder(last.id);
+  // المطعم فتح أو سكّر وهو مفتوح المنيو ← تتحدث الأزرار وحدها
+  let wasClosed = null;
+  setInterval(() => { if (!M || !$('stView').hidden) return; const c = closedNow(); if (wasClosed !== null && c !== wasClosed) renderMenu(); wasClosed = c; }, 30000);
 }
 
 function renderHead() {
@@ -237,6 +248,7 @@ function renderMenu() {
   if (!M.on) b.push('<div class="banner warn">⏸️ المطعم مو مستقبل طلبات أونلاين هسه — تگدر تتصفح المنيو</div>');
   // «عرض المنيو بس»: المطعم شغّل المنيو بدون طلب — الزبون يتصفح والمتوفر يبين
   else if (viewOnly()) b.push('<div class="banner">📖 هذا منيو المطعم — الأصناف المتوفرة هسه. للطلب كلّم الكاشير أو الويتر 🙌</div>');
+  else if (closedNow()) b.push(`<div class="banner warn" id="closedBan">🌙 المطعم مسكّر هسه — نفتح الساعة ${hm12(M.hours.open)} ونسكّر ${hm12(M.hours.close)}. تگدر تتصفح المنيو</div>`);
   else if (!canOrder()) b.push(`<div class="banner warn">${M.modes && M.modes.table ? '🪑 حتى تطلب، امسح كود الطاولة' : '⏸️ الطلب الأونلاين متوقف هسه'}</div>`);
   if (M.note) b.push(`<div class="banner">📢 ${esc(M.note)}</div>`);
   $('banners').innerHTML = b.join('');
@@ -393,6 +405,7 @@ async function send() {
   if (sending || !cart.length) return;
   const err = (t, id) => { const e = $('cErr'); e.textContent = t; e.hidden = false; if (id) { $(id).classList.add('bad'); $(id).focus(); } };
   document.querySelectorAll('#cartSh .bad').forEach((x) => x.classList.remove('bad'));
+  if (closedNow()) { err(`🌙 المطعم مسكّر هسه — نفتح الساعة ${hm12(M.hours.open)}`); return; }
   if (!modes().includes(mode)) { err('⏸️ الطلب الأونلاين متوقف هسه'); return; }
   const name = $('cName').value.trim(), note = $('cNote').value.trim();
   const phone = $('cPhone') ? digits($('cPhone').value).replace(/[^\d+]/g, '') : '';
