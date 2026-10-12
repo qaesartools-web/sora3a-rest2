@@ -55,13 +55,35 @@ export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
       busy = false;
     };
   };
-  const deny = async (msg) => { await signOut(auth).catch(() => {}); form(msg); };
-  onAuthStateChanged(auth, async (user) => {
+  // الشاشة (remember): ما تطلع من الحساب وحدها أبداً — نت مقطوع، كهرباء، حساب موقوف مؤقتاً… تنتظر وترجع وحدها.
+  //   تسجيل الخروج بس من زر «تسجيل خروج» (أو إذا انغيّرت كلمة السر من الإدارة).
+  let retryT = 0, tries = 0, cur = null;
+  const hold = (msg, user) => {
+    clearTimeout(retryT);
+    const ms = Math.min(60000, 5000 * Math.pow(2, Math.min(tries++, 4)));
+    el.hidden = false;
+    el.innerHTML = `<div class="gate-f gate-hold"><div class="gate-logo">س</div><h1>${esc(title)}</h1><p class="gate-msg">${esc(msg)}</p>
+      <p class="gate-sub">الشاشة ترجع وحدها — ما تحتاج تكتب الرمز</p><div class="gate-w gate-spin">⏳</div>
+      <button class="gate-b gate-out" type="button">تسجيل خروج</button></div>`;
+    el.querySelector('.gate-out').onclick = () => { clearTimeout(retryT); signOut(auth).catch(() => {}); };
+    retryT = setTimeout(() => check(user), ms);
+  };
+  const netErr = (e) => !e || e.code === 'unavailable' || e.code === 'deadline-exceeded' || e.code === 'failed-precondition' || /offline|network/i.test(e.message || '');
+  window.addEventListener('online', () => { if (cur && retryT) { clearTimeout(retryT); tries = 0; check(cur); } });
+  onAuthStateChanged(auth, (user) => {
+    clearTimeout(retryT); retryT = 0; tries = 0; cur = user;
     if (!user) { onOut && onOut(); form(); return; }
+    check(user);
+  });
+  async function check(user) {
+    if (user !== cur) return;
+    retryT = 0;
     el.hidden = false; el.innerHTML = '<div class="gate-w">⏳</div>';
+    const deny = async (msg, keep) => { if (remember && keep) return hold(msg, user); await signOut(auth).catch(() => {}); form(msg); };
     try {
       const u = await getDoc(doc(db, 'users', user.uid)), d = u.exists() ? u.data() : null;
-      if (!d || d.disabled || !['restaurant', 'cashier'].includes(d.role)) return deny('❌ هذا الحساب مو حساب مطعم أو كاشير');
+      if (d && d.disabled) return deny('⛔ الحساب موقوف حالياً — أول ما يتفعّل', true);
+      if (!d || !['restaurant', 'cashier'].includes(d.role)) return deny('❌ هذا الحساب مو حساب مطعم أو كاشير');
       let rid = d.restaurantId;
       if (!rid && d.role === 'restaurant') {
         const q = await getDocs(query(collection(db, 'restaurants'), where('userId', '==', user.uid)));
@@ -88,10 +110,15 @@ export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
           return;
         }
       }
+      tries = 0;
       el.hidden = true; el.innerHTML = '';
       onIn({ uid: user.uid, role: d.role, name: d.name || '', rid, rest });
-    } catch (e) { deny(e.code === 'permission-denied' ? '⛔ الحساب موقوف أو خارج وقت الدوام' : '📶 تعذّر الاتصال — تأكد من الإنترنت'); }
-  });
+    } catch (e) {
+      if (e.code === 'permission-denied') deny('⛔ الحساب موقوف أو خارج وقت الدوام', true);
+      else if (remember && netErr(e)) hold('📶 ننتظر الإنترنت…', user);
+      else deny('📶 تعذّر الاتصال — تأكد من الإنترنت', true);
+    }
+  }
 }
 
 // أنماط نموذج الدخول (مشتركة)
@@ -102,4 +129,7 @@ export const GATE_CSS = `.gate{position:fixed;top:0;right:0;bottom:0;left:0;disp
 .gate-i{display:block;width:100%;margin-top:10px;padding:13px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:15px;text-align:left}
 .gate-b{display:block;width:100%;margin-top:14px;padding:14px;border:none;border-radius:14px;background:#0A100D;color:#3DF08B;font:inherit;font-weight:700;font-size:16px;cursor:pointer}
 .gate-e{color:#FF4D2E;font-weight:600;font-size:13.5px;margin-top:10px;min-height:1em}
-.gate-w{font-size:40px}`;
+.gate-w{font-size:40px}
+.gate-hold .gate-msg{font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px}.gate-hold .gate-sub{margin-bottom:6px}
+.gate-spin{display:inline-block;animation:gateSpin 2.4s linear infinite;margin:6px 0}@keyframes gateSpin{to{transform:rotate(360deg)}}
+.gate-out{background:transparent;color:var(--muted);border:1.5px solid var(--line);font-weight:600;font-size:14px;padding:11px}`;

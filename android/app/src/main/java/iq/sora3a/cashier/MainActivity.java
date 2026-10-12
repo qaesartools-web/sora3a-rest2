@@ -4,12 +4,14 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.role.RoleManager;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -40,7 +42,7 @@ import java.util.Collections;
 //  • الشاشة: «طلبك جاهز» على التلفزيون/التيفي بوكس — ملء الشاشة، ما تطفي، وتفتح وحدها مع تشغيل الجهاز
 public class MainActivity extends Activity {
     private static final String START_URL = BuildConfig.START_URL;
-    private static final int REQ_BT = 7, REQ_PHONE = 8;
+    private static final int REQ_BT = 7, REQ_PHONE = 8, REQ_HOME = 9;
     private WebView web;
     private volatile String pageUrl = "";
 
@@ -196,14 +198,41 @@ public class MainActivity extends Activity {
         if (!openSettings(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
             openSettings(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
-    // أندرويد 10+ يحتاج «الظهور فوق التطبيقات» حتى تفتح الشاشة وحدها بعد تشغيل البوكس — نطلبه مرة وحدة
+    // «يفتح وحده مع التلفزيون»: الطريقة المضمونة = الشاشة تصير الواجهة الرئيسية للتلفزيون (Home).
+    //   أي تشغيل للتلفزيون أو رجوع من الستاند باي أو زر 🏠 بالريموت ← تطلع الشاشة. ما تحتاج أي إذن خاص.
+    //   (الطريقة القديمة — «الظهور فوق التطبيقات» + ScreenWatch — تبقى احتياط للأجهزة اللي تسمح بيها)
     private void askAutoStart() {
-        if (Build.VERSION.SDK_INT < 29 || overlayOk() || isFinishing() || appPrefs().getBoolean("askedOverlay", false)) return;
-        appPrefs().edit().putBoolean("askedOverlay", true).apply();
-        new AlertDialog.Builder(this).setTitle("تشغيل تلقائي مع البوكس")
-            .setMessage("حتى تفتح الشاشة وحدها أول ما يشتغل البوكس، فعّل «الظهور فوق التطبيقات» لتطبيق «سرعة - الشاشة».")
-            .setPositiveButton("تفعيل", (d, w) -> openPerm("overlay")).setNegativeButton("لاحقاً", null).show();
+        if (isFinishing() || !appPrefs().getBoolean("autoStart", true) || isHome() || appPrefs().getBoolean("askedHome", false)) return;
+        appPrefs().edit().putBoolean("askedHome", true).apply();
+        new AlertDialog.Builder(this).setTitle("تفتح وحدها مع التلفزيون")
+            .setMessage("حتى تفتح الشاشة وحدها كل ما يشتغل التلفزيون (حتى بعد ما تنطفي الكهرباء)، نخليها الواجهة الرئيسية للتلفزيون.\n\nبالرسالة الجاية اختار «سرعة - الشاشة» واضغط «دائماً» (Always).\n\nتكدر ترجع لواجهة التلفزيون العادية بأي وقت من ⚙️ بالشاشة.")
+            .setPositiveButton("تمام", (d, w) -> { setHomeAlias(true); askHome(); }).setNegativeButton("لاحقاً", null).show();
     }
+    private ComponentName homeAlias() { return new ComponentName(this, MainActivity.class.getPackage().getName() + ".TvHome"); }
+    private void setHomeAlias(boolean on) {
+        try { getPackageManager().setComponentEnabledSetting(homeAlias(), on ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP); } catch (Exception ignored) {}
+    }
+    // هل الشاشة هي الواجهة الرئيسية هسه؟
+    boolean isHome() {
+        if (!BuildConfig.SCREEN) return false;
+        try {
+            ResolveInfo r = getPackageManager().resolveActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY);
+            return r != null && r.activityInfo != null && getPackageName().equals(r.activityInfo.packageName);
+        } catch (Exception e) { return false; }
+    }
+    // نطلب من التلفزيون يخليها الواجهة الرئيسية: رسالة النظام (أندرويد 10+)، أو صفحة «التطبيق الرئيسي»، أو قائمة الاختيار
+    private void askHome() {
+        if (Build.VERSION.SDK_INT >= 29) {
+            try {
+                RoleManager rm = getSystemService(RoleManager.class);
+                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME) && !rm.isRoleHeld(RoleManager.ROLE_HOME)) { startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME), REQ_HOME); return; }
+            } catch (Exception ignored) {}
+        }
+        if (openSettings(new Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) return;
+        if (openSettings(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) return;
+        if (Build.VERSION.SDK_INT >= 29 && !overlayOk()) openPerm("overlay");   // آخر حل
+    }
+    @Override protected void onActivityResult(int req, int res, Intent data) { super.onActivityResult(req, res, data); if (req == REQ_HOME) pushAuto(); }
 
     // البلوتوث (أندرويد 12+) — حتى تطلع الطابعة المدمجة وطابعات البلوتوث
     void ensureBluetoothPermission() {
@@ -227,10 +256,16 @@ public class MainActivity extends Activity {
     }
     private SharedPreferences appPrefs() { return getSharedPreferences("app", 0); }
     // أندرويد 10+ يحتاج «الظهور فوق التطبيقات» حتى يفتح الكاشير وحده بعد تشغيل الجهاز
-    boolean autoStartOn() { return appPrefs().getBoolean("autoStart", true) && (Build.VERSION.SDK_INT < 29 || overlayOk()); }
+    boolean autoStartOn() { return appPrefs().getBoolean("autoStart", true) && (isHome() || Build.VERSION.SDK_INT < 29 || overlayOk()); }
     boolean setAutoStart(boolean on) {
         appPrefs().edit().putBoolean("autoStart", on).apply();
         ScreenWatch.sync(this, false);
+        if (BuildConfig.SCREEN) {
+            // تشغيل: تصير الواجهة الرئيسية. إطفاء: نشيلها، والتلفزيون يرجع لواجهته وحده
+            setHomeAlias(on);
+            if (on && !isHome()) askHome();
+            return autoStartOn();
+        }
         if (on && Build.VERSION.SDK_INT >= 29 && !overlayOk()) openPerm("overlay");
         return autoStartOn();
     }
@@ -295,8 +330,11 @@ public class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (web.canGoBack()) { web.goBack(); return; }
         if (BuildConfig.LINE) { finish(); return; } // الخط يشتغل بالخلفية حتى والتطبيق مسكّر
-        new AlertDialog.Builder(this).setMessage(BuildConfig.SCREEN ? "تريد تسكّر الشاشة؟" : "تريد تسكّر الكاشير؟")
-            .setPositiveButton("إغلاق", (d, w) -> finish()).setNegativeButton("إلغاء", null).show();
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setMessage(BuildConfig.SCREEN ? "تريد تسكّر الشاشة؟" : "تريد تسكّر الكاشير؟")
+            .setPositiveButton("إغلاق", (d, w) -> finish()).setNegativeButton("إلغاء", null);
+        // الشاشة واجهة رئيسية: «إغلاق» يرجعها نفسها — فنعطي طريق لإعدادات التلفزيون دائماً
+        if (BuildConfig.SCREEN) b.setNeutralButton("إعدادات التلفزيون", (d, w) -> openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+        b.show();
     }
 
     private static final String OFFLINE = "<html dir=rtl><body style='margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0B1220;color:#EEF2F7;font-family:sans-serif;text-align:center'>"
