@@ -59,6 +59,7 @@ public class MainActivity extends Activity {
             return;
         }
         super.onActivityResult(req, res, data);
+        if (req == REQ_HOME) pushAuto();   // رجع من «الواجهة الرئيسية» ← نحدّث حالة «يفتح وحده» بقائمة الشاشة
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
@@ -232,7 +233,6 @@ public class MainActivity extends Activity {
         if (openSettings(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) return;
         if (Build.VERSION.SDK_INT >= 29 && !overlayOk()) openPerm("overlay");   // آخر حل
     }
-    @Override protected void onActivityResult(int req, int res, Intent data) { super.onActivityResult(req, res, data); if (req == REQ_HOME) pushAuto(); }
 
     // البلوتوث (أندرويد 12+) — حتى تطلع الطابعة المدمجة وطابعات البلوتوث
     void ensureBluetoothPermission() {
