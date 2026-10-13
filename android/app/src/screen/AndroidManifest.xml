@@ -35,6 +35,8 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+        <!-- منبّه كل دقيقة: يرجّع خدمة المراقبة إذا انسكّرت، ويكشف رجوع التلفزيون من الستاند باي حتى لو ما وصلت إشارة «الشاشة اشتغلت» -->
+        <receiver android:name=".Tick" android:process=":watch" android:exported="false" />
         <service android:name=".ScreenWatch" android:process=":watch" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Opens the restaurant order-ready display when the TV wakes from standby" />
         </service>

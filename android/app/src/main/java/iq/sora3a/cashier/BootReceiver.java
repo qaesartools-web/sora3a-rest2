@@ -14,7 +14,7 @@ public class BootReceiver extends BroadcastReceiver {
         String a = intent.getAction();
         if (BuildConfig.SCREEN && Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) { ScreenWatch.sync(ctx, false); return; }
         if (!Intent.ACTION_BOOT_COMPLETED.equals(a) && !"android.intent.action.QUICKBOOT_POWERON".equals(a) && !"com.htc.intent.action.QUICKBOOT_POWERON".equals(a)) return;
-        if (BuildConfig.SCREEN) { ScreenWatch.sync(ctx, true); return; }
+        if (BuildConfig.SCREEN) { AutoLog.add(ctx, "boot", ""); ScreenWatch.sync(ctx, true); return; }
         if (!ctx.getSharedPreferences("app", 0).getBoolean("autoStart", true)) return;
         // أندرويد 10+: فتح شاشة من الخلفية يحتاج إذن «الظهور فوق التطبيقات»
         if (Build.VERSION.SDK_INT >= 29 && !Settings.canDrawOverlays(ctx)) return;

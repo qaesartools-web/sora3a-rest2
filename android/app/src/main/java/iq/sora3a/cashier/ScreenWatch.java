@@ -13,28 +13,50 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 
 // تطبيق الشاشة: أول ما ينفتح التلفزيون (من الستاند باي أو بعد ما يشتغل من جديد) تطلع «طلبك جاهز» وحدها.
-// خدمة صغيرة بعملية منفصلة (:watch) بدون متصفح — تسمع «الشاشة اشتغلت» وتفتح التطبيق فوق واجهة التلفزيون.
+// خدمة صغيرة بعملية منفصلة (:watch) بدون متصفح — تسمع «الشاشة اشتغلت» (ومنبّه Tick إذا الإشارة ما وصلت)،
+// وبعدها «تحرس» الشاشة فترة: كل ما واجهة التلفزيون أو مصدر القنوات يطلع فوقها، ترجّعها قدام.
 public class ScreenWatch extends Service {
+    static final long BOOT_GUARD = 180_000, WAKE_GUARD = 90_000;
+    private static final long STEP = 2500;
     private static final String CH = "screen_watch";
     private final Handler h = new Handler(Looper.getMainLooper());
     private BroadcastReceiver rx;
+    private long until, lastOpenLog;
+    private boolean guarding, sawFront, noOverlayLogged;
 
-    // يشغّل الخدمة إذا «يفتح وحده مع التلفزيون» مفعّلة، ويطفيها إذا لا. open: افتح التطبيق هسه (بعد تشغيل الجهاز)
-    static void sync(Context ctx, boolean open) {
+    // من التطبيق أو تشغيل الجهاز (العملية الرئيسية): يشغّل الخدمة والمنبّه إذا «يفتح وحده مع التلفزيون» مفعّلة، ويطفيهم إذا لا.
+    // boot: الجهاز هسه اشتغل ← نحرس الشاشة 3 دقايق (التلفزيون يفتح واجهته ومصدر القنوات على مهل)
+    static void sync(Context ctx, boolean boot) {
         if (!BuildConfig.SCREEN) return;
-        Intent i = new Intent(ctx, ScreenWatch.class).putExtra("open", open);
-        if (!ctx.getSharedPreferences("app", 0).getBoolean("autoStart", true)) { ctx.stopService(i); return; }
-        try { if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i); else ctx.startService(i); } catch (Exception ignored) {}
+        boolean on = ctx.getSharedPreferences("app", 0).getBoolean("autoStart", true);
+        Tick.arm(ctx, on);
+        if (!on) { ctx.stopService(new Intent(ctx, ScreenWatch.class)); return; }
+        ensure(ctx, boot ? BOOT_GUARD : 0);
+    }
+
+    // يشغّل الخدمة (أو يوصلها إذا شغّالة). guard > 0: احرس الشاشة هالمدة
+    static void ensure(Context ctx, long guard) {
+        Intent i = new Intent(ctx, ScreenWatch.class).putExtra("guard", guard);
+        try {
+            if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i); else ctx.startService(i);
+        } catch (Exception e) {
+            try { ctx.startService(i); } catch (Exception e2) { AutoLog.add(ctx, "err", "service " + e2.getClass().getSimpleName()); }
+        }
     }
 
     @Override public void onCreate() {
         super.onCreate();
         foreground();
+        AutoLog.add(this, "svc", "");
         rx = new BroadcastReceiver() {
-            @Override public void onReceive(Context c, Intent i) { bringUp(new long[]{2500, 7000, 15000}); }
+            @Override public void onReceive(Context c, Intent i) {
+                if (Intent.ACTION_SCREEN_ON.equals(i.getAction())) AutoLog.add(c, "screen-on", "");
+                guard(WAKE_GUARD);
+            }
         };
         IntentFilter f = new IntentFilter(Intent.ACTION_SCREEN_ON);
         f.addAction(Intent.ACTION_USER_PRESENT);
@@ -43,20 +65,44 @@ public class ScreenWatch extends Service {
 
     @Override public int onStartCommand(Intent intent, int flags, int id) {
         foreground();
-        // بعد تشغيل الجهاز: التلفزيون يفتح واجهته على مهل ← نحاول أكثر من مرة ونطلع فوقها
-        if (intent != null && intent.getBooleanExtra("open", false)) bringUp(new long[]{4000, 12000, 25000, 45000});
+        // intent فارغ = التلفزيون سكّر الخدمة والنظام رجّعها
+        if (intent == null) AutoLog.add(this, "restart", "");
+        long g = intent == null ? 0 : intent.getLongExtra("guard", 0);
+        if (g > 0) guard(g);
         return START_STICKY;
     }
 
-    private void bringUp(long[] delays) {
-        h.removeCallbacksAndMessages(null);
-        for (long ms : delays) h.postDelayed(() -> { if (!appInFront()) open(); }, ms);
+    private void guard(long ms) {
+        long u = SystemClock.elapsedRealtime() + ms;
+        if (u > until) until = u;
+        if (guarding) return;
+        guarding = true; sawFront = false;
+        h.postDelayed(step, 1500);
     }
+
+    private final Runnable step = new Runnable() {
+        @Override public void run() {
+            if (SystemClock.elapsedRealtime() > until) { guarding = false; return; }
+            if (Tick.isOn(ScreenWatch.this)) {
+                if (!appInFront()) open();
+                else if (!sawFront) { sawFront = true; AutoLog.add(ScreenWatch.this, "front", ""); }
+            }
+            h.postDelayed(this, STEP);
+        }
+    };
 
     private void open() {
         // أندرويد 10+: فتح شاشة من الخلفية يحتاج «الظهور فوق التطبيقات» (التلفزيونات أندرويد 9 ما تحتاجه)
-        if (Build.VERSION.SDK_INT >= 29 && !Settings.canDrawOverlays(this)) return;
-        try { startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)); } catch (Exception ignored) {}
+        if (Build.VERSION.SDK_INT >= 29 && !Settings.canDrawOverlays(this)) {
+            if (!noOverlayLogged) { noOverlayLogged = true; AutoLog.add(this, "no-overlay", ""); }
+            return;
+        }
+        sawFront = false;
+        try {
+            startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
+            long now = SystemClock.elapsedRealtime();
+            if (now - lastOpenLog > 10_000) { lastOpenLog = now; AutoLog.add(this, "open", ""); }
+        } catch (Exception e) { AutoLog.add(this, "err", "open " + e.getClass().getSimpleName()); }
     }
 
     // الشاشة قدام؟ (عملية التطبيق الرئيسية بالواجهة) — حتى ما نعيد فتحها وهي مفتوحة
