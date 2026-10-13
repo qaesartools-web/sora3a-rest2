@@ -141,7 +141,7 @@ public class MainActivity extends Activity {
                     return true;
                 }
                 if ("https".equals(u.getScheme()) && "qaesartools-web.github.io".equals(u.getHost())) return false;
-                ScreenWatch.pause(MainActivity.this);
+                leave();
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (ActivityNotFoundException ignored) {}
                 return true;
             }
@@ -237,7 +237,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 29) {
             try {
                 RoleManager rm = getSystemService(RoleManager.class);
-                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME) && !rm.isRoleHeld(RoleManager.ROLE_HOME)) { ScreenWatch.pause(this); startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME), REQ_HOME); return; }
+                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME) && !rm.isRoleHeld(RoleManager.ROLE_HOME)) { leave(); startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME), REQ_HOME); return; }
             } catch (Exception ignored) {}
         }
         if (openSettings(new Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) return;
@@ -320,7 +320,7 @@ public class MainActivity extends Activity {
         });
     }
     private boolean openSettings(Intent i) {
-        ScreenWatch.pause(this);   // المطعم هو اللي فتحها من الشاشة ← لا نرجّعه للشاشة غصب
+        leave();   // المطعم هو اللي فتحها من الشاشة ← لا نرجّعه للشاشة غصب
         try { startActivity(i); return true; } catch (Exception e) { return false; }
     }
 
@@ -328,7 +328,10 @@ public class MainActivity extends Activity {
     private void notifyPage() {
         if (web != null && pageOriginOk()) web.evaluateJavascript("window.dispatchEvent(new Event('sora:resume'))", null);
     }
-    @Override protected void onResume() { super.onResume(); notifyPage(); if (BuildConfig.SCREEN) pushAuto(); }
+    @Override protected void onResume() { super.onResume(); leaving = false; notifyPage(); if (BuildConfig.SCREEN) pushAuto(); }
+    // الشاشة: المطعم نفسه طالع منها (إعدادات، رابط، تحديث...) ← لا ترجع وحدها فوق اللي فتحه
+    private boolean leaving;
+    private void leave() { leaving = true; ScreenWatch.pause(this); }
     // الشاشة: نبلّغ الصفحة هل «يفتح وحده مع التلفزيون» شغّال (يطلع بقائمة ⚙️)
     private void pushAuto() {
         if (web == null || !pageUrl.startsWith(START_URL)) return;
@@ -368,6 +371,7 @@ public class MainActivity extends Activity {
     }
     private void doUpdate(Updater.Info u) {
         if (updDlg != null && updDlg.isShowing()) updDlg.dismiss();
+        leave();   // رسالة التثبيت تطلع فوق الشاشة — لا نرجّعها فوقها
         final AlertDialog dl = new AlertDialog.Builder(this).setTitle("⬆️ تحديث — نسخة " + u.name).setMessage("⬇️ ينزل التحديث…").setCancelable(false).show();
         new Thread(() -> {
             try {
@@ -391,8 +395,13 @@ public class MainActivity extends Activity {
         AutoLog.add(this, "home", "");
         if (appPrefs().getBoolean("autoStart", true)) ScreenWatch.ensure(this, ScreenWatch.HOME_GUARD);
     }
-    // الشاشة راحت للخلف (شي غطّاها) ← بالسجل نعرف شكد بعد التشغيل صار هذا
-    @Override protected void onStop() { super.onStop(); if (BuildConfig.SCREEN && !isFinishing()) AutoLog.add(this, "bg", ""); }
+    // الشاشة راحت للخلف: إذا مو المطعم اللي طلع منها (يعني التلفزيون غطّاها بواجهته أو HDMI أو القنوات) ← ترجع وحدها بعد 20 ثانية
+    @Override protected void onStop() {
+        super.onStop();
+        if (!BuildConfig.SCREEN || isFinishing()) return;
+        AutoLog.add(this, "bg", leaving ? "me" : "");
+        if (!leaving && appPrefs().getBoolean("autoStart", true)) ScreenWatch.away(this);
+    }
 
     // ⚙️ ← «فحص التشغيل التلقائي»: كل اللي نحتاجه حتى نعرف ليش ما انفتحت وحدها — المطعم يصوّره ويبعثه
     private void autoDiag() {
@@ -434,7 +443,8 @@ public class MainActivity extends Activity {
             case "open": return "🚀 فتحناها فوق التلفزيون";
             case "front": return "✅ الشاشة قدام";
             case "home": return "🏠 انفتحت كواجهة رئيسية";
-            case "bg": return "⬇️ شي غطّى الشاشة";
+            case "bg": return d.equals("me") ? "⬇️ طلعتوا من الشاشة (إعدادات/تحديث)" : "⬇️ شي غطّى الشاشة";
+            case "return": return "↩️ رجّعناها قدام بعد 20 ثانية";
             case "updated": return "⬆️ تحدّث التطبيق لنسخة " + d;
             case "no-overlay": return "⛔ التلفزيون ما يسمح تفتح وحدها";
             default: return "⚠️ " + code + (d.isEmpty() ? "" : " " + d);
