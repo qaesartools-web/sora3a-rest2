@@ -20,10 +20,10 @@ import android.provider.Settings;
 // خدمة صغيرة بعملية منفصلة (:watch) بدون متصفح — تسمع «الشاشة اشتغلت» (ومنبّه Tick إذا الإشارة ما وصلت)،
 // وبعدها «تحرس» الشاشة فترة: كل ما واجهة التلفزيون أو مصدر القنوات يطلع فوقها، ترجّعها قدام.
 // وإذا شي غطّى الشاشة والتلفزيون شغّال (واجهة التطبيقات، HDMI، القنوات) وهي مو المطعم اللي طلع منها بنفسه،
-// ترجع وحدها بعد 20 ثانية — بعض التلفزيونات (MediaTek) «تطفي» بس الشاشة وترجع على واجهتها بدون أي إشارة.
+// ترجع وحدها بعد 10 ثواني — بعض التلفزيونات (MediaTek) «تطفي» بس الشاشة وترجع على واجهتها بدون أي إشارة.
 public class ScreenWatch extends Service {
     static final long BOOT_GUARD = 180_000, HOME_GUARD = 120_000, WAKE_GUARD = 90_000;
-    private static final long STEP = 2500, RETURN_AFTER = 20_000;
+    private static final long STEP = 2500, RETURN_AFTER = 10_000;
     private static final String CH = "screen_watch";
     private final Handler h = new Handler(Looper.getMainLooper());
     private BroadcastReceiver rx;
@@ -36,6 +36,8 @@ public class ScreenWatch extends Service {
         if (!BuildConfig.SCREEN) return;
         boolean on = ctx.getSharedPreferences("app", 0).getBoolean("autoStart", true);
         Tick.arm(ctx, on);
+        // نتذكر متى شغّلنا المنبّه (بأي تشغيل للجهاز وبأي نسخة) — إذا اختفى بعدين بدون إعادة تشغيل = التلفزيون سكّر التطبيق بالقوة
+        ctx.getSharedPreferences("app", 0).edit().putBoolean("tickArmed", on).putInt("armedBoot", Tick.bootCount(ctx)).putInt("armedVer", BuildConfig.VERSION_CODE).apply();
         if (!on) { ctx.stopService(new Intent(ctx, ScreenWatch.class)); return; }
         ensure(ctx, boot ? BOOT_GUARD : 0);
     }
@@ -43,7 +45,7 @@ public class ScreenWatch extends Service {
     // المطعم فتح شي من الشاشة نفسها (إعدادات التلفزيون، رابط، تحديث...) ← نوقف الحراسة والرجوع حتى ما نرجّعه للشاشة غصب
     static void pause(Context ctx) { if (BuildConfig.SCREEN) ensure(ctx, -1); }
 
-    // الشاشة انغطّت وهي مو المطعم اللي طلع منها ← ترجع وحدها بعد 20 ثانية والتلفزيون شغّال (لحد ما ترجع قدام)
+    // الشاشة انغطّت وهي مو المطعم اللي طلع منها ← ترجع وحدها بعد 10 ثواني والتلفزيون شغّال (لحد ما ترجع قدام)
     static void away(Context ctx) { if (BuildConfig.SCREEN) start(ctx, new Intent(ctx, ScreenWatch.class).putExtra("away", true)); }
 
     // يشغّل الخدمة (أو يوصلها إذا شغّالة). guard > 0: احرس الشاشة هالمدة، guard < 0: وقّف الحراسة
@@ -130,6 +132,8 @@ public class ScreenWatch extends Service {
         sawFront = false;
         try {
             startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
+            // وطريقة ثانية: نقدّم مهمة التطبيق نفسها (بعض التلفزيونات تتجاهل الفتح من الخلفية)
+            try { for (ActivityManager.AppTask t : ((ActivityManager) getSystemService(ACTIVITY_SERVICE)).getAppTasks()) { t.moveToFront(); break; } } catch (Exception ignored) {}
             long now = SystemClock.elapsedRealtime();
             if (log && now - lastOpenLog > 10_000) { lastOpenLog = now; AutoLog.add(this, "open", ""); }
         } catch (Exception e) { AutoLog.add(this, "err", "open " + e.getClass().getSimpleName()); }
