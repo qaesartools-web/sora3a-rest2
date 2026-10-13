@@ -168,6 +168,7 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
   <div class="mt">⚙️ إعدادات الشاشة</div>
   <button type="button" id="mSnd"></button>
   <button type="button" id="mAuto" hidden></button>
+  <button type="button" id="mDiag" hidden>🩺 فحص التشغيل التلقائي</button>
   <button type="button" id="mReload">🔄 تحديث الشاشة</button>
   <button type="button" id="fsBtn">⛶ ملء الشاشة</button>
   <button type="button" id="mOut">🚪 تسجيل خروج</button>
@@ -298,7 +299,7 @@ let closeT = null, outArmed = false;
 const armClose = () => { clearTimeout(closeT); closeT = setTimeout(() => { if (!menu.hidden) closeMenu(); }, 20000); };
 // داخل تطبيق التلفزيون: «يفتح وحده مع التلفزيون» — التطبيق يبلّغنا بالحالة، ونغيّرها برابط sora3a:// يلقفه التطبيق
 let autoOn = null;
-window.__setAuto = (on) => { autoOn = !!on; $('mAuto').hidden = false; menuUi(); };
+window.__setAuto = (on) => { autoOn = !!on; $('mAuto').hidden = false; $('mDiag').hidden = !window.__autoDiag; menuUi(); };
 if (typeof window.__autoState === 'boolean') window.__setAuto(window.__autoState);
 function menuUi() {
   soundUi();
@@ -313,6 +314,8 @@ $('menuBtn').onclick = () => { if (menu.hidden) openMenu(); else closeMenu(); };
 $('mSnd').onclick = () => { sound = !sound; ls.set('scr_sound', sound); if (sound) chime(); menuUi(); armClose(); };
 // التطبيق يلقف رابط sora3a:// (الاختبارات تحط window.__goApp وتشوف شنو انطلب)
 $('mAuto').onclick = () => { if (autoOn !== null) (window.__goApp || ((u) => { location.href = u; }))('sora3a://autostart?on=' + (autoOn ? 0 : 1)); armClose(); };
+// «فحص التشغيل التلقائي»: التطبيق يعرض شنو صار بالتلفزيون (اشتغل، رجع من الستاند باي، فتحناها...) حتى نصوّره
+$('mDiag').onclick = () => { closeMenu(); (window.__goApp || ((u) => { location.href = u; }))('sora3a://autodiag'); };
 $('mReload').onclick = () => location.reload();
 $('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else if (d.documentElement.requestFullscreen) d.documentElement.requestFullscreen().catch(() => {}); closeMenu(); };
 $('mOut').onclick = () => {

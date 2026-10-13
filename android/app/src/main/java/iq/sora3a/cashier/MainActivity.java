@@ -3,6 +3,7 @@ package iq.sora3a.cashier;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.app.role.RoleManager;
 import android.content.ActivityNotFoundException;
@@ -34,7 +35,10 @@ import android.widget.FrameLayout;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
 
 // ثلاث تطبيقات من نفس الكود (BuildConfig.LINE / BuildConfig.SCREEN):
 //  • الكاشير: نفس الكاشير من الإنترنت (أي تحديث يوصل فوراً) + طباعة مباشرة على الطابعة المدمجة والشبكة والبلوتوث
@@ -130,6 +134,7 @@ public class MainActivity extends Activity {
                 // الشاشة: زر «يفتح وحده مع التلفزيون» بقائمة ⚙️
                 if (BuildConfig.SCREEN && "sora3a".equals(u.getScheme())) {
                     if ("autostart".equals(u.getHost())) { setAutoStart("1".equals(u.getQueryParameter("on"))); pushAuto(); }
+                    else if ("autodiag".equals(u.getHost())) autoDiag();
                     return true;
                 }
                 if ("https".equals(u.getScheme()) && "qaesartools-web.github.io".equals(u.getHost())) return false;
@@ -148,6 +153,7 @@ public class MainActivity extends Activity {
         });
         if (state != null) web.restoreState(state); else web.loadUrl(START_URL);
         if (BuildConfig.SCREEN) {
+            logHome(getIntent());
             if (webViewMajor() > 0 && webViewMajor() < MIN_WEBVIEW) webViewTooOld();
             web.postDelayed(this::askAutoStart, 4000);
             ScreenWatch.sync(this, false);
@@ -321,7 +327,70 @@ public class MainActivity extends Activity {
     private void pushAuto() {
         if (web == null || !pageUrl.startsWith(START_URL)) return;
         boolean on = autoStartOn();
-        web.evaluateJavascript("window.__autoState=" + on + ";window.__setAuto&&window.__setAuto(" + on + ")", null);
+        web.evaluateJavascript("window.__autoState=" + on + ";window.__autoDiag=1;window.__setAuto&&window.__setAuto(" + on + ")", null);
+    }
+    @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); if (BuildConfig.SCREEN) logHome(i); }
+    // انفتحت لأنها الواجهة الرئيسية (تشغيل التلفزيون أو زر 🏠) ← نسجّلها بفحص التشغيل التلقائي
+    private void logHome(Intent i) { if (i != null && i.hasCategory(Intent.CATEGORY_HOME)) AutoLog.add(this, "home", ""); }
+
+    // ⚙️ ← «فحص التشغيل التلقائي»: كل اللي نحتاجه حتى نعرف ليش ما انفتحت وحدها — المطعم يصوّره ويبعثه
+    private void autoDiag() {
+        PackageManager pm = getPackageManager();
+        String home = "—";
+        try {
+            ResolveInfo r = pm.resolveActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY);
+            if (r != null && r.activityInfo != null) {
+                String p = r.activityInfo.packageName;
+                home = getPackageName().equals(p) ? "✅ سرعة - الشاشة" : "android".equals(p) ? "❓ ما محددة (يسأل كل مرة)" : "❌ " + r.activityInfo.loadLabel(pm) + " (" + p + ")";
+            }
+        } catch (Exception ignored) {}
+        StringBuilder b = new StringBuilder();
+        b.append("أندرويد ").append(Build.VERSION.RELEASE).append(" • ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append(" • نسخة ").append(BuildConfig.VERSION_NAME).append('\n');
+        b.append("يفتح وحده: ").append(appPrefs().getBoolean("autoStart", true) ? "✅ مفعّل" : "❌ مطفي").append('\n');
+        b.append("الواجهة الرئيسية: ").append(home).append('\n');
+        b.append("خدمة المراقبة: ").append(watchRunning() ? "✅ شغّالة" : "❌ واقفة").append('\n');
+        if (Build.VERSION.SDK_INT >= 29) b.append("الظهور فوق التطبيقات: ").append(overlayOk() ? "✅" : "❌").append('\n');
+        b.append("\nآخر الأحداث (الأحدث فوق):\n");
+        List<String> l = AutoLog.read(this);
+        if (l.isEmpty()) b.append("— ماكو بعد\n");
+        for (int i = 0; i < Math.min(14, l.size()); i++) {
+            String[] p = l.get(i).split("\\|", 3);
+            if (p.length < 2) continue;
+            try { b.append(when12(Long.parseLong(p[0]))); } catch (Exception e) { b.append('—'); }
+            b.append(" • ").append(logText(p[1], p.length > 2 ? p[2] : "")).append('\n');
+        }
+        new AlertDialog.Builder(this).setTitle("🩺 فحص التشغيل التلقائي").setMessage(b.toString())
+            .setPositiveButton("اختيار الواجهة الرئيسية", (d, w) -> { appPrefs().edit().putBoolean("autoStart", true).apply(); ScreenWatch.sync(this, false); setHomeAlias(true); askHome(); })
+            .setNegativeButton("رجوع", null).show();
+    }
+    private static String logText(String code, String d) {
+        switch (code) {
+            case "boot": return "🔌 التلفزيون اشتغل (تشغيل جديد)";
+            case "wake": return "🌙 رجع من الستاند باي" + (d.isEmpty() ? "" : " بعد " + d + " دقيقة");
+            case "screen-on": return "💡 الشاشة اشتغلت";
+            case "svc": return "⚙️ خدمة المراقبة اشتغلت";
+            case "restart": return "♻️ التلفزيون سكّر الخدمة ورجعت";
+            case "open": return "🚀 فتحناها فوق التلفزيون";
+            case "front": return "✅ الشاشة قدام";
+            case "home": return "🏠 انفتحت كواجهة رئيسية";
+            case "no-overlay": return "⛔ التلفزيون ما يسمح تفتح وحدها";
+            default: return "⚠️ " + code + (d.isEmpty() ? "" : " " + d);
+        }
+    }
+    private static String when12(long ms) {
+        Calendar c = Calendar.getInstance(); c.setTimeInMillis(ms);
+        int h = c.get(Calendar.HOUR_OF_DAY);
+        return c.get(Calendar.DAY_OF_MONTH) + "/" + (c.get(Calendar.MONTH) + 1) + " " + (h % 12 == 0 ? 12 : h % 12)
+            + String.format(Locale.US, ":%02d:%02d", c.get(Calendar.MINUTE), c.get(Calendar.SECOND)) + (h < 12 ? " ص" : " م");
+    }
+    @SuppressWarnings("deprecation")
+    private boolean watchRunning() {
+        try {
+            ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            for (ActivityManager.RunningServiceInfo s : am.getRunningServices(50))
+                if (ScreenWatch.class.getName().equals(s.service.getClassName())) return true;
+        } catch (Exception ignored) {}
+        return false;
     }
     @Override public void onRequestPermissionsResult(int req, String[] perms, int[] res) { super.onRequestPermissionsResult(req, perms, res); notifyPage(); }
 
