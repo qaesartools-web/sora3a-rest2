@@ -17,6 +17,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.View;
 import android.view.WindowManager;
@@ -159,6 +160,7 @@ public class MainActivity extends Activity {
         web.postDelayed(updTick, 10_000);
         if (BuildConfig.SCREEN) {
             logHome(getIntent());
+            checkKilled();   // قبل ScreenWatch.sync اللي يرجّع المنبّه
             if (webViewMajor() > 0 && webViewMajor() < MIN_WEBVIEW) webViewTooOld();
             web.postDelayed(this::askAutoStart, 4000);
             ScreenWatch.sync(this, false);
@@ -403,6 +405,40 @@ public class MainActivity extends Activity {
         if (!leaving && appPrefs().getBoolean("autoStart", true)) ScreenWatch.away(this);
     }
 
+    // التلفزيون يسكّر التطبيق بالقوة من ينطفي (منبّه المراقبة وقف بدون ما ينطفي الجهاز)، أو اشتغل وما بلّغه؟
+    //   هذا شي ما يكدر أي تطبيق يتجاوزه — نسجّله ونطلع للمطعم بالتلفزيون نفسه شنو يغيّر بالإعدادات
+    private static boolean checked;   // مرة وحدة لكل تشغيل للعملية (بعد السكّر بالقوة العملية دائماً جديدة، والقراءة من الملف مو من الذاكرة)
+    private void checkKilled() {
+        if (checked) return;
+        checked = true;
+        SharedPreferences p = appPrefs();
+        if (!p.getBoolean("autoStart", true) || !p.getBoolean("tickArmed", false) || p.getInt("armedVer", -1) != BuildConfig.VERSION_CODE) return;
+        int boot = Tick.bootCount(this);
+        if (boot < 0) return;
+        long now = SystemClock.elapsedRealtime(), tick = getSharedPreferences("watch", 0).getLong("tick", 0);
+        String why = null;
+        if (boot == p.getInt("armedBoot", -2)) {
+            // المنبّه يدقّ كل دقيقة (حتى اللي فاته وقته بالستاند باي يدقّ أول ما يصحى) — إذا بطّل بنفس التشغيل = انسكّر بالقوة
+            if (tick > 0 && tick < now && now - tick > 150_000) { why = "killed"; AutoLog.add(this, why, String.valueOf((now - tick) / 60000)); }
+        } else if (now > 180_000) { why = "noboot"; AutoLog.add(this, why, ""); }   // اشتغل من جديد وما وصلنا «التشغيل»
+        final String w = why;
+        if (w != null && System.currentTimeMillis() > p.getLong("killWarnUntil", 0)) web.postDelayed(() -> warnKilled(w), 6000);
+    }
+    private void warnKilled(String why) {
+        if (isFinishing()) return;
+        appPrefs().edit().putLong("killWarnUntil", System.currentTimeMillis() + 12 * 3600_000L).apply();
+        String msg = "killed".equals(why)
+            ? "التلفزيون يسكّر «سرعة - الشاشة» بالقوة من ينطفي بالريموت، وهذا يمنعها ترجع وحدها (ما يكدر أي تطبيق يرجع بعدها).\n\n"
+              + "الحل بإعدادات التلفزيون، وحدة من هذني:\n"
+              + "• طفّي «التشغيل السريع» (Quick Start أو Instant On أو Fast Boot): التلفزيون يشتغل من جديد كل مرة، والشاشة تفتح وحدها مع التشغيل.\n"
+              + "• أو بمدير التلفزيون ضيف «سرعة - الشاشة» لـ«القائمة البيضاء» (تنظيف الذاكرة أو التسريع)."
+            : "التلفزيون اشتغل وما بلّغ «سرعة - الشاشة»، فما كدرت تفتح وحدها.\n\n"
+              + "الحل: بمدير التلفزيون ← «البدء الآلي» تأكد إن «سرعة - الشاشة» مفعّلة، وإذا أكو «القائمة البيضاء» ضيفها.";
+        new AlertDialog.Builder(this).setTitle("⚠️ التلفزيون يمنع الشاشة ترجع وحدها").setMessage(msg)
+            .setPositiveButton("فتح إعدادات التلفزيون", (d, x) -> openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
+            .setNegativeButton("تمام", null).show();
+    }
+
     // ⚙️ ← «فحص التشغيل التلقائي»: كل اللي نحتاجه حتى نعرف ليش ما انفتحت وحدها — المطعم يصوّره ويبعثه
     private void autoDiag() {
         PackageManager pm = getPackageManager();
@@ -444,7 +480,9 @@ public class MainActivity extends Activity {
             case "front": return "✅ الشاشة قدام";
             case "home": return "🏠 انفتحت كواجهة رئيسية";
             case "bg": return d.equals("me") ? "⬇️ طلعتوا من الشاشة (إعدادات/تحديث)" : "⬇️ شي غطّى الشاشة";
-            case "return": return "↩️ رجّعناها قدام بعد 20 ثانية";
+            case "return": return "↩️ رجّعناها قدام وحدها";
+            case "killed": return "⛔ التلفزيون سكّر التطبيق بالقوة" + (d.isEmpty() ? "" : " (قبل " + d + " دقيقة)");
+            case "noboot": return "⛔ التلفزيون اشتغل وما بلّغ التطبيق";
             case "updated": return "⬆️ تحدّث التطبيق لنسخة " + d;
             case "no-overlay": return "⛔ التلفزيون ما يسمح تفتح وحدها";
             default: return "⚠️ " + code + (d.isEmpty() ? "" : " " + d);

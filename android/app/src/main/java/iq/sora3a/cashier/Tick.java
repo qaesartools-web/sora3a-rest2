@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.provider.Settings;
 
 // تطبيق الشاشة: منبّه كل دقيقة تقريباً (ما يصحّي الجهاز) بعملية خدمة المراقبة (:watch).
 //  • يرجّع خدمة المراقبة إذا التلفزيون سكّرها.
@@ -38,6 +39,11 @@ public class Tick extends BroadcastReceiver {
         boolean woke = on && (gap > GAP || !wasOn);
         if (woke) AutoLog.add(ctx, "wake", gap > GAP ? String.valueOf(gap / 60000) : "");
         ScreenWatch.ensure(ctx, woke ? ScreenWatch.WAKE_GUARD : 0);
+    }
+
+    // عدد مرات تشغيل الجهاز من جديد — حتى نفرّق «انطفى وانشغل» عن «التلفزيون سكّر التطبيق بالقوة»
+    static int bootCount(Context ctx) {
+        try { return Settings.Global.getInt(ctx.getContentResolver(), Settings.Global.BOOT_COUNT); } catch (Exception e) { return -1; }
     }
 
     static boolean isOn(Context ctx) {
