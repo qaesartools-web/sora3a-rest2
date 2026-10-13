@@ -19,14 +19,16 @@ import android.provider.Settings;
 // تطبيق الشاشة: أول ما ينفتح التلفزيون (من الستاند باي أو بعد ما يشتغل من جديد) تطلع «طلبك جاهز» وحدها.
 // خدمة صغيرة بعملية منفصلة (:watch) بدون متصفح — تسمع «الشاشة اشتغلت» (ومنبّه Tick إذا الإشارة ما وصلت)،
 // وبعدها «تحرس» الشاشة فترة: كل ما واجهة التلفزيون أو مصدر القنوات يطلع فوقها، ترجّعها قدام.
+// وإذا شي غطّى الشاشة والتلفزيون شغّال (واجهة التطبيقات، HDMI، القنوات) وهي مو المطعم اللي طلع منها بنفسه،
+// ترجع وحدها بعد 20 ثانية — بعض التلفزيونات (MediaTek) «تطفي» بس الشاشة وترجع على واجهتها بدون أي إشارة.
 public class ScreenWatch extends Service {
     static final long BOOT_GUARD = 180_000, HOME_GUARD = 120_000, WAKE_GUARD = 90_000;
-    private static final long STEP = 2500;
+    private static final long STEP = 2500, RETURN_AFTER = 20_000;
     private static final String CH = "screen_watch";
     private final Handler h = new Handler(Looper.getMainLooper());
     private BroadcastReceiver rx;
-    private long until, lastOpenLog;
-    private boolean guarding, sawFront, noOverlayLogged;
+    private long until, lastOpenLog, coveredSince;
+    private boolean running, armed, sawFront, noOverlayLogged;
 
     // من التطبيق أو تشغيل الجهاز (العملية الرئيسية): يشغّل الخدمة والمنبّه إذا «يفتح وحده مع التلفزيون» مفعّلة، ويطفيهم إذا لا.
     // boot: الجهاز هسه اشتغل ← نحرس الشاشة 3 دقايق (التلفزيون يفتح واجهته ومصدر القنوات على مهل)
@@ -38,12 +40,16 @@ public class ScreenWatch extends Service {
         ensure(ctx, boot ? BOOT_GUARD : 0);
     }
 
-    // المطعم فتح شي من الشاشة نفسها (إعدادات التلفزيون، رابط...) ← نوقف الحراسة حتى ما نرجّعه للشاشة غصب
+    // المطعم فتح شي من الشاشة نفسها (إعدادات التلفزيون، رابط، تحديث...) ← نوقف الحراسة والرجوع حتى ما نرجّعه للشاشة غصب
     static void pause(Context ctx) { if (BuildConfig.SCREEN) ensure(ctx, -1); }
 
+    // الشاشة انغطّت وهي مو المطعم اللي طلع منها ← ترجع وحدها بعد 20 ثانية والتلفزيون شغّال (لحد ما ترجع قدام)
+    static void away(Context ctx) { if (BuildConfig.SCREEN) start(ctx, new Intent(ctx, ScreenWatch.class).putExtra("away", true)); }
+
     // يشغّل الخدمة (أو يوصلها إذا شغّالة). guard > 0: احرس الشاشة هالمدة، guard < 0: وقّف الحراسة
-    static void ensure(Context ctx, long guard) {
-        Intent i = new Intent(ctx, ScreenWatch.class).putExtra("guard", guard);
+    static void ensure(Context ctx, long guard) { start(ctx, new Intent(ctx, ScreenWatch.class).putExtra("guard", guard)); }
+
+    private static void start(Context ctx, Intent i) {
         try {
             if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i); else ctx.startService(i);
         } catch (Exception e) {
@@ -55,6 +61,9 @@ public class ScreenWatch extends Service {
         super.onCreate();
         foreground();
         AutoLog.add(this, "svc", "");
+        // «ترجع وحدها» تبقى حتى لو التلفزيون سكّر الخدمة ورجعت (الملف بس هالعملية تكتب بيه)
+        armed = getSharedPreferences("watch", 0).getBoolean("armed", false);
+        if (armed) loop();
         rx = new BroadcastReceiver() {
             @Override public void onReceive(Context c, Intent i) {
                 if (Intent.ACTION_SCREEN_ON.equals(i.getAction())) AutoLog.add(c, "screen-on", "");
@@ -70,31 +79,49 @@ public class ScreenWatch extends Service {
         foreground();
         // intent فارغ = التلفزيون سكّر الخدمة والنظام رجّعها
         if (intent == null) AutoLog.add(this, "restart", "");
+        if (intent != null && intent.getBooleanExtra("away", false)) { setArmed(true); coveredSince = 0; loop(); }
         long g = intent == null ? 0 : intent.getLongExtra("guard", 0);
-        if (g > 0) guard(g); else if (g < 0) until = 0;
+        if (g > 0) guard(g); else if (g < 0) { until = 0; setArmed(false); }
         return START_STICKY;
     }
 
     private void guard(long ms) {
         long u = SystemClock.elapsedRealtime() + ms;
         if (u > until) until = u;
-        if (guarding) return;
-        guarding = true; sawFront = false;
+        sawFront = false;
+        loop();
+    }
+
+    private void setArmed(boolean on) {
+        if (armed == on) return;
+        armed = on;
+        getSharedPreferences("watch", 0).edit().putBoolean("armed", on).apply();
+    }
+
+    private void loop() {
+        if (running) return;
+        running = true;
         h.postDelayed(step, 1500);
     }
 
     private final Runnable step = new Runnable() {
         @Override public void run() {
-            if (SystemClock.elapsedRealtime() > until) { guarding = false; return; }
-            if (Tick.isOn(ScreenWatch.this)) {
-                if (!appInFront()) open();
-                else if (!sawFront) { sawFront = true; AutoLog.add(ScreenWatch.this, "front", ""); }
-            }
+            long now = SystemClock.elapsedRealtime();
+            boolean guarding = now <= until;
+            if (!guarding && !armed) { running = false; return; }
+            if (!Tick.isOn(ScreenWatch.this)) coveredSince = 0;          // التلفزيون مطفي: نعدّ من يرجع يشتغل
+            else if (appInFront()) {
+                coveredSince = 0;
+                setArmed(false);
+                if (guarding && !sawFront) { sawFront = true; AutoLog.add(ScreenWatch.this, "front", ""); }
+            } else if (guarding) open(true);
+            else if (coveredSince == 0) coveredSince = now;
+            else if (now - coveredSince >= RETURN_AFTER) { coveredSince = now; AutoLog.add(ScreenWatch.this, "return", ""); open(false); }
             h.postDelayed(this, STEP);
         }
     };
 
-    private void open() {
+    private void open(boolean log) {
         // أندرويد 10+: فتح شاشة من الخلفية يحتاج «الظهور فوق التطبيقات» (التلفزيونات أندرويد 9 ما تحتاجه)
         if (Build.VERSION.SDK_INT >= 29 && !Settings.canDrawOverlays(this)) {
             if (!noOverlayLogged) { noOverlayLogged = true; AutoLog.add(this, "no-overlay", ""); }
@@ -104,7 +131,7 @@ public class ScreenWatch extends Service {
         try {
             startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
             long now = SystemClock.elapsedRealtime();
-            if (now - lastOpenLog > 10_000) { lastOpenLog = now; AutoLog.add(this, "open", ""); }
+            if (log && now - lastOpenLog > 10_000) { lastOpenLog = now; AutoLog.add(this, "open", ""); }
         } catch (Exception e) { AutoLog.add(this, "err", "open " + e.getClass().getSimpleName()); }
     }
 
