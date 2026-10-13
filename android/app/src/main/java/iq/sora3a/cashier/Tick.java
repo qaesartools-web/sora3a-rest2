@@ -38,6 +38,7 @@ public class Tick extends BroadcastReceiver {
         long gap = last > 0 && last < now ? now - last : 0;
         boolean woke = on && (gap > GAP || !wasOn);
         if (woke) AutoLog.add(ctx, "wake", gap > GAP ? String.valueOf(gap / 60000) : "");
+        ScreenWatch.unblock(ctx);   // إذا مدير التلفزيون رجع طفّى استقبال التشغيل
         ScreenWatch.ensure(ctx, woke ? ScreenWatch.WAKE_GUARD : 0);
     }
 
