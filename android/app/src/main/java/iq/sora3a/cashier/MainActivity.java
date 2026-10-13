@@ -163,6 +163,7 @@ public class MainActivity extends Activity {
             checkKilled();   // قبل ScreenWatch.sync اللي يرجّع المنبّه
             if (webViewMajor() > 0 && webViewMajor() < MIN_WEBVIEW) webViewTooOld();
             web.postDelayed(this::askAutoStart, 4000);
+            web.postDelayed(this::askListener, 7000);
             ScreenWatch.sync(this, false);
         }
     }
@@ -300,10 +301,12 @@ public class MainActivity extends Activity {
                     Intent i = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
                     if (Build.VERSION.SDK_INT >= 30) {
                         Intent d = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
-                            .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, new ComponentName(this, WaListener.class).flattenToString());
+                            .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, new ComponentName(this, BuildConfig.SCREEN ? ScreenListener.class : WaListener.class).flattenToString());
                         if (d.resolveActivity(getPackageManager()) != null) i = d;
                     }
-                    openSettings(i);
+                    // بعض التلفزيونات ما بيها هاي الصفحة ← «الوصول الخاص للتطبيقات» أو صفحة التطبيق
+                    if (!openSettings(i) && !openSettings(new Intent("android.settings.MANAGE_SPECIAL_APP_ACCESS_SETTINGS")))
+                        openSettings(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg)));
                     return;
                 }
                 case "overlay":
@@ -407,6 +410,21 @@ public class MainActivity extends Activity {
 
     // التلفزيون يسكّر التطبيق بالقوة من ينطفي (منبّه المراقبة وقف بدون ما ينطفي الجهاز)، أو اشتغل وما بلّغه؟
     //   هذا شي ما يكدر أي تطبيق يتجاوزه — نسجّله ونطلع للمطعم بالتلفزيون نفسه شنو يغيّر بالإعدادات
+    // «التشغيل الأقوى»: نطلب من المطعم يفعّل «الوصول للإشعارات» مرة وحدة (إذا «بعدين» نرجع نسأل باچر)
+    private AlertDialog lnDlg;
+    private void askListener() {
+        if (isFinishing() || !appPrefs().getBoolean("autoStart", true) || notifOk() || System.currentTimeMillis() < appPrefs().getLong("lnLater", 0)) return;
+        if (lnDlg != null && lnDlg.isShowing()) return;
+        lnDlg = new AlertDialog.Builder(this).setTitle("🔗 خطوة وحدة حتى تفتح الشاشة وحدها دائماً")
+            .setMessage("تلفزيونك ما يبلّغ التطبيقات من يشتغل، فنخلّي نظام الأندرويد نفسه يشغّل الشاشة مع التلفزيون.\n\n"
+                + "اضغط «تفعيل» ← اختار «سرعة - الشاشة» ← فعّلها (سماح).\n\n"
+                + "الشاشة ما تقرا الإشعارات ولا تستخدمها — هذا بس حتى تشتغل وحدها.")
+            .setPositiveButton("تفعيل", (d, w) -> openPerm("notif"))
+            .setNegativeButton("بعدين", (d, w) -> appPrefs().edit().putLong("lnLater", System.currentTimeMillis() + 24 * 3600_000L).apply()).show();
+        final AlertDialog d = lnDlg;   // ما تبقى فوق الطلبات إذا محد بالتلفزيون
+        web.postDelayed(() -> { if (d.isShowing()) { d.dismiss(); appPrefs().edit().putLong("lnLater", System.currentTimeMillis() + 6 * 3600_000L).apply(); } }, 90_000);
+    }
+
     private static boolean checked;   // مرة وحدة لكل تشغيل للعملية (بعد السكّر بالقوة العملية دائماً جديدة، والقراءة من الملف مو من الذاكرة)
     private void checkKilled() {
         if (checked) return;
@@ -434,9 +452,15 @@ public class MainActivity extends Activity {
               + "• أو بمدير التلفزيون ضيف «سرعة - الشاشة» لـ«القائمة البيضاء» (تنظيف الذاكرة أو التسريع)."
             : "التلفزيون اشتغل وما بلّغ «سرعة - الشاشة»، فما كدرت تفتح وحدها.\n\n"
               + "الحل: بمدير التلفزيون ← «البدء الآلي» تأكد إن «سرعة - الشاشة» مفعّلة، وإذا أكو «القائمة البيضاء» ضيفها.";
-        new AlertDialog.Builder(this).setTitle("⚠️ التلفزيون يمنع الشاشة ترجع وحدها").setMessage(msg)
-            .setPositiveButton("فتح إعدادات التلفزيون", (d, x) -> openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
-            .setNegativeButton("تمام", null).show();
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle("⚠️ التلفزيون يمنع الشاشة ترجع وحدها");
+        if (!notifOk()) {
+            b.setMessage(msg + "\n\nأسهل حل: فعّل «التشغيل الأقوى» — الأندرويد نفسه يشغّل الشاشة حتى لو التلفزيون ما بلّغها.")
+                .setPositiveButton("تفعيل التشغيل الأقوى", (d, x) -> openPerm("notif"))
+                .setNeutralButton("إعدادات التلفزيون", (d, x) -> openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+        } else {
+            b.setMessage(msg).setPositiveButton("فتح إعدادات التلفزيون", (d, x) -> openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+        }
+        b.setNegativeButton("تمام", null).show();
     }
 
     // ⚙️ ← «فحص التشغيل التلقائي»: كل اللي نحتاجه حتى نعرف ليش ما انفتحت وحدها — المطعم يصوّره ويبعثه
@@ -455,6 +479,7 @@ public class MainActivity extends Activity {
         b.append("يفتح وحده: ").append(appPrefs().getBoolean("autoStart", true) ? "✅ مفعّل" : "❌ مطفي").append('\n');
         b.append("الواجهة الرئيسية: ").append(home).append('\n');
         b.append("خدمة المراقبة: ").append(watchRunning() ? "✅ شغّالة" : "❌ واقفة").append('\n');
+        b.append("التشغيل الأقوى: ").append(notifOk() ? "✅ مفعّل" : "❌ مو مفعّل").append('\n');
         b.append("استقبال التشغيل: ").append(bootReceiverOn() ? "✅" : "⛔ مطفي من التلفزيون").append('\n');
         if (Build.VERSION.SDK_INT >= 29) b.append("الظهور فوق التطبيقات: ").append(overlayOk() ? "✅" : "❌").append('\n');
         b.append("\nآخر الأحداث (الأحدث فوق):\n");
@@ -484,6 +509,8 @@ public class MainActivity extends Activity {
             case "return": return "↩️ رجّعناها قدام وحدها";
             case "killed": return "⛔ التلفزيون سكّر التطبيق بالقوة" + (d.isEmpty() ? "" : " (قبل " + d + " دقيقة)");
             case "noboot": return "⛔ التلفزيون اشتغل وما بلّغ التطبيق";
+            case "listener": return "🔗 الأندرويد شغّل التطبيق وحده (التشغيل الأقوى)";
+            case "job": return "🔁 الأندرويد رجّع التطبيق بعد التشغيل";
             case "unblocked": return "🔓 التلفزيون طفّى جزء من التطبيق (" + d + ") ورجّعناه";
             case "updated": return "⬆️ تحدّث التطبيق لنسخة " + d;
             case "no-overlay": return "⛔ التلفزيون ما يسمح تفتح وحدها";
