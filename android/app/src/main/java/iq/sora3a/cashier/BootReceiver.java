@@ -12,7 +12,13 @@ public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context ctx, Intent intent) {
         String a = intent.getAction();
-        if (BuildConfig.SCREEN && Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) { ScreenWatch.sync(ctx, false); return; }
+        // الشاشة تحدّثت (من داخل التطبيق أو تنصيب جديد) ← ترجع تنفتح وحدها
+        if (BuildConfig.SCREEN && Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) {
+            AutoLog.add(ctx, "updated", BuildConfig.VERSION_NAME);
+            ScreenWatch.sync(ctx, false);
+            if (ctx.getSharedPreferences("app", 0).getBoolean("autoStart", true)) ScreenWatch.ensure(ctx, ScreenWatch.WAKE_GUARD);
+            return;
+        }
         if (!Intent.ACTION_BOOT_COMPLETED.equals(a) && !"android.intent.action.QUICKBOOT_POWERON".equals(a) && !"com.htc.intent.action.QUICKBOOT_POWERON".equals(a)) return;
         if (BuildConfig.SCREEN) { AutoLog.add(ctx, "boot", ""); ScreenWatch.sync(ctx, true); return; }
         if (!ctx.getSharedPreferences("app", 0).getBoolean("autoStart", true)) return;

@@ -25,12 +25,25 @@ jobs:
         with: { distribution: temurin, java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: '8.9' }
-      - name: Signing key (generated per build)
+      # مفتاح التوقيع: ثابت من سرّ SIGN_SEED (كل نسخة تنصب فوق القديمة، والتطبيق يحدّث نفسه)،
+      # وإذا السرّ مو موجود (مثلاً PR من fork) مفتاح مؤقت لهالبناء بس — والتحديث من داخل التطبيق يبقى مطفي
+      - name: Signing key
+        env: { SIGN_SEED: '${{ secrets.SIGN_SEED }}' }
         run: |
           P=$(openssl rand -hex 16); echo "::add-mask::$P"
+          K="$RUNNER_TEMP/release.p12"
           echo "KEYSTORE_PASS=$P" >> "$GITHUB_ENV"
-          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-      - run: keytool -genkeypair -keystore "$KEYSTORE_PATH" -storepass "$KEYSTORE_PASS" -keypass "$KEYSTORE_PASS" -alias sora3a -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Sora3a Cashier"
+          echo "KEYSTORE_PATH=$K" >> "$GITHUB_ENV"
+          if [ -n "$SIGN_SEED" ]; then
+            python3 -m venv "$RUNNER_TEMP/py" && "$RUNNER_TEMP/py/bin/pip" install --quiet cryptography
+            CERT=$(KEYSTORE_PASS="$P" "$RUNNER_TEMP/py/bin/python" tools/signkey.py "$K")
+            echo "SIGN_CERT=$CERT" >> "$GITHUB_ENV"
+            echo "🔑 التوقيع ثابت — بصمة الشهادة: \`$CERT\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            keytool -genkeypair -storetype PKCS12 -keystore "$K" -storepass "$P" -keypass "$P" -alias sora3a -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Sora3a Cashier"
+            echo "SIGN_CERT=" >> "$GITHUB_ENV"
+            echo "⚠️ التوقيع مؤقت (ماكو SIGN_SEED) — التحديث من داخل التطبيق مطفي" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Unit tests + build
         working-directory: android
         env: { VERSION_CODE: '${{ github.run_number }}' }
@@ -39,6 +52,8 @@ jobs:
           cp android/app/build/outputs/apk/cashier/release/app-cashier-release.apk sora3a-cashier.apk
           cp android/app/build/outputs/apk/line/release/app-line-release.apk sora3a-line.apk
           cp android/app/build/outputs/apk/screen/release/app-screen-release.apk sora3a-screen.apk
+          # التطبيق يقرا هذا الملف حتى يعرف أكو نسخة أحدث، ويحدّث نفسه بس إذا بصمة التوقيع نفسها
+          printf '{"version":%s,"name":"1.%s","cert":"%s"}\n' "${{ github.run_number }}" "${{ github.run_number }}" "$SIGN_CERT" > version.json
       - uses: actions/upload-artifact@v4
         with: { name: sora3a-android-apks, path: 'sora3a-*.apk' }
       - name: Publish (fixed tag, not latest)
@@ -49,7 +64,9 @@ jobs:
           name: تطبيق الكاشير للأندرويد
           make_latest: false
           body: نسخة ${{ github.run_number }} — نزّل sora3a-cashier.apk وثبّته على جهاز الكاشير أو التابلت. (لربط رقم المطعم استخدم تطبيق «خط المطعم».)
-          files: sora3a-cashier.apk
+          files: |
+            sora3a-cashier.apk
+            version.json
       - name: Publish line app (fixed tag, not latest)
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
@@ -58,7 +75,9 @@ jobs:
           name: تطبيق خط المطعم للأندرويد
           make_latest: false
           body: نسخة ${{ github.run_number }} — نزّل sora3a-line.apk وثبّته على التلفون اللي بيه شريحة المطعم أو واتساب المطعم، سجّل دخول بحساب صاحب المطعم واكتب الرقم. رقم المتصل يطلع بالكاشير.
-          files: sora3a-line.apk
+          files: |
+            sora3a-line.apk
+            version.json
       - name: Publish screen app (fixed tag, not latest)
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
@@ -67,4 +86,6 @@ jobs:
           name: تطبيق الشاشة «طلبك جاهز» للتلفزيون
           make_latest: false
           body: نسخة ${{ github.run_number }} — نزّل sora3a-screen.apk وثبّته على التيفي بوكس أو التلفزيون أندرويد أو التابلت. سجّل دخول مرة وحدة، والشاشة تفتح وحدها مع تشغيل الجهاز.
-          files: sora3a-screen.apk
+          files: |
+            sora3a-screen.apk
+            version.json
