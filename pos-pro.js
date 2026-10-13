@@ -547,7 +547,7 @@
     const rcpt = `<div class="logo">${esc(title)}</div>${subL ? `<div class="sub">${esc(subL)}</div>` : ''}${phone ? `<div class="sub">📞 ${esc(phone)}</div>` : ''}
       <div class="div"></div>${head}${pg}<div class="div"></div>
       <div class="row"><span>رقم الطلب</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div>
-      <div class="row"><span>التاريخ</span><span>${esc(d.toLocaleDateString('ar-IQ-u-nu-latn'))} ${esc(o.createdAt || '')}</span></div>
+      <div class="row"><span>التاريخ</span><span>${esc(d.toLocaleDateString('ar-IQ-u-nu-latn'))} ${esc(t12(o.createdAt))}</span></div>
       ${o.customer && type === 'delivery' ? `<div class="row"><span>الزبون</span><span>${esc(o.customer)}</span></div>` : ''}
       ${o.phone ? `<div class="row"><span>الهاتف</span><span>${esc(o.phone)}</span></div>` : ''}
       ${o.address && type === 'delivery' ? `<div class="row"><span>العنوان</span><span>${esc(o.address)}</span></div>` : ''}
@@ -565,7 +565,7 @@
       ${p.received && (p.method === 'cash' || p.method === 'mixed') ? `<div class="row"><span>المستلم نقداً</span><span>${fmt(p.received)}</span></div><div class="row"><span>الباقي</span><span>${fmt(p.change || 0)}</span></div>` : ''}
       <div class="div"></div><div class="foot">${esc(settings.receiptFooter || 'شكراً لزيارتكم ❤️')}</div>`;
     const kt = withKitchen ? `<div class="pb kt"><div class="logo">🍳 تذكرة مطبخ</div><div class="div"></div>${head}${pg}
-      <div class="row"><span>${esc(o.createdAt || '')}</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div><div class="div"></div>
+      <div class="row"><span>${esc(t12(o.createdAt))}</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div><div class="div"></div>
       ${items.map((i) => `<div class="item">${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<div class="n">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}</div>` : '';
     return `<html><head><meta charset="UTF-8"><style>${css}</style></head><body>${rcpt}${kt}</body></html>`;
   }
@@ -860,7 +860,7 @@
       const chips = o.kSec ? `<div class="kds-secs">${Object.entries(o.kSec).map(([sid, v]) => { const sc = secById(sid) || { name: sid, emoji: '🍽️' };
         return `<button type="button" class="kds-sec ${v.readyAt ? 'done' : ''}" onclick="kSecDone('${esc(o.id)}','${esc(sid)}')">${v.readyAt ? '✅' : '⏳'} ${esc(sc.emoji || '')} ${esc(sc.name)} <small>${toA(v.n || 0)}</small></button>`; }).join('')}</div>` : '';
       const items = (o.items || []).map((it, k) => ({ ...orderItemsFull(o)[k], note: it.note, sec: it.sec })).filter((i) => !kdsSec || i.sec === kdsSec);
-      return `<div class="kds-card ${cls}"><div class="kds-top"><div><div class="kds-num">#${esc(kNum(o))} <span class="kds-lbl">${esc(label)}</span></div><div class="kds-type">${esc(o.createdAt || '')}${o.pager ? ` • <b class="kds-pager">📟 ${toA(o.pager)}</b>` : ''}</div></div>
+      return `<div class="kds-card ${cls}"><div class="kds-top"><div><div class="kds-num">#${esc(kNum(o))} <span class="kds-lbl">${esc(label)}</span></div><div class="kds-type">${esc(t12(o.createdAt))}${o.pager ? ` • <b class="kds-pager">📟 ${toA(o.pager)}</b>` : ''}</div></div>
         <div class="kds-time">⏱ ${toA(m)} د</div></div>${kdsSec ? '' : chips}
         <div class="kds-items">${items.map((i) => `<div class="kds-it"><span class="q">${toA(i.qty)}×</span><span>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${!kdsSec && i.sec && secById(i.sec) ? ` <small class="kds-isec">${esc(secById(i.sec).emoji || '')}</small>` : ''}${i.note ? `<span class="n">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('')}</div>
         ${o.note ? `<div class="kds-note">📝 ${esc(o.note)}</div>` : ''}
@@ -1166,7 +1166,7 @@
     return `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;width:${W}px;padding:8px;color:#000">
       <div style="text-align:center;font-size:20px;font-weight:900;background:#000;color:#fff;padding:4px">${esc(sc.emoji || '')} قسم ${esc(sc.name)}</div>
       <div style="text-align:center;font-size:56px;font-weight:900;line-height:1.1;margin-top:4px">#${esc(kNum(o))}</div>
-      <div style="text-align:center;font-size:14px;font-weight:700">${esc(label)}${o.pager ? ' • 📟 بيجر ' + esc(o.pager) : ''} • ${esc(o.createdAt || '')}</div>
+      <div style="text-align:center;font-size:14px;font-weight:700">${esc(label)}${o.pager ? ' • 📟 بيجر ' + esc(o.pager) : ''} • ${esc(t12(o.createdAt))}</div>
       <div style="border-top:2px dashed #000;margin:6px 0"></div>
       ${items.map((i) => `<div style="font-size:20px;font-weight:900;margin:4px 0">${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<div style="font-size:15px;font-weight:700">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}
       ${o.note ? `<div style="border-top:1px dashed #000;margin-top:6px;padding-top:4px;font-size:15px;font-weight:700">📝 ${esc(o.note)}</div>` : ''}
@@ -1326,7 +1326,7 @@
     const el = $('dpJobs'); if (!el || !DESK) return;
     const js = await DESK.jobs().catch(() => []);
     el.innerHTML = js.length ? js.slice(0, 30).map((j) => `<div class="dp-job"><span>${j.ok ? '✅' : j.fallback ? '⚠️' : '❌'}</span>
-      <span class="dp-jt"><b>${esc(j.title)}</b><small>${esc(new Date(j.at).toLocaleTimeString('ar-IQ-u-nu-latn', { hour: '2-digit', minute: '2-digit' }))} • ${esc(j.fallback ? 'انطبعت على ' + j.fallback : j.printer)}${j.ok ? '' : ' • ' + esc(j.error)}</small></span>
+      <span class="dp-jt"><b>${esc(j.title)}</b><small>${esc(new Date(j.at).toLocaleTimeString('ar-IQ-u-nu-latn', { hour: 'numeric', minute: '2-digit', hour12: true }))} • ${esc(j.fallback ? 'انطبعت على ' + j.fallback : j.printer)}${j.ok ? '' : ' • ' + esc(j.error)}</small></span>
       ${j.canReprint ? `<button type="button" class="btn-soft" onclick="dpReprint(${j.id})">🔁</button>` : ''}</div>`).join('') : '<div class="ac-sub">ماكو طباعة لحد الآن</div>';
   };
   window.dpReprint = async (id) => { const r = await DESK.reprint(id); toast(r.ok ? '✅ انعادت الطباعة' : r.fallback ? '⚠️ انطبعت على الطابعة الرئيسية' : '❌ ' + r.error); dpJobs(); };

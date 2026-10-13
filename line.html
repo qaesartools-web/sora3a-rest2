@@ -163,7 +163,7 @@ function linkedHtml() {
   rows.push(row(pm.battery, 'إيقاف توفير البطارية — حتى ما ينام التطبيق', 'battery'));
   const allOk = (!st.sim || pm.phone) && (!st.wa || pm.notif) && pm.battery;
   const oem = /xiaomi|redmi|poco|oppo|realme|vivo|huawei|honor|oneplus|tecno|infinix|itel/.test(st.maker || '');
-  const when = (t) => new Date(t).toLocaleString('ar-IQ-u-nu-latn', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const when = (t) => new Date(t).toLocaleString('ar-IQ-u-nu-latn', { day: 'numeric', month: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
   const last = !st.lastAt ? '' : st.lastErr
     ? `<div class="warn" style="margin-top:10px">❌ آخر مكالمة (<span dir="ltr">${esc(st.lastNumber)}</span>) ما وصلت: ${esc(st.lastErr)}</div>`
     : `<div class="muted" style="margin-top:10px">آخر مكالمة وصلت للكاشير: <b dir="ltr">${esc(st.lastNumber)}</b>${st.lastKind === 'wa' ? ' (واتساب)' : ''} • ${esc(when(st.lastAt))}</div>`;
@@ -197,7 +197,7 @@ function groups() {
   }
   return [...m.values()].sort((a, b) => (+a.line || 0) - (+b.line || 0));
 }
-const when = (t) => new Date(t).toLocaleString('ar-IQ-u-nu-latn', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+const when = (t) => new Date(t).toLocaleString('ar-IQ-u-nu-latn', { day: 'numeric', month: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
 function multiHtml() {
   const nums = groups();
   if (!nums.length) {
