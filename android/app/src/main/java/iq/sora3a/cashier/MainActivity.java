@@ -138,6 +138,7 @@ public class MainActivity extends Activity {
                     return true;
                 }
                 if ("https".equals(u.getScheme()) && "qaesartools-web.github.io".equals(u.getHost())) return false;
+                ScreenWatch.pause(MainActivity.this);
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (ActivityNotFoundException ignored) {}
                 return true;
             }
@@ -232,7 +233,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 29) {
             try {
                 RoleManager rm = getSystemService(RoleManager.class);
-                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME) && !rm.isRoleHeld(RoleManager.ROLE_HOME)) { startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME), REQ_HOME); return; }
+                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME) && !rm.isRoleHeld(RoleManager.ROLE_HOME)) { ScreenWatch.pause(this); startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME), REQ_HOME); return; }
             } catch (Exception ignored) {}
         }
         if (openSettings(new Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) return;
@@ -315,6 +316,7 @@ public class MainActivity extends Activity {
         });
     }
     private boolean openSettings(Intent i) {
+        ScreenWatch.pause(this);   // المطعم هو اللي فتحها من الشاشة ← لا نرجّعه للشاشة غصب
         try { startActivity(i); return true; } catch (Exception e) { return false; }
     }
 
@@ -330,8 +332,16 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("window.__autoState=" + on + ";window.__autoDiag=1;window.__setAuto&&window.__setAuto(" + on + ")", null);
     }
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); if (BuildConfig.SCREEN) logHome(i); }
-    // انفتحت لأنها الواجهة الرئيسية (تشغيل التلفزيون أو زر 🏠) ← نسجّلها بفحص التشغيل التلقائي
-    private void logHome(Intent i) { if (i != null && i.hasCategory(Intent.CATEGORY_HOME)) AutoLog.add(this, "home", ""); }
+    // انفتحت لأنها الواجهة الرئيسية = غالباً التلفزيون هسه اشتغل (أو زر 🏠).
+    //   بعض التلفزيونات (مثل MediaTek) تفتح الواجهة الرئيسية وبعد ثواني تفتح القنوات/المصدر فوقها، وما تبعث «الشاشة اشتغلت»
+    //   ← نحرس الشاشة دقيقتين ونرجّعها قدام إذا شي غطّاها
+    private void logHome(Intent i) {
+        if (i == null || !i.hasCategory(Intent.CATEGORY_HOME)) return;
+        AutoLog.add(this, "home", "");
+        if (appPrefs().getBoolean("autoStart", true)) ScreenWatch.ensure(this, ScreenWatch.HOME_GUARD);
+    }
+    // الشاشة راحت للخلف (شي غطّاها) ← بالسجل نعرف شكد بعد التشغيل صار هذا
+    @Override protected void onStop() { super.onStop(); if (BuildConfig.SCREEN && !isFinishing()) AutoLog.add(this, "bg", ""); }
 
     // ⚙️ ← «فحص التشغيل التلقائي»: كل اللي نحتاجه حتى نعرف ليش ما انفتحت وحدها — المطعم يصوّره ويبعثه
     private void autoDiag() {
@@ -373,6 +383,7 @@ public class MainActivity extends Activity {
             case "open": return "🚀 فتحناها فوق التلفزيون";
             case "front": return "✅ الشاشة قدام";
             case "home": return "🏠 انفتحت كواجهة رئيسية";
+            case "bg": return "⬇️ شي غطّى الشاشة";
             case "no-overlay": return "⛔ التلفزيون ما يسمح تفتح وحدها";
             default: return "⚠️ " + code + (d.isEmpty() ? "" : " " + d);
         }
