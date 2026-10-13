@@ -37,6 +37,16 @@
         </receiver>
         <!-- منبّه كل دقيقة: يرجّع خدمة المراقبة إذا انسكّرت، ويكشف رجوع التلفزيون من الستاند باي حتى لو ما وصلت إشارة «الشاشة اشتغلت» -->
         <receiver android:name=".Tick" android:process=":watch" android:exported="false" />
+        <!-- «التشغيل الأقوى»: الأندرويد نفسه يربطها أول ما يشتغل الجهاز ويرجّعها بعد السكّر بالقوة (المطعم يفعّل «الوصول للإشعارات» مرة وحدة).
+             ما نقرا الإشعارات — بس حتى تشتغل الشاشة وحدها على التلفزيونات اللي ما تبلّغ التطبيقات بالتشغيل -->
+        <service android:name=".ScreenListener" android:process=":watch" android:label="@string/app_name" android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+        <!-- احتياط بدون إعداد: مهمة دورية محفوظة، الأندرويد يرجّعها بعد كل تشغيل للجهاز -->
+        <service android:name=".BootJob" android:process=":watch" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
         <service android:name=".ScreenWatch" android:process=":watch" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Opens the restaurant order-ready display when the TV wakes from standby" />
         </service>

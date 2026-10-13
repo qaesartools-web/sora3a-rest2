@@ -39,6 +39,7 @@ public class ScreenWatch extends Service {
         unblock(ctx);
         boolean on = ctx.getSharedPreferences("app", 0).getBoolean("autoStart", true);
         Tick.arm(ctx, on);
+        BootJob.schedule(ctx, on);
         // نتذكر متى شغّلنا المنبّه (بأي تشغيل للجهاز وبأي نسخة) — إذا اختفى بعدين بدون إعادة تشغيل = التلفزيون سكّر التطبيق بالقوة
         ctx.getSharedPreferences("app", 0).edit().putBoolean("tickArmed", on).putInt("armedBoot", Tick.bootCount(ctx)).putInt("armedVer", BuildConfig.VERSION_CODE).apply();
         if (!on) { ctx.stopService(new Intent(ctx, ScreenWatch.class)); return; }
@@ -51,7 +52,7 @@ public class ScreenWatch extends Service {
         if (!BuildConfig.SCREEN) return false;
         boolean fixed = false;
         PackageManager pm = ctx.getPackageManager();
-        for (Class<?> c : new Class<?>[]{BootReceiver.class, Tick.class, ScreenWatch.class, UpdateReceiver.class}) {
+        for (Class<?> c : new Class<?>[]{BootReceiver.class, Tick.class, ScreenWatch.class, UpdateReceiver.class, ScreenListener.class, BootJob.class}) {
             try {
                 ComponentName cn = new ComponentName(ctx, c);
                 int st = pm.getComponentEnabledSetting(cn);
