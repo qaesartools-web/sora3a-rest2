@@ -47,6 +47,7 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 @keyframes dot{70%{box-shadow:0 0 0 9px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
 .when{text-align:left;flex:none}
 .clk{color:#fff;font-family:var(--num);font-weight:800;font-size:3vw;font-size:clamp(22px,3vw,52px);line-height:1;letter-spacing:.5px}
+.clk small{font-size:.5em;font-weight:700;opacity:.8;letter-spacing:0}
 .dt{font-size:1vw;font-size:clamp(11px,1vw,17px);color:rgba(255,255,255,.9);margin-top:4px}
 .mb{flex:none;width:48px;height:48px;border-radius:14px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.25);font-size:20px;display:flex;align-items:center;justify-content:center;position:relative}
 .mb small{position:absolute;bottom:-4px;left:-4px;font-size:13px}
@@ -339,7 +340,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) keep
 
 function clock() {
   const d = new Date();
-  $('clk').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const h = d.getHours();   // نظام 12 ساعة (ص/م)
+  $('clk').innerHTML = ((h % 12) || 12) + ':' + String(d.getMinutes()).padStart(2, '0') + ' <small>' + (h < 12 ? 'ص' : 'م') + '</small>';
   try { $('dt').textContent = d.toLocaleDateString('ar-IQ-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' }); } catch (e) {}
 }
 setInterval(() => { clock(); if (rid) { if (bagDay() !== day) listen(); else render(); } }, 30000);
