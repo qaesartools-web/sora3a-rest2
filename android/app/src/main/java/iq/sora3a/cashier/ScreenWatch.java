@@ -20,7 +20,7 @@ import android.provider.Settings;
 // خدمة صغيرة بعملية منفصلة (:watch) بدون متصفح — تسمع «الشاشة اشتغلت» (ومنبّه Tick إذا الإشارة ما وصلت)،
 // وبعدها «تحرس» الشاشة فترة: كل ما واجهة التلفزيون أو مصدر القنوات يطلع فوقها، ترجّعها قدام.
 public class ScreenWatch extends Service {
-    static final long BOOT_GUARD = 180_000, WAKE_GUARD = 90_000;
+    static final long BOOT_GUARD = 180_000, HOME_GUARD = 120_000, WAKE_GUARD = 90_000;
     private static final long STEP = 2500;
     private static final String CH = "screen_watch";
     private final Handler h = new Handler(Looper.getMainLooper());
@@ -38,7 +38,10 @@ public class ScreenWatch extends Service {
         ensure(ctx, boot ? BOOT_GUARD : 0);
     }
 
-    // يشغّل الخدمة (أو يوصلها إذا شغّالة). guard > 0: احرس الشاشة هالمدة
+    // المطعم فتح شي من الشاشة نفسها (إعدادات التلفزيون، رابط...) ← نوقف الحراسة حتى ما نرجّعه للشاشة غصب
+    static void pause(Context ctx) { if (BuildConfig.SCREEN) ensure(ctx, -1); }
+
+    // يشغّل الخدمة (أو يوصلها إذا شغّالة). guard > 0: احرس الشاشة هالمدة، guard < 0: وقّف الحراسة
     static void ensure(Context ctx, long guard) {
         Intent i = new Intent(ctx, ScreenWatch.class).putExtra("guard", guard);
         try {
@@ -68,7 +71,7 @@ public class ScreenWatch extends Service {
         // intent فارغ = التلفزيون سكّر الخدمة والنظام رجّعها
         if (intent == null) AutoLog.add(this, "restart", "");
         long g = intent == null ? 0 : intent.getLongExtra("guard", 0);
-        if (g > 0) guard(g);
+        if (g > 0) guard(g); else if (g < 0) until = 0;
         return START_STICKY;
     }
 
