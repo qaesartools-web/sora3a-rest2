@@ -31,10 +31,12 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
+import java.io.File;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
@@ -135,6 +137,7 @@ public class MainActivity extends Activity {
                 if (BuildConfig.SCREEN && "sora3a".equals(u.getScheme())) {
                     if ("autostart".equals(u.getHost())) { setAutoStart("1".equals(u.getQueryParameter("on"))); pushAuto(); }
                     else if ("autodiag".equals(u.getHost())) autoDiag();
+                    else if ("update".equals(u.getHost())) { if (update != null) doUpdate(update); else checkUpdate(true); }
                     return true;
                 }
                 if ("https".equals(u.getScheme()) && "qaesartools-web.github.io".equals(u.getHost())) return false;
@@ -153,6 +156,7 @@ public class MainActivity extends Activity {
             }
         });
         if (state != null) web.restoreState(state); else web.loadUrl(START_URL);
+        web.postDelayed(updTick, 10_000);
         if (BuildConfig.SCREEN) {
             logHome(getIntent());
             if (webViewMajor() > 0 && webViewMajor() < MIN_WEBVIEW) webViewTooOld();
@@ -329,7 +333,54 @@ public class MainActivity extends Activity {
     private void pushAuto() {
         if (web == null || !pageUrl.startsWith(START_URL)) return;
         boolean on = autoStartOn();
-        web.evaluateJavascript("window.__autoState=" + on + ";window.__autoDiag=1;window.__setAuto&&window.__setAuto(" + on + ")", null);
+        String up = update == null ? "" : update.name.replaceAll("[^0-9.]", "");
+        web.evaluateJavascript("window.__autoState=" + on + ";window.__autoDiag=1;window.__setAuto&&window.__setAuto(" + on + ")"
+            + ";window.__appUpdate='" + up + "';window.__setUpdate&&window.__setUpdate('" + up + "')", null);
+    }
+
+    // ── التحديث من داخل التطبيق (Updater): نفحص بعد التشغيل بشوية وكل 6 ساعات ──
+    private Updater.Info update;
+    private AlertDialog updDlg;
+    private final Runnable updTick = new Runnable() {
+        @Override public void run() { if (isFinishing()) return; checkUpdate(false); web.postDelayed(this, 6 * 3600_000L); }
+    };
+    private void checkUpdate(boolean manual) {
+        new Thread(() -> {
+            Updater.Info u = Updater.check(this);
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                update = u;
+                if (BuildConfig.SCREEN) pushAuto();   // زر «تحديث التطبيق» بقائمة ⚙️
+                if (u == null) { if (manual) Toast.makeText(this, "التطبيق آخر نسخة ✅", Toast.LENGTH_LONG).show(); return; }
+                if (manual || System.currentTimeMillis() > appPrefs().getLong("updLater", 0)) askUpdate(u);
+            });
+        }).start();
+    }
+    private void updLater(long ms) { appPrefs().edit().putLong("updLater", System.currentTimeMillis() + ms).apply(); }
+    private void askUpdate(Updater.Info u) {
+        if (updDlg != null && updDlg.isShowing()) return;
+        updDlg = new AlertDialog.Builder(this).setTitle("⬆️ تحديث جديد — نسخة " + u.name)
+            .setMessage("التحديث ينزل وينصب من هنا: بدون فلاشة، وبدون ما ينمسح شي أو تسجّل دخول من جديد.\n\nبعد التنزيل تطلع رسالة الجهاز ← اضغط «تثبيت».")
+            .setPositiveButton("تحديث هسه", (d, w) -> doUpdate(u))
+            .setNegativeButton("بعدين", (d, w) -> updLater(24 * 3600_000L)).show();
+        // الشاشة: الرسالة ما تبقى فوق الطلبات — تختفي بعد دقيقة (والتحديث يبقى بقائمة ⚙️)
+        if (BuildConfig.SCREEN) { final AlertDialog d = updDlg; web.postDelayed(() -> { if (d.isShowing()) { d.dismiss(); updLater(6 * 3600_000L); } }, 60_000); }
+    }
+    private void doUpdate(Updater.Info u) {
+        if (updDlg != null && updDlg.isShowing()) updDlg.dismiss();
+        final AlertDialog dl = new AlertDialog.Builder(this).setTitle("⬆️ تحديث — نسخة " + u.name).setMessage("⬇️ ينزل التحديث…").setCancelable(false).show();
+        new Thread(() -> {
+            try {
+                File f = new File(getCacheDir(), "update.apk");
+                Updater.download(f, (p) -> runOnUiThread(() -> dl.setMessage("⬇️ ينزل التحديث… " + (p >= 0 ? p + "%" : ""))));
+                runOnUiThread(() -> dl.setMessage("📦 يتجهز التثبيت…"));
+                Updater.install(this, f);
+                runOnUiThread(dl::dismiss);
+            } catch (Exception e) {
+                AutoLog.add(this, "err", "update " + e.getClass().getSimpleName());
+                runOnUiThread(() -> { dl.dismiss(); Toast.makeText(this, "❌ ما كدرنا ننزّل التحديث — تأكد من الإنترنت وجرّب مرة ثانية", Toast.LENGTH_LONG).show(); });
+            }
+        }).start();
     }
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); if (BuildConfig.SCREEN) logHome(i); }
     // انفتحت لأنها الواجهة الرئيسية = غالباً التلفزيون هسه اشتغل (أو زر 🏠).
@@ -384,6 +435,7 @@ public class MainActivity extends Activity {
             case "front": return "✅ الشاشة قدام";
             case "home": return "🏠 انفتحت كواجهة رئيسية";
             case "bg": return "⬇️ شي غطّى الشاشة";
+            case "updated": return "⬆️ تحدّث التطبيق لنسخة " + d;
             case "no-overlay": return "⛔ التلفزيون ما يسمح تفتح وحدها";
             default: return "⚠️ " + code + (d.isEmpty() ? "" : " " + d);
         }

@@ -51,6 +51,7 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 .dt{font-size:1vw;font-size:clamp(11px,1vw,17px);color:rgba(255,255,255,.9);margin-top:4px}
 .mb{flex:none;width:48px;height:48px;border-radius:14px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.25);font-size:20px;display:flex;align-items:center;justify-content:center;position:relative}
 .mb small{position:absolute;bottom:-4px;left:-4px;font-size:13px}
+.mb.upd::after{content:'⬆️';position:absolute;top:-8px;right:-8px;font-size:15px}
 
 /* ── العمودين ── */
 .cols{flex:1;min-height:0;display:flex;padding:0 2.4vw;padding:0 clamp(16px,2.4vw,40px)}
@@ -166,6 +167,7 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 <div class="off" id="off" hidden><div class="off-c"><b>⛔</b><h1>خدمة الشاشة موقوفة لهذا المطعم</h1><p>تواصل ويا إدارة سرعة حتى يفعّلونها — وأول ما تتفعّل ترجع الشاشة تشتغل وحدها.</p><button type="button" id="offOut">🚪 تسجيل خروج</button></div></div>
 <div class="menu" id="menu" hidden role="dialog" aria-label="الإعدادات">
   <div class="mt">⚙️ إعدادات الشاشة</div>
+  <button type="button" id="mUpd" hidden></button>
   <button type="button" id="mSnd"></button>
   <button type="button" id="mAuto" hidden></button>
   <button type="button" id="mDiag" hidden>🩺 فحص التشغيل التلقائي</button>
@@ -301,13 +303,16 @@ const armClose = () => { clearTimeout(closeT); closeT = setTimeout(() => { if (!
 let autoOn = null;
 window.__setAuto = (on) => { autoOn = !!on; $('mAuto').hidden = false; $('mDiag').hidden = !window.__autoDiag; menuUi(); };
 if (typeof window.__autoState === 'boolean') window.__setAuto(window.__autoState);
+// تحديث التطبيق نفسه: التطبيق يبلّغنا إذا أكو نسخة أحدث ← زر بالقائمة وعلامة ⬆️ على ⚙️، والضغط يحدّث بدون فلاشة
+window.__setUpdate = (name) => { $('mUpd').hidden = !name; $('mUpd').textContent = '⬆️ تحديث التطبيق — نسخة ' + (name || ''); $('menuBtn').classList.toggle('upd', !!name); };
+if (window.__appUpdate) window.__setUpdate(window.__appUpdate);
 function menuUi() {
   soundUi();
   if (autoOn !== null) $('mAuto').textContent = autoOn ? '🚀 يفتح وحده مع التلفزيون: يشتغل' : '🚀 يفتح وحده مع التلفزيون: مطفي';
   $('mOut').textContent = outArmed ? '⚠️ متأكد؟ اضغط مرة ثانية للخروج' : '🚪 تسجيل خروج';
   $('mOut').classList.toggle('warn', outArmed);
 }
-function openMenu() { outArmed = false; menuUi(); menu.hidden = false; $('mSnd').focus(); armClose(); }
+function openMenu() { outArmed = false; menuUi(); menu.hidden = false; $($('mUpd').hidden ? 'mSnd' : 'mUpd').focus(); armClose(); }
 function closeMenu() { menu.hidden = true; outArmed = false; clearTimeout(closeT); try { $('menuBtn').focus(); } catch (e) {} }
 window.closeScreenMenu = closeMenu;
 $('menuBtn').onclick = () => { if (menu.hidden) openMenu(); else closeMenu(); };
@@ -316,6 +321,7 @@ $('mSnd').onclick = () => { sound = !sound; ls.set('scr_sound', sound); if (soun
 $('mAuto').onclick = () => { if (autoOn !== null) (window.__goApp || ((u) => { location.href = u; }))('sora3a://autostart?on=' + (autoOn ? 0 : 1)); armClose(); };
 // «فحص التشغيل التلقائي»: التطبيق يعرض شنو صار بالتلفزيون (اشتغل، رجع من الستاند باي، فتحناها...) حتى نصوّره
 $('mDiag').onclick = () => { closeMenu(); (window.__goApp || ((u) => { location.href = u; }))('sora3a://autodiag'); };
+$('mUpd').onclick = () => { closeMenu(); (window.__goApp || ((u) => { location.href = u; }))('sora3a://update'); };
 $('mReload').onclick = () => location.reload();
 $('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else if (d.documentElement.requestFullscreen) d.documentElement.requestFullscreen().catch(() => {}); closeMenu(); };
 $('mOut').onclick = () => {
