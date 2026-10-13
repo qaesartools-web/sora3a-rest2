@@ -6,9 +6,11 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -34,12 +36,33 @@ public class ScreenWatch extends Service {
     // boot: الجهاز هسه اشتغل ← نحرس الشاشة 3 دقايق (التلفزيون يفتح واجهته ومصدر القنوات على مهل)
     static void sync(Context ctx, boolean boot) {
         if (!BuildConfig.SCREEN) return;
+        unblock(ctx);
         boolean on = ctx.getSharedPreferences("app", 0).getBoolean("autoStart", true);
         Tick.arm(ctx, on);
         // نتذكر متى شغّلنا المنبّه (بأي تشغيل للجهاز وبأي نسخة) — إذا اختفى بعدين بدون إعادة تشغيل = التلفزيون سكّر التطبيق بالقوة
         ctx.getSharedPreferences("app", 0).edit().putBoolean("tickArmed", on).putInt("armedBoot", Tick.bootCount(ctx)).putInt("armedVer", BuildConfig.VERSION_CODE).apply();
         if (!on) { ctx.stopService(new Intent(ctx, ScreenWatch.class)); return; }
         ensure(ctx, boot ? BOOT_GUARD : 0);
+    }
+
+    // بعض «مدراء التلفزيون» يمنعون التشغيل التلقائي بإطفاء أجزاء التطبيق (استقبال التشغيل، المنبّه، المراقبة).
+    //   التطبيق يكدر يرجّع أجزاءه هو — نفحصها كل مرة ونرجّعها، ونسجّل إذا لكيناها مطفية. يرجّع true إذا رجّع شي.
+    static boolean unblock(Context ctx) {
+        if (!BuildConfig.SCREEN) return false;
+        boolean fixed = false;
+        PackageManager pm = ctx.getPackageManager();
+        for (Class<?> c : new Class<?>[]{BootReceiver.class, Tick.class, ScreenWatch.class, UpdateReceiver.class}) {
+            try {
+                ComponentName cn = new ComponentName(ctx, c);
+                int st = pm.getComponentEnabledSetting(cn);
+                if (st == PackageManager.COMPONENT_ENABLED_STATE_DISABLED || st == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER) {
+                    pm.setComponentEnabledSetting(cn, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);
+                    AutoLog.add(ctx, "unblocked", c.getSimpleName());
+                    fixed = true;
+                }
+            } catch (Exception e) { AutoLog.add(ctx, "err", "unblock " + c.getSimpleName() + " " + e.getClass().getSimpleName()); }
+        }
+        return fixed;
     }
 
     // المطعم فتح شي من الشاشة نفسها (إعدادات التلفزيون، رابط، تحديث...) ← نوقف الحراسة والرجوع حتى ما نرجّعه للشاشة غصب

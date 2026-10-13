@@ -455,6 +455,7 @@ public class MainActivity extends Activity {
         b.append("يفتح وحده: ").append(appPrefs().getBoolean("autoStart", true) ? "✅ مفعّل" : "❌ مطفي").append('\n');
         b.append("الواجهة الرئيسية: ").append(home).append('\n');
         b.append("خدمة المراقبة: ").append(watchRunning() ? "✅ شغّالة" : "❌ واقفة").append('\n');
+        b.append("استقبال التشغيل: ").append(bootReceiverOn() ? "✅" : "⛔ مطفي من التلفزيون").append('\n');
         if (Build.VERSION.SDK_INT >= 29) b.append("الظهور فوق التطبيقات: ").append(overlayOk() ? "✅" : "❌").append('\n');
         b.append("\nآخر الأحداث (الأحدث فوق):\n");
         List<String> l = AutoLog.read(this);
@@ -483,6 +484,7 @@ public class MainActivity extends Activity {
             case "return": return "↩️ رجّعناها قدام وحدها";
             case "killed": return "⛔ التلفزيون سكّر التطبيق بالقوة" + (d.isEmpty() ? "" : " (قبل " + d + " دقيقة)");
             case "noboot": return "⛔ التلفزيون اشتغل وما بلّغ التطبيق";
+            case "unblocked": return "🔓 التلفزيون طفّى جزء من التطبيق (" + d + ") ورجّعناه";
             case "updated": return "⬆️ تحدّث التطبيق لنسخة " + d;
             case "no-overlay": return "⛔ التلفزيون ما يسمح تفتح وحدها";
             default: return "⚠️ " + code + (d.isEmpty() ? "" : " " + d);
@@ -493,6 +495,12 @@ public class MainActivity extends Activity {
         int h = c.get(Calendar.HOUR_OF_DAY);
         return c.get(Calendar.DAY_OF_MONTH) + "/" + (c.get(Calendar.MONTH) + 1) + " " + (h % 12 == 0 ? 12 : h % 12)
             + String.format(Locale.US, ":%02d:%02d", c.get(Calendar.MINUTE), c.get(Calendar.SECOND)) + (h < 12 ? " ص" : " م");
+    }
+    private boolean bootReceiverOn() {
+        try {
+            int st = getPackageManager().getComponentEnabledSetting(new ComponentName(this, BootReceiver.class));
+            return st != PackageManager.COMPONENT_ENABLED_STATE_DISABLED && st != PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER;
+        } catch (Exception e) { return true; }
     }
     @SuppressWarnings("deprecation")
     private boolean watchRunning() {
