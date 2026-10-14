@@ -138,6 +138,7 @@ public class MainActivity extends Activity {
                 if (BuildConfig.SCREEN && "sora3a".equals(u.getScheme())) {
                     if ("autostart".equals(u.getHost())) { setAutoStart("1".equals(u.getQueryParameter("on"))); pushAuto(); }
                     else if ("autodiag".equals(u.getHost())) autoDiag();
+                    else if ("adb".equals(u.getHost())) adbSetup();
                     else if ("update".equals(u.getHost())) { if (update != null) doUpdate(update); else checkUpdate(true); }
                     return true;
                 }
@@ -343,7 +344,8 @@ public class MainActivity extends Activity {
         boolean on = autoStartOn();
         String up = update == null ? "" : update.name.replaceAll("[^0-9.]", "");
         web.evaluateJavascript("window.__autoState=" + on + ";window.__autoDiag=1;window.__setAuto&&window.__setAuto(" + on + ")"
-            + ";window.__appUpdate='" + up + "';window.__setUpdate&&window.__setUpdate('" + up + "')", null);
+            + ";window.__appUpdate='" + up + "';window.__setUpdate&&window.__setUpdate('" + up + "')"
+            + ";window.__adbOn=" + LocalAdb.ready(this) + ";window.__setAdb&&window.__setAdb(" + LocalAdb.ready(this) + ")", null);
     }
 
     // ── التحديث من داخل التطبيق (Updater): نفحص بعد التشغيل بشوية وكل 6 ساعات ──
@@ -425,6 +427,75 @@ public class MainActivity extends Activity {
         web.postDelayed(() -> { if (d.isShowing()) { d.dismiss(); appPrefs().edit().putLong("lnLater", System.currentTimeMillis() + 6 * 3600_000L).apply(); } }, 90_000);
     }
 
+    // ── «الفتح مثل الريموت» (وضع المطوّر): المطعم يفعّله مرة وحدة ويوافق على رسالة التلفزيون ──
+    private boolean adbBusy;
+    private void adbSetup() {
+        if (adbBusy) return;
+        adbBusy = true;
+        leave();   // رسالة «السماح» مال التلفزيون تطلع فوق الشاشة — لا نرجّع الشاشة فوقها
+        final AlertDialog wait = new AlertDialog.Builder(this).setTitle("🔧 الفتح مثل الريموت")
+            .setMessage("لحظة…\n\nإذا التلفزيون سألك «السماح بتصحيح USB؟»: علّم «السماح دائماً من هذا الكمبيوتر» ← واضغط «موافق».")
+            .setCancelable(false).show();
+        new Thread(() -> {
+            String r;
+            try {
+                LocalAdb.shell(this, "echo ok", 90_000);
+                LocalAdb.setReady(this, true);
+                AutoLog.add(this, "adb-ok", "");
+                adbSettings();
+                r = "ok";
+            } catch (LocalAdb.Off e) { r = "off"; }
+            catch (LocalAdb.NotAllowed e) { r = "no"; }
+            catch (Exception e) { r = e.getClass().getSimpleName(); AutoLog.add(this, "adb-err", r); }
+            final String res = r;
+            runOnUiThread(() -> { adbBusy = false; if (wait.isShowing()) wait.dismiss(); adbResult(res); pushAuto(); });
+        }).start();
+    }
+    // أوامر ثابتة مرة وحدة (ما تجي من الصفحة): «التشغيل الأقوى» بدون ما المطعم يدوّر بالإعدادات، والشاشة واجهة رئيسية،
+    // والسماح لها تشتغل بالخلفية — حتى التلفزيون ما يمنعها
+    private void adbSettings() {
+        String p = getPackageName(), cls = MainActivity.class.getPackage().getName();
+        runOnUiThread(() -> setHomeAlias(true));
+        String[] cmds = {
+            "cmd notification allow_listener " + p + "/" + cls + ".ScreenListener",
+            "cmd package set-home-activity " + p + "/" + cls + ".TvHome",
+            "appops set " + p + " RUN_IN_BACKGROUND allow",
+            "dumpsys deviceidle whitelist +" + p,
+        };
+        for (String c : cmds) {
+            String name = c.substring(0, c.indexOf(' ', c.indexOf(' ') + 1));
+            try { LocalAdb.shell(this, c, 0); AutoLog.add(this, "adb-set", name); }
+            catch (Exception e) { AutoLog.add(this, "adb-err", name + " " + e.getClass().getSimpleName()); }
+        }
+    }
+    private void adbResult(String r) {
+        if (isFinishing()) return;
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle("🔧 الفتح مثل الريموت");
+        if ("ok".equals(r)) {
+            b.setMessage("✅ تم! هسه الشاشة تفتح نفسها مثل ما تفتحها بالريموت.\n\nجرّب: طفّي التلفزيون وشغّله، وانتظر لحد دقيقة.").setPositiveButton("تمام", null);
+        } else if ("off".equals(r)) {
+            b.setMessage("لازم نفعّل «وضع المطوّر» بالتلفزيون مرة وحدة:\n\n"
+                    + "1. الإعدادات ← تفضيلات الجهاز ← حول ← انزل لـ«الإصدار» (Build) واضغط عليه 7 مرات لحد ما يكتب «أنت مطوّر».\n"
+                    + "2. ارجع ← «خيارات المطوّر» ← فعّل «تصحيح USB»، وإذا موجود فعّل «تصحيح الشبكة» (ADB عبر الشبكة).\n"
+                    + "3. ارجع للشاشة ← ⚙️ ← «🔧 الفتح مثل الريموت».")
+                .setPositiveButton("فتح «حول»", (d, w) -> {
+                    if (!openSettings(new Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
+                        openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                })
+                .setNeutralButton("خيارات المطوّر", (d, w) -> {
+                    if (!openSettings(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
+                        openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                })
+                .setNegativeButton("رجوع", null);
+        } else if ("no".equals(r)) {
+            b.setMessage("التلفزيون ما سمح. جرّب مرة ثانية، ولمن يسألك «السماح بتصحيح USB؟» علّم «السماح دائماً» ← «موافق».")
+                .setPositiveButton("جرّب مرة ثانية", (d, w) -> adbSetup()).setNegativeButton("رجوع", null);
+        } else {
+            b.setMessage("صار خطأ (" + r + "). جرّب مرة ثانية.").setPositiveButton("جرّب مرة ثانية", (d, w) -> adbSetup()).setNegativeButton("رجوع", null);
+        }
+        b.show();
+    }
+
     private static boolean checked;   // مرة وحدة لكل تشغيل للعملية (بعد السكّر بالقوة العملية دائماً جديدة، والقراءة من الملف مو من الذاكرة)
     private void checkKilled() {
         if (checked) return;
@@ -453,7 +524,13 @@ public class MainActivity extends Activity {
             : "التلفزيون اشتغل وما بلّغ «سرعة - الشاشة»، فما كدرت تفتح وحدها.\n\n"
               + "الحل: بمدير التلفزيون ← «البدء الآلي» تأكد إن «سرعة - الشاشة» مفعّلة، وإذا أكو «القائمة البيضاء» ضيفها.";
         AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle("⚠️ التلفزيون يمنع الشاشة ترجع وحدها");
-        if (!notifOk()) {
+        if (!LocalAdb.ready(this)) {
+            b.setMessage(msg + "\n\nأقوى حل: «🔧 الفتح مثل الريموت» — الشاشة تفتح نفسها مثل ما تفتحها بالريموت (يحتاج وضع المطوّر مرة وحدة).")
+                .setPositiveButton("🔧 الفتح مثل الريموت", (d, x) -> adbSetup())
+                .setNeutralButton(notifOk() ? "إعدادات التلفزيون" : "تفعيل التشغيل الأقوى", (d, x) -> {
+                    if (notifOk()) openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); else openPerm("notif");
+                });
+        } else if (!notifOk()) {
             b.setMessage(msg + "\n\nأسهل حل: فعّل «التشغيل الأقوى» — الأندرويد نفسه يشغّل الشاشة حتى لو التلفزيون ما بلّغها.")
                 .setPositiveButton("تفعيل التشغيل الأقوى", (d, x) -> openPerm("notif"))
                 .setNeutralButton("إعدادات التلفزيون", (d, x) -> openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
@@ -479,6 +556,7 @@ public class MainActivity extends Activity {
         b.append("يفتح وحده: ").append(appPrefs().getBoolean("autoStart", true) ? "✅ مفعّل" : "❌ مطفي").append('\n');
         b.append("الواجهة الرئيسية: ").append(home).append('\n');
         b.append("خدمة المراقبة: ").append(watchRunning() ? "✅ شغّالة" : "❌ واقفة").append('\n');
+        b.append("الفتح مثل الريموت: ").append(LocalAdb.ready(this) ? "✅ مفعّل" : "❌ مو مفعّل (⚙️ ← 🔧)").append('\n');
         b.append("التشغيل الأقوى: ").append(notifOk() ? "✅ مفعّل" : "❌ مو مفعّل").append('\n');
         b.append("استقبال التشغيل: ").append(bootReceiverOn() ? "✅" : "⛔ مطفي من التلفزيون").append('\n');
         if (Build.VERSION.SDK_INT >= 29) b.append("الظهور فوق التطبيقات: ").append(overlayOk() ? "✅" : "❌").append('\n');
@@ -509,6 +587,10 @@ public class MainActivity extends Activity {
             case "return": return "↩️ رجّعناها قدام وحدها";
             case "killed": return "⛔ التلفزيون سكّر التطبيق بالقوة" + (d.isEmpty() ? "" : " (قبل " + d + " دقيقة)");
             case "noboot": return "⛔ التلفزيون اشتغل وما بلّغ التطبيق";
+            case "adb-ok": return "🔧 التلفزيون سمح بالفتح مثل الريموت";
+            case "adb-open": return "📺 فتحناها مثل الريموت";
+            case "adb-set": return "🔧 ثبّتنا: " + d;
+            case "adb-err": return "⚠️ الفتح مثل الريموت: " + d;
             case "listener": return "🔗 الأندرويد شغّل التطبيق وحده (التشغيل الأقوى)";
             case "job": return "🔁 الأندرويد رجّع التطبيق بعد التشغيل";
             case "unblocked": return "🔓 التلفزيون طفّى جزء من التطبيق (" + d + ") ورجّعناه";

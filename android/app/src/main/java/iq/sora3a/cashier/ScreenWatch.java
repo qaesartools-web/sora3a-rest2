@@ -29,7 +29,7 @@ public class ScreenWatch extends Service {
     private static final String CH = "screen_watch";
     private final Handler h = new Handler(Looper.getMainLooper());
     private BroadcastReceiver rx;
-    private long until, lastOpenLog, coveredSince;
+    private long until, lastOpenLog, coveredSince, lastAdb, lastAdbLog;
     private boolean running, armed, sawFront, noOverlayLogged;
 
     // من التطبيق أو تشغيل الجهاز (العملية الرئيسية): يشغّل الخدمة والمنبّه إذا «يفتح وحده مع التلفزيون» مفعّلة، ويطفيهم إذا لا.
@@ -156,11 +156,29 @@ public class ScreenWatch extends Service {
         sawFront = false;
         try {
             startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
+            adbOpen();
             // وطريقة ثانية: نقدّم مهمة التطبيق نفسها (بعض التلفزيونات تتجاهل الفتح من الخلفية)
             try { for (ActivityManager.AppTask t : ((ActivityManager) getSystemService(ACTIVITY_SERVICE)).getAppTasks()) { t.moveToFront(); break; } } catch (Exception ignored) {}
             long now = SystemClock.elapsedRealtime();
             if (log && now - lastOpenLog > 10_000) { lastOpenLog = now; AutoLog.add(this, "open", ""); }
         } catch (Exception e) { AutoLog.add(this, "err", "open " + e.getClass().getSimpleName()); }
+    }
+
+    // «الفتح مثل الريموت»: إذا المطعم فعّل وضع المطوّر ووافق، نفتحها بأمر am start — التلفزيون يعامله مثل ضغطة الريموت
+    private void adbOpen() {
+        if (!LocalAdb.ready(this)) return;
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastAdb < 8000) return;
+        lastAdb = now;
+        final boolean log = now - lastAdbLog > 60_000;
+        if (log) lastAdbLog = now;
+        final Context c = getApplicationContext();
+        new Thread(() -> {
+            try {
+                LocalAdb.shell(c, "am start -n " + c.getPackageName() + "/" + MainActivity.class.getName(), 0);
+                if (log) AutoLog.add(c, "adb-open", "");
+            } catch (Exception e) { if (log) AutoLog.add(c, "adb-err", e.getClass().getSimpleName()); }
+        }).start();
     }
 
     // الشاشة قدام؟ (عملية التطبيق الرئيسية بالواجهة) — حتى ما نعيد فتحها وهي مفتوحة
