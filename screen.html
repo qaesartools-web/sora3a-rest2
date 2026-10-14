@@ -170,6 +170,7 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
   <button type="button" id="mUpd" hidden></button>
   <button type="button" id="mSnd"></button>
   <button type="button" id="mAuto" hidden></button>
+  <button type="button" id="mAdb" hidden>🔧 الفتح مثل الريموت</button>
   <button type="button" id="mDiag" hidden>🩺 فحص التشغيل التلقائي</button>
   <button type="button" id="mReload">🔄 تحديث الشاشة</button>
   <button type="button" id="fsBtn">⛶ ملء الشاشة</button>
@@ -306,6 +307,9 @@ if (typeof window.__autoState === 'boolean') window.__setAuto(window.__autoState
 // تحديث التطبيق نفسه: التطبيق يبلّغنا إذا أكو نسخة أحدث ← زر بالقائمة وعلامة ⬆️ على ⚙️، والضغط يحدّث بدون فلاشة
 window.__setUpdate = (name) => { $('mUpd').hidden = !name; $('mUpd').textContent = '⬆️ تحديث التطبيق — نسخة ' + (name || ''); $('menuBtn').classList.toggle('upd', !!name); };
 if (window.__appUpdate) window.__setUpdate(window.__appUpdate);
+// «الفتح مثل الريموت» (وضع المطوّر): التطبيق يبلّغنا هل مفعّل — الزر يفتح الضبط (مرة وحدة) أو يعيده
+window.__setAdb = (on) => { $('mAdb').hidden = false; $('mAdb').textContent = on ? '🔧 الفتح مثل الريموت: مفعّل ✅' : '🔧 الفتح مثل الريموت (وضع المطوّر)'; };
+if (typeof window.__adbOn === 'boolean') window.__setAdb(window.__adbOn);
 function menuUi() {
   soundUi();
   if (autoOn !== null) $('mAuto').textContent = autoOn ? '🚀 يفتح وحده مع التلفزيون: يشتغل' : '🚀 يفتح وحده مع التلفزيون: مطفي';
@@ -322,6 +326,7 @@ $('mAuto').onclick = () => { if (autoOn !== null) (window.__goApp || ((u) => { l
 // «فحص التشغيل التلقائي»: التطبيق يعرض شنو صار بالتلفزيون (اشتغل، رجع من الستاند باي، فتحناها...) حتى نصوّره
 $('mDiag').onclick = () => { closeMenu(); (window.__goApp || ((u) => { location.href = u; }))('sora3a://autodiag'); };
 $('mUpd').onclick = () => { closeMenu(); (window.__goApp || ((u) => { location.href = u; }))('sora3a://update'); };
+$('mAdb').onclick = () => { closeMenu(); (window.__goApp || ((u) => { location.href = u; }))('sora3a://adb'); };
 $('mReload').onclick = () => location.reload();
 $('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else if (d.documentElement.requestFullscreen) d.documentElement.requestFullscreen().catch(() => {}); closeMenu(); };
 $('mOut').onclick = () => {
