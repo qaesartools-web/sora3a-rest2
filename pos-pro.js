@@ -1039,7 +1039,7 @@
   const TAB_PERM = { reports: 'reports', acc: 'inventory' };
   const isCashierRole = () => !!(window.posUser && window.posUser.role === 'cashier');
   // التقارير والأرباح والمبيعات الشهرية: للمالك فقط (الكاشير يطبع تقرير اليوم من الوردية)
-  const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
+  const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'kitchen' ? !featOn('kitchen') : t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
   // التحديث التلقائي ينتظر لحد ما الكاشير يكون فاضي: سلة فارغة، لا نافذة مفتوحة، لا مكالمة
   window.auIdle = () => !restData || (!cart.length && !document.querySelector('[id$="Ov"].on, .duty-lock.on, .call-card'));
   window.auSave = () => ({ tab: TABS.find((t) => { const e = $(t + 'Screen'); return e && e.classList.contains('on'); }) || 'cashier' });
@@ -1496,6 +1496,11 @@
   function applyFeatures() {
     document.querySelectorAll('.otype[onclick*="delivery"]').forEach((b) => { b.style.display = feat('captain') ? '' : 'none'; });
     ['readyScrBtn', 'screenApkBtn'].forEach((id) => { const b = $(id); if (b) b.style.display = feat('screen') ? '' : 'none'; });
+    // «شاشة المجهز» مفعّلة ← المطبخ ينشال من الكاشير (المجهز يحضّر على جهازه، ويرجع الطلب للكاشير أول ما يصير جاهز)
+    const kOff = featOn('kitchen');
+    document.querySelectorAll('[data-tab="kitchen"]').forEach((b) => { b.style.display = kOff ? 'none' : ''; });
+    if ($('kdsLink')) $('kdsLink').style.display = kOff ? '' : 'none';
+    if (kOff && $('kitchenScreen') && $('kitchenScreen').classList.contains('on')) goTab('cashier');
     renderPagers();
     dpEnforceTest();
   }
