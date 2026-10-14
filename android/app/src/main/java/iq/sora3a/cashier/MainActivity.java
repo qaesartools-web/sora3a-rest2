@@ -478,14 +478,8 @@ public class MainActivity extends Activity {
                     + "1. الإعدادات ← تفضيلات الجهاز ← حول ← انزل لـ«الإصدار» (Build) واضغط عليه 7 مرات لحد ما يكتب «أنت مطوّر».\n"
                     + "2. ارجع ← «خيارات المطوّر» ← فعّل «تصحيح USB»، وإذا موجود فعّل «تصحيح الشبكة» (ADB عبر الشبكة).\n"
                     + "3. ارجع للشاشة ← ⚙️ ← «🔧 الفتح مثل الريموت».")
-                .setPositiveButton("فتح «حول»", (d, w) -> {
-                    if (!openSettings(new Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
-                        openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                })
-                .setNeutralButton("خيارات المطوّر", (d, w) -> {
-                    if (!openSettings(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
-                        openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                })
+                .setPositiveButton("فتح «حول»", (d, w) -> openHidden(Settings.ACTION_DEVICE_INFO_SETTINGS, ABOUT_PAGES))
+                .setNeutralButton("خيارات المطوّر", (d, w) -> openHidden(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS, DEV_PAGES))
                 .setNegativeButton("رجوع", null);
         } else if ("no".equals(r)) {
             b.setMessage("التلفزيون ما سمح. جرّب مرة ثانية، ولمن يسألك «السماح بتصحيح USB؟» علّم «السماح دائماً» ← «موافق».")
@@ -494,6 +488,35 @@ public class MainActivity extends Activity {
             b.setMessage("صار خطأ (" + r + "). جرّب مرة ثانية.").setPositiveButton("جرّب مرة ثانية", (d, w) -> adbSetup()).setNegativeButton("رجوع", null);
         }
         b.show();
+    }
+
+    // بعض التلفزيونات (الشركة المصنّعة) تفتح صفحاتها هي بدل صفحتي «حول» و«خيارات المطوّر» الأصليتين وتخفيهن.
+    //   نجرّب الصفحات الأصلية بالاسم (إعدادات أندرويد للتلفزيون ثم للموبايل)، ثم أي صفحة ثانية تفتح نفس الطلب، وآخر شي اللي يختاره التلفزيون
+    private static final String[] ABOUT_PAGES = {
+        "com.android.tv.settings/.about.AboutActivity",
+        "com.android.settings/.Settings$MyDeviceInfoActivity",
+        "com.android.settings/.Settings$DeviceInfoSettingsActivity",
+    };
+    private static final String[] DEV_PAGES = {
+        "com.android.tv.settings/.system.development.DevelopmentActivity",
+        "com.android.settings/.Settings$DevelopmentSettingsDashboardActivity",
+        "com.android.settings/.Settings$DevelopmentSettingsActivity",
+        "com.android.settings/.DevelopmentSettings",
+    };
+    private void openHidden(String action, String[] pages) {
+        PackageManager pm = getPackageManager();
+        java.util.LinkedHashSet<ComponentName> tries = new java.util.LinkedHashSet<>();
+        for (String s : pages) tries.add(ComponentName.unflattenFromString(s));
+        try {
+            for (ResolveInfo r : pm.queryIntentActivities(new Intent(action), 0))
+                if (r.activityInfo != null && r.activityInfo.packageName.contains("android")) tries.add(new ComponentName(r.activityInfo.packageName, r.activityInfo.name));
+        } catch (Exception ignored) {}
+        for (ComponentName c : tries) {
+            try { pm.getActivityInfo(c, 0); } catch (Exception e) { continue; }   // مو موجودة بهالتلفزيون
+            if (openSettings(new Intent(action).setComponent(c).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) { AutoLog.add(this, "page", c.flattenToShortString()); return; }
+        }
+        AutoLog.add(this, "page", "none");
+        if (!openSettings(new Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 
     private static boolean checked;   // مرة وحدة لكل تشغيل للعملية (بعد السكّر بالقوة العملية دائماً جديدة، والقراءة من الملف مو من الذاكرة)
@@ -557,6 +580,7 @@ public class MainActivity extends Activity {
         b.append("الواجهة الرئيسية: ").append(home).append('\n');
         b.append("خدمة المراقبة: ").append(watchRunning() ? "✅ شغّالة" : "❌ واقفة").append('\n');
         b.append("الفتح مثل الريموت: ").append(LocalAdb.ready(this) ? "✅ مفعّل" : "❌ مو مفعّل (⚙️ ← 🔧)").append('\n');
+        b.append("إعدادات أندرويد الأصلية: ").append(hasPkg("com.android.tv.settings") ? "تلفزيون ✅ " : "تلفزيون ❌ ").append(hasPkg("com.android.settings") ? "موبايل ✅" : "موبايل ❌").append('\n');
         b.append("التشغيل الأقوى: ").append(notifOk() ? "✅ مفعّل" : "❌ مو مفعّل").append('\n');
         b.append("استقبال التشغيل: ").append(bootReceiverOn() ? "✅" : "⛔ مطفي من التلفزيون").append('\n');
         if (Build.VERSION.SDK_INT >= 29) b.append("الظهور فوق التطبيقات: ").append(overlayOk() ? "✅" : "❌").append('\n');
@@ -591,6 +615,7 @@ public class MainActivity extends Activity {
             case "adb-open": return "📺 فتحناها مثل الريموت";
             case "adb-set": return "🔧 ثبّتنا: " + d;
             case "adb-err": return "⚠️ الفتح مثل الريموت: " + d;
+            case "page": return "📄 صفحة الإعدادات: " + d;
             case "listener": return "🔗 الأندرويد شغّل التطبيق وحده (التشغيل الأقوى)";
             case "job": return "🔁 الأندرويد رجّع التطبيق بعد التشغيل";
             case "unblocked": return "🔓 التلفزيون طفّى جزء من التطبيق (" + d + ") ورجّعناه";
@@ -604,6 +629,9 @@ public class MainActivity extends Activity {
         int h = c.get(Calendar.HOUR_OF_DAY);
         return c.get(Calendar.DAY_OF_MONTH) + "/" + (c.get(Calendar.MONTH) + 1) + " " + (h % 12 == 0 ? 12 : h % 12)
             + String.format(Locale.US, ":%02d:%02d", c.get(Calendar.MINUTE), c.get(Calendar.SECOND)) + (h < 12 ? " ص" : " م");
+    }
+    private boolean hasPkg(String p) {
+        try { getPackageManager().getPackageInfo(p, 0); return true; } catch (Exception e) { return false; }
     }
     private boolean bootReceiverOn() {
         try {
