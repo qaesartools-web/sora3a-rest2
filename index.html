@@ -526,6 +526,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 
     <!-- ORDERS -->
     <div class="screen" id="ordersScreen">
+      <div id="kdsLink" style="display:none;margin:0 0 10px"><a class="cact-b" href="kitchen.html" target="_blank" rel="noopener" title="افتحها على تابلت أو تيفي بالمطبخ — المجهز يضغط «جاهز» ويرجع الطلب للكاشير">👨‍🍳 شاشة المطبخ (المجهز) — افتحها على جهاز المطبخ</a></div>
       <div id="ordSum"></div>
       <div class="sg">
         <div class="st"><div class="sv" id="sAll">0</div><div class="sl">الكل</div></div>
@@ -2808,7 +2809,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=37"></script>
+<script src="pos-pro.js?v=38"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){

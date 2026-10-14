@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>سرعة — المطبخ</title>
+<meta name="theme-color" content="#0A100D">
+<link rel="icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="المطبخ">
+<style id="gateCss"></style>
+<style>
+:root{
+  --bg:#0c1116; --card:#141c24; --card2:#1b2530; --line:#283440; --text:#eef3f8; --muted:#90a0b0;
+  --new:#3df08b; --warn:#ffb627; --late:#ff4d2e; --ok:#3df08b;
+  --font:system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;
+  --num:'Sora',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.5;overflow:hidden}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+
+/* ── الرأس ── */
+.top{display:flex;align-items:center;gap:12px;padding:10px 18px;background:#0a0f14;border-bottom:1px solid var(--line)}
+.top .t{flex:1;min-width:0}
+.top b{display:block;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top small{color:var(--muted);font-size:12.5px}
+.pill{background:var(--new);color:#06160c;border-radius:999px;min-width:40px;height:40px;padding:0 14px;display:flex;align-items:center;justify-content:center;font-family:var(--num);font-weight:800;font-size:20px}
+.pill.zero{background:var(--card2);color:var(--muted)}
+.mb{flex:none;width:46px;height:46px;border-radius:14px;border:1px solid var(--line);background:var(--card2);font-size:20px;display:flex;align-items:center;justify-content:center}
+
+/* ── الشبكة ── */
+.grid{height:calc(100vh - 62px);overflow-y:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px;align-content:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;border-top:5px solid var(--new);animation:pop .25s ease}
+.card.warn{border-top-color:var(--warn)}
+.card.late{border-top-color:var(--late)}
+@keyframes pop{from{transform:scale(.96);opacity:.4}to{transform:scale(1);opacity:1}}
+.ch{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:12px 14px 8px}
+.cnum{font-family:var(--num);font-weight:800;font-size:26px;line-height:1}
+.clbl{font-size:13px;color:var(--muted);margin-top:4px}
+.ctime{text-align:left;font-family:var(--num);font-weight:700;font-size:15px;white-space:nowrap}
+.ctime .m{font-size:21px}
+.card.warn .ctime{color:var(--warn)}
+.card.late .ctime{color:var(--late)}
+.items{padding:2px 14px 10px;flex:1}
+.it{display:flex;gap:8px;padding:5px 0;border-top:1px dashed var(--line);font-size:16px}
+.it:first-child{border-top:0}
+.it .q{font-family:var(--num);font-weight:800;color:var(--new);min-width:30px}
+.it .nm{flex:1}
+.it .note{display:block;color:var(--warn);font-size:13.5px;margin-top:2px}
+.it .sec{font-size:12px;color:var(--muted)}
+.onote{margin:0 14px 10px;background:color-mix(in srgb,var(--warn) 16%,var(--card2));color:var(--warn);border-radius:10px;padding:7px 10px;font-size:13.5px}
+.secs{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px}
+.sec{border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:6px 11px;font-size:13px;font-weight:600}
+.sec.done{background:color-mix(in srgb,var(--ok) 22%,var(--card2));border-color:var(--ok);color:var(--ok)}
+.done-b{border:0;background:var(--ok);color:#06160c;font-weight:800;font-size:17px;padding:14px;margin:0;border-top:1px solid var(--line)}
+.done-b:active{filter:brightness(.92)}
+.empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:12vh 20px}
+.empty .i{font-size:72px;opacity:.5}
+.empty b{display:block;font-size:20px;margin-top:10px;color:var(--text)}
+
+/* ── شريط الجاهز ── */
+.rdy{padding:10px 16px;background:#0a0f14;border-bottom:1px solid var(--line)}
+.rdy .t{font-size:13px;color:var(--muted);margin-bottom:7px}
+.rdy .row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.rdy-b{flex:none;border:1px solid var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--text);border-radius:12px;padding:8px 12px;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:92px}
+.rdy-b b{font-family:var(--num);font-size:17px}
+.rdy-b em{font-style:normal;color:var(--ok);font-size:12px;font-weight:700}
+
+/* ── القائمة ── */
+.menu{position:fixed;top:64px;inset-inline-start:16px;z-index:40;width:290px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:12px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.menu .mt{font-size:12.5px;color:var(--muted);padding:2px 6px 8px}
+.menu button{display:block;width:100%;text-align:start;border:1px solid var(--line);background:var(--card2);border-radius:12px;padding:12px;font-size:15px;font-weight:600;margin-top:8px}
+.menu button.warn{border-color:var(--late);color:var(--late)}
+
+/* ── موقوفة ── */
+.off{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px;background:var(--bg)}
+.off b{font-size:60px}
+.off h1{font-size:22px;margin:10px 0}
+.off p{color:var(--muted);max-width:420px}
+.off button{margin-top:18px;border:0;background:var(--ok);color:#06160c;font-weight:800;border-radius:12px;padding:12px 22px;font-size:16px}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(140%);background:#06160c;color:var(--new);border:1px solid var(--ok);padding:12px 18px;border-radius:14px;font-weight:700;z-index:60;transition:transform .25s;max-width:92vw;text-align:center}
+#toast.on{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="gate"></div>
+
+<div id="app" hidden>
+  <div class="top">
+    <button class="mb" id="menuBtn" aria-label="الإعدادات">⚙️</button>
+    <div class="t"><b id="rName">المطبخ</b><small id="sub">طلبات قيد التحضير</small></div>
+    <div class="pill zero" id="pill">0</div>
+  </div>
+  <div class="rdy" id="rdy" hidden></div>
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="menu" id="menu" hidden role="dialog" aria-label="الإعدادات">
+  <div class="mt">⚙️ إعدادات المطبخ</div>
+  <button type="button" id="mSnd"></button>
+  <button type="button" id="fsBtn">⛶ ملء الشاشة</button>
+  <button type="button" id="mReload">🔄 تحديث</button>
+  <button type="button" id="mOut" class="warn">🚪 تسجيل خروج</button>
+  <button type="button" id="mClose">✕ رجوع</button>
+</div>
+
+<div class="off" id="off" hidden>
+  <b>👨‍🍳</b>
+  <h1>شاشة المطبخ موقوفة لهذا المطعم</h1>
+  <p>فعّلها من لوحة الإدارة: المطعم ← الخدمات ← «👨‍🍳 شاشة المجهز». أول ما تتفعّل تشتغل وحدها.</p>
+  <button type="button" id="offOut">🚪 تسجيل خروج</button>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+import { db, staffGate, logout, esc, bagDay, GATE_CSS, doc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from './staff.js';
+document.getElementById('gateCss').textContent = GATE_CSS;
+const $ = (id) => document.getElementById(id);
+const toA = (n) => String(n);
+// الوقت المخزون "HH:MM" ← نظام 12 ساعة (ص/م)
+const t12 = (v) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim()); if (!m || +m[1] > 23) return String(v || ''); const h = +m[1]; return ((h % 12) || 12) + ':' + m[2] + ' ' + (h < 12 ? 'ص' : 'م'); };
+const nowT = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2200); }
+
+let me = null, orders = [], sections = [], unsubs = [], sound = true, ready = false;
+const seen = new Set();
+try { sound = localStorage.getItem('kds_sound') !== '0'; } catch (e) {}
+
+const getType = (o) => o.orderType === 'salon' ? 'salon' : o.orderType === 'takeaway' ? 'takeaway' : 'delivery';
+const kNum = (o) => o.ticketNo || o.salonNum || o.holdNum || String(o.id || '').slice(0, 4).toUpperCase();
+const secById = (id) => sections.find((x) => x.id === id) || { name: id, emoji: '🍽️' };
+
+staffGate($('gate'), {
+  title: 'سرعة — المطبخ', sub: 'سجّل دخول بحساب المطعم أو الكاشير', device: 'claim', remember: true,
+  onIn: (u) => { me = u; start(); },
+  onOut: () => { unsubs.forEach((f) => f()); unsubs = []; me = null; orders = []; seen.clear(); $('app').hidden = true; $('off').hidden = true; },
+});
+$('offOut').onclick = () => logout();
+
+// خدمة «شاشة المجهز» يشغّلها المدير الأعلى (features.kitchen === true) — مباشرة بدون تحديث
+function svc(on) { $('app').hidden = !on; $('off').hidden = on; if (on) render(); }
+
+function start() {
+  $('rName').textContent = me.rest.name || 'المطبخ';
+  const R = (...p) => doc(db, 'restaurants', me.rid, ...p);
+  svc(!!(me.rest.features && me.rest.features.kitchen === true));
+  unsubs.push(onSnapshot(R(), (s) => { const f = (s.exists() && s.data().features) || {}; svc(f.kitchen === true); }, () => {}));
+  unsubs.push(onSnapshot(R('settings', 'main'), (s) => { const d = s.exists() ? s.data() : {}; sections = (d.sections || []).filter((x) => x && x.name); if (d.receiptTitle) $('rName').textContent = d.receiptTitle; }, () => {}));
+  // طلبات اليوم وأمس (للي يشتغلون بعد نص الليل)
+  const since = Date.now() - 36 * 3600000;
+  unsubs.push(onSnapshot(query(collection(db, 'orders'), where('restaurantId', '==', me.rid), where('createdAtMs', '>=', since)), (s) => {
+    orders = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // تنبيه عند وصول طلب جديد للمطبخ
+    let fresh = false;
+    newList().forEach((o) => { if (!seen.has(o.id)) { seen.add(o.id); if (ready) fresh = true; } });
+    ready = true;
+    render();
+    if (fresh && sound && !$('app').hidden) beep();
+  }, (e) => console.warn('orders', e.code)));
+}
+
+const newList = () => orders.filter((o) => o.kitchen === 'new' && o.status !== 'cancelled' && Date.now() - (o.createdAtMs || 0) < 86400000)
+  .sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
+const readyWaiting = () => orders.filter((o) => (o.kitchen === 'ready' || o.status === 'ready') && !['delivered', 'cancelled', 'done'].includes(o.status) && !o.captainId && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < 20 * 60000)
+  .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
+
+function render() {
+  if ($('app').hidden) return;
+  const list = newList();
+  const p = $('pill'); p.textContent = toA(list.length); p.classList.toggle('zero', !list.length);
+  $('sub').textContent = list.length ? toA(list.length) + ' طلب قيد التحضير' : 'ماكو طلبات هسه';
+
+  const rdy = readyWaiting(), rb = $('rdy');
+  rb.hidden = !rdy.length;
+  if (rdy.length) rb.innerHTML = `<div class="t">🔔 جاهز — رجع للكاشير حتى يسلّمه للزبون أو يختار كابتن</div><div class="row">${rdy.map((o) => { const t = getType(o); return `<div class="rdy-b"><b>#${esc(kNum(o))}</b><em>${t === 'salon' ? '🪑 صالة' : t === 'takeaway' ? '🥡 سفري' : '🏍️ دلفري'}</em></div>`; }).join('')}</div>`;
+
+  $('grid').innerHTML = list.length ? list.map((o) => {
+    const m = Math.floor((Date.now() - (o.createdAtMs || Date.now())) / 60000), t = getType(o);
+    const cls = m >= 20 ? 'late' : m >= 10 ? 'warn' : '';
+    const label = t === 'salon' ? '🪑 ' + (o.tableNo ? 'طاولة ' + esc(o.tableNo) : 'صالة') : t === 'takeaway' ? '🥡 سفري' : '🏍️ دلفري';
+    const secChips = o.kSec ? `<div class="secs">${Object.entries(o.kSec).map(([sid, v]) => { const sc = secById(sid); return `<button type="button" class="sec ${v.readyAt ? 'done' : ''}" data-sec="${esc(o.id)}|${esc(sid)}">${v.readyAt ? '✅' : '⏳'} ${esc(sc.emoji || '')} ${esc(sc.name)}</button>`; }).join('')}</div>` : '';
+    const items = (o.items || []).map((i) => `<div class="it"><span class="q">${toA(i.qty || 1)}×</span><span class="nm">${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' <small class="sec">(' + esc(i.variant) + ')</small>' : ''}${i.sec && sections.length ? ' <small class="sec">' + esc((secById(i.sec).emoji) || '') + '</small>' : ''}${i.note ? `<span class="note">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('');
+    return `<div class="card ${cls}"><div class="ch"><div><div class="cnum">#${esc(kNum(o))}</div><div class="clbl">${label}${o.pager ? ' • 📟 ' + esc(o.pager) : ''} • ${esc(t12(o.createdAt))}</div></div><div class="ctime"><span class="m">${toA(m)}</span> د</div></div>
+      <div class="items">${items || '<div class="it">—</div>'}</div>
+      ${o.note ? `<div class="onote">📝 ${esc(o.note)}</div>` : ''}${secChips}
+      <button class="done-b" data-done="${esc(o.id)}">✅ جاهز — خلّص الطلب</button></div>`;
+  }).join('') : '<div class="empty"><div class="i">👨‍🍳</div><b>ماكو طلبات قيد التحضير</b><div>الطلبات الجديدة تطلع هنا تلقائياً</div></div>';
+}
+
+// ضغط «جاهز» أو شريحة قسم
+$('grid').addEventListener('click', (e) => {
+  const d = e.target.closest('[data-done]'); if (d) return done(d.dataset.done);
+  const s = e.target.closest('[data-sec]'); if (s) { const [id, sid] = s.dataset.sec.split('|'); secDone(id, sid); }
+});
+
+async function done(id) {
+  const o = orders.find((x) => x.id === id); if (!o) return;
+  const fields = { kitchen: 'ready', kitchenReadyAt: Date.now() };
+  if (o.kSec) fields.kSec = Object.fromEntries(Object.entries(o.kSec).map(([k, v]) => [k, { ...v, readyAt: v.readyAt || Date.now() }]));
+  // طلب أونلاين قيد التحضير ← نعلن «جاهز» حتى يوصل للزبون، ويرجع للكاشير للتسليم/الكابتن (نفس القديم)
+  if (o.status === 'preparing') { fields.status = 'ready'; fields.readyAt = Date.now(); fields.timeline = arrayUnion({ status: 'ready', time: nowT(), text: 'الطلب جاهز للاستلام' }); }
+  try { await updateDoc(doc(db, 'orders', id), fields); toast('✅ #' + kNum(o) + ' جاهز'); }
+  catch (err) { toast('❌ تعذّر التحديث'); }
+}
+async function secDone(id, sid) {
+  const o = orders.find((x) => x.id === id); if (!o || !o.kSec || !o.kSec[sid]) return;
+  const ks = { ...o.kSec, [sid]: { ...o.kSec[sid], readyAt: o.kSec[sid].readyAt ? 0 : Date.now() } };
+  if (Object.values(ks).every((v) => v.readyAt)) { o.kSec = ks; return done(id); }
+  try { await updateDoc(doc(db, 'orders', id), { kSec: ks }); toast((ks[sid].readyAt ? '✅ ' : '↩️ ') + secById(sid).name); }
+  catch (err) { toast('❌ تعذّر التحديث'); }
+}
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, .22].forEach((d) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.type = 'triangle'; o.frequency.value = d ? 1320 : 990;
+      g.gain.setValueAtTime(.0001, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.35, ctx.currentTime + d + .03); g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d + .2); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .22); });
+  } catch (e) {}
+}
+
+// ── القائمة ⚙️ ──
+const menu = $('menu');
+function sndUi() { $('mSnd').textContent = sound ? '🔔 الصوت: يعمل' : '🔕 الصوت: مطفأ'; }
+function openMenu() { sndUi(); menu.hidden = false; $('mSnd').focus(); }
+function closeMenu() { menu.hidden = true; }
+$('menuBtn').onclick = () => menu.hidden ? openMenu() : closeMenu();
+$('mClose').onclick = closeMenu;
+$('mSnd').onclick = () => { sound = !sound; try { localStorage.setItem('kds_sound', sound ? '1' : '0'); } catch (e) {} if (sound) beep(); sndUi(); };
+$('mReload').onclick = () => location.reload();
+$('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else if (d.documentElement.requestFullscreen) d.documentElement.requestFullscreen().catch(() => {}); closeMenu(); };
+let outArmed = false;
+$('mOut').onclick = () => { if (!outArmed) { outArmed = true; $('mOut').textContent = '⚠️ متأكد؟ اضغط مرة ثانية'; return; } logout(); };
+
+// الوقت على البطاقات يمشي، والشاشة ما تطفي
+setInterval(() => { if (!$('app').hidden) render(); }, 30000);
+let lock = null;
+async function keepOn() { try { if ('wakeLock' in navigator && !document.hidden) lock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) keepOn(); });
+keepOn();
+</script>
+</body>
+</html>
