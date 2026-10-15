@@ -27,7 +27,7 @@
   const DEFAULTS = {
     receiptTitle: '', receiptSub: '', receiptPhone: '', receiptFooter: 'شكراً لزيارتكم ❤️',
     defaultFee: 5000, feePresets: [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000], taxPct: 0, servicePct: 0, tables: 0, pagers: 10,
-    printKitchen: false, quickAdd: true, paper: 80,
+    printKitchen: false, quickAdd: true, paper: 80, drawer: false,
     // أقسام المطبخ: كل قسم يستلم أصنافه فقط، ورقم الطلب يوحّدها
     kSecOn: false, catSection: {},
     sections: [{ id: 'k1', name: 'الشاورما', emoji: '🌯' }, { id: 'k2', name: 'الكنتاكي', emoji: '🍗' }, { id: 'k3', name: 'البرغر', emoji: '🍔' },
@@ -918,6 +918,8 @@
           <div><div class="flbl">عرض ورق الطابعة</div><select class="fsel" id="stPaper"><option value="80" ${s.paper !== 58 ? 'selected' : ''}>80 ملم</option><option value="58" ${s.paper === 58 ? 'selected' : ''}>58 ملم</option></select></div></div>
         <div class="flbl">نص أسفل الفاتورة</div><input class="finp" id="stFooter" maxlength="120" value="${esc(s.receiptFooter)}">
         <label class="set-check"><input type="checkbox" id="stKitchen" ${s.printKitchen ? 'checked' : ''}> طباعة تذكرة مطبخ مع كل فاتورة</label>
+        <label class="set-check"><input type="checkbox" id="stDrawer" ${s.drawer ? 'checked' : ''}> 💵 افتح درج الفلوس تلقائياً عند طباعة الفاتورة</label>
+        <div class="ac-sub" style="line-height:1.8">يشتغل مع تطبيق الكاشير (أندرويد/ويندوز) وبرنامج QZ Tray، والدرج موصول بالطابعة. إذا الكاشير من المتصفح، فعّل «فتح الدرج» من إعدادات الطابعة بالويندوز.</div>
       </div>
       <div class="sh-card"><div class="sh-title">👨‍🍳 أقسام المطبخ والطابعات</div>
         <label class="set-check"><input type="checkbox" id="stSecOn" ${s.kSecOn ? 'checked' : ''}> تقسيم الطلب على أقسام المطبخ — كل قسم يطبع أصنافه فقط، ورقم الطلب يوحّدها</label>
@@ -970,7 +972,7 @@
     const clamp = (v, a, b) => Math.max(a, Math.min(b, num(v)));
     const next = {
       receiptTitle: $('stTitle').value.trim(), receiptSub: $('stSub').value.trim(), receiptPhone: $('stPhone').value.trim(), receiptFooter: $('stFooter').value.trim(),
-      paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked,
+      paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked, drawer: $('stDrawer').checked,
       taxPct: clamp($('stTax').value, 0, 50), servicePct: clamp($('stSvc').value, 0, 50), defaultFee: clamp($('stFee').value, 0, 1e6),
       feePresets: [...new Set(list($('stFees').value).filter((x) => String(x).trim() !== '').map(num))].filter((x) => x >= 0).slice(0, 10), tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
       kSecOn: $('stSecOn').checked,
@@ -1220,6 +1222,12 @@
     const cfg = qz.configs.create(printer, { units: 'mm', size: { width: settings.paper === 58 ? 58 : 80 }, margins: 0, scaleContent: true });
     await qz.print(cfg, [{ type: 'pixel', format: 'html', flavor: 'plain', data: html }]);
   }
+  // فتح درج الفلوس بعد ما تنطبع الفاتورة (الدرج موصول بالطابعة) — يشتغل بتطبيق الكاشير (أندرويد/سطح المكتب) وQZ Tray
+  async function kickDrawer(printer) {
+    if (!settings.drawer) return;
+    try { if (DESK && DESK.drawer) { await DESK.drawer(printer || ''); return; } } catch (e) {}
+    try { const qc = qzCfg(); if (qc.on && qc.main) { await qzReady(); await qz.print(qz.configs.create(qc.main), [{ type: 'raw', format: 'hex', data: '1B700019FA' }]); } } catch (e) {}
+  }
   async function printOrderAll(o, receipt) {
     const secs = o.kSec ? Object.keys(o.kSec) : [];
     if (DESK) {
@@ -1230,6 +1238,7 @@
         jobs.push(deskPrint(docOf(secTicketBody(o, sid)), (c.printers || {})[sid] || c.main, '👨‍🍳 ' + sc.name + ' #' + kNum(o), (c.copies || {})[sid]));
       }
       await Promise.all(jobs);
+      if (receipt) kickDrawer(c.main);
       return;
     }
     const c = qzCfg();
@@ -1242,7 +1251,7 @@
       } catch (e) { console.warn('qz', e); left = secs; toast('⚠️ برنامج الطابعات (QZ Tray) غير متصل — التذاكر انطبعت على الطابعة الافتراضية'); }
     }
     const pages = left.map((sid) => `<div style="page-break-before:always">${secTicketBody(o, sid)}</div>`).join('');
-    if (receipt) printHTML(pages ? receipt.replace('</body>', pages + '</body>') : receipt);
+    if (receipt) { printHTML(pages ? receipt.replace('</body>', pages + '</body>') : receipt); kickDrawer(c.main || ''); }
     else if (pages) printHTML(docOf(pages.replace('page-break-before:always', 'page-break-before:auto')));
   }
   window.printOrderAll = printOrderAll;
