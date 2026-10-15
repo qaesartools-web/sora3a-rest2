@@ -68,6 +68,10 @@ public class Bridge {
                 String fb = o.isNull("fallback") || !o.has("fallback") ? null : o.optString("fallback", "");
                 return result(engine.print(html, o.optString("printer", ""), o.optInt("widthMm", 80), o.optInt("copies", 1), o.optString("title", ""), fb));
             }
+            case "drawer": {
+                engine.kick(a.optString(0, ""));
+                return new JSONObject().put("ok", true);
+            }
             case "jobs": {
                 JSONArray out = new JSONArray();
                 for (PrintEngine.Job j : engine.jobs())
@@ -200,6 +204,7 @@ public class Bridge {
         + "window.SoraDesktop={version:SoraPOS.version(),platform:'android',";
     private static final String CASHIER = "canAutoStart:true,canAddNetwork:true,"
         + "printers:function(){return call('printers')},print:function(h,o){return call('print',[String(h||''),o||{}])},"
+        + "drawer:function(p){return call('drawer',[String(p||'')])},"
         + "jobs:function(){return call('jobs')},reprint:function(id){return call('reprint',[Number(id)])},"
         + "getTestMode:function(){return call('getTestMode')},setTestMode:function(on){return call('setTestMode',[!!on])},"
         + "openSimulator:function(){return call('openSimulator')},getAutoStart:function(){return call('getAutoStart')},"

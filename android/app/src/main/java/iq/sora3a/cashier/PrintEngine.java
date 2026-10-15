@@ -139,6 +139,14 @@ public class PrintEngine {
         return new Result(false, false, job.error, job.printer, job.id);
     }
 
+    // فتح درج الفلوس الموصول بالطابعة — بنفس طابور الطابعة حتى ينفتح بعد ما تنطبع الفاتورة
+    public void kick(String printer) {
+        if (printer == null || printer.isEmpty()) printer = defaultName();
+        if (printer.isEmpty() || isVirtual(printer)) return;
+        final String p = printer;
+        queue(p).execute(() -> { try { backend.send(p, EscPos.KICK); } catch (Exception ignored) {} });
+    }
+
     public synchronized List<Job> jobs() { return new ArrayList<>(jobs); }
 
     public Result reprint(int id) {

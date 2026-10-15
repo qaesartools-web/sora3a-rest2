@@ -8,6 +8,7 @@ public final class EscPos {
 
     public static final byte[] INIT = {0x1B, 0x40};
     public static final byte[] CUT = {0x1D, 0x56, 0x42, 0x00};      // قص جزئي بعد تغذية بسيطة
+    public static final byte[] KICK = {0x1B, 0x70, 0x00, 0x19, (byte) 0xFA};   // فتح درج الفلوس (ESC p 0 25 250)
     public static byte[] feed(int lines) { return new byte[]{0x1B, 0x64, (byte) Math.max(0, Math.min(255, lines))}; }
 
     // عدد النقاط بعرض الورقة (203 نقطة بالإنج): 80 ملم ← 576، 58 ملم ← 384
