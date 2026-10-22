@@ -1499,10 +1499,12 @@
   document.addEventListener('change', (e) => { if (e.target && e.target.id === 'stQzOn') { const b = $('qzBox'); if (b) b.style.display = e.target.value === '1' ? 'block' : 'none'; } });
 
   // ══════════ خدمات المطعم (يفتحها المدير الأعلى من لوحة الإدارة) ══════════
-  function feat(k) { return !restData || !restData.features || restData.features[k] !== false; }
+  // صاحب المطعم يكدر يوقف (ويرجّع) الخدمات اللي شغّلها البرج — من لوحة الإدارة (restaurants.svcOff)
+  const ownerOff = (k) => !!(restData && restData.svcOff && restData.svcOff[k] === true && !['devices', 'printTest', 'screen'].includes(k));
+  function feat(k) { return (!restData || !restData.features || restData.features[k] !== false) && !ownerOff(k); }
   window.posFeat = feat;
   // خدمات مطفية إلا إذا شغّلها المدير الأعلى (مثل محاكي الطابعات)
-  function featOn(k) { return !!(restData && restData.features && restData.features[k] === true); }
+  function featOn(k) { return !!(restData && restData.features && restData.features[k] === true) && !ownerOff(k); }
   function applyFeatures() {
     document.querySelectorAll('.otype[onclick*="delivery"]').forEach((b) => { b.style.display = feat('captain') ? '' : 'none'; });
     ['readyScrBtn', 'screenApkBtn'].forEach((id) => { const b = $(id); if (b) b.style.display = feat('screen') ? '' : 'none'; });
@@ -1517,10 +1519,11 @@
   function listenRest() {
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', rid()), (s) => {
       if (!s.exists() || !restData) return;
-      const before = JSON.stringify(restData.features || {}), beforeH = JSON.stringify(restData.hours || null);
+      const before = JSON.stringify([restData.features || {}, restData.svcOff || {}]), beforeH = JSON.stringify(restData.hours || null);
       restData.features = s.data().features || null;
+      restData.svcOff = s.data().svcOff || null;
       restData.hours = s.data().hours || null;   // ساعات الدوام (من برج سرعة) — تنشر ويا المنيو الأونلاين
-      if (before !== JSON.stringify(restData.features || {})) { applyFeatures(); pubSoon(); toast('🔄 تم تحديث خدمات المطعم'); }
+      if (before !== JSON.stringify([restData.features || {}, restData.svcOff || {}])) { applyFeatures(); pubSoon(); toast('🔄 تم تحديث خدمات المطعم'); }
       else if (beforeH !== JSON.stringify(restData.hours || null)) pubSoon();
     }, () => {}));
   }

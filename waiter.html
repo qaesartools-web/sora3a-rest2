@@ -127,7 +127,7 @@ button{cursor:pointer}
 </head>
 <body>
 <div class="gate" id="gate" hidden></div>
-<div class="offw" id="off" hidden><div class="offc"><b>⛔</b><h2>تطبيق الويتر موقوف لهذا المطعم</h2><p>صاحب المطعم يتواصل ويا إدارة سرعة حتى يفعّلونه — وأول ما يتفعّل يرجع يشتغل وحده.</p><button type="button" id="offOut">خروج</button></div></div>
+<div class="offw" id="off" hidden><div class="offc"><b id="offI">⛔</b><h2 id="offT">تطبيق الويتر موقوف لهذا المطعم</h2><p id="offP">صاحب المطعم يتواصل ويا إدارة سرعة حتى يفعّلونه — وأول ما يتفعّل يرجع يشتغل وحده.</p><button type="button" id="offOut">خروج</button></div></div>
 <div id="app" hidden>
   <header class="hd"><div class="wrap">
     <div class="t"><b id="rName"></b><small id="wName"></small></div>
@@ -218,15 +218,25 @@ staffGate($('gate'), {
 });
 $('offOut').onclick = () => logout();
 // خدمة «تطبيق الويتر» يشغّلها أو يوقفها المدير الأعلى — مباشرة بدون تحديث
-function svc(on) { $('app').hidden = !on; $('off').hidden = on; }
+// البرج يشغّل الخدمة، وصاحب المطعم يكدر يوقفها ويرجّعها من لوحة الإدارة (svcOff) — بس إذا البرج مشغّلها
+const waiterOn = (d) => !(d && d.features && d.features.waiter === false) && !(d && d.svcOff && d.svcOff.waiter === true);
+function svc(on) {
+  $('app').hidden = !on; $('off').hidden = on;
+  if (!on) {
+    const own = !!(me && me.rest && me.rest.svcOff && me.rest.svcOff.waiter === true && !(me.rest.features && me.rest.features.waiter === false));
+    $('offI').textContent = own ? '⏸️' : '⛔';
+    $('offT').textContent = own ? 'تطبيق الويتر موقوف من صاحب المطعم' : 'تطبيق الويتر موقوف لهذا المطعم';
+    $('offP').textContent = own ? 'صاحب المطعم يرجّعه من لوحة الإدارة ← الشاشات والخدمات — وأول ما يشتغل يرجع وحده.' : 'صاحب المطعم يتواصل ويا إدارة سرعة حتى يفعّلونه — وأول ما يتفعّل يرجع يشتغل وحده.';
+  }
+}
 $('outBtn').onclick = () => { if (!cart.length || confirm('عندك أصناف ما انرسلت — تطلع؟')) logout(); };
 
 function start() {
-  svc(!(me.rest.features && me.rest.features.waiter === false));
+  svc(waiterOn(me.rest));
   $('rName').textContent = me.rest.name || 'المطعم';
   $('wName').textContent = '🧑‍🍳 ' + (me.name || (me.role === 'restaurant' ? 'صاحب المطعم' : 'الويتر'));
   const R = (...p) => doc(db, 'restaurants', me.rid, ...p);
-  unsubs.push(onSnapshot(R(), (s) => { const f = (s.exists() && s.data().features) || {}; svc(f.waiter !== false); }, () => {}));
+  unsubs.push(onSnapshot(R(), (s) => { const d = s.exists() ? s.data() : {}; me.rest = { ...me.rest, features: d.features, svcOff: d.svcOff }; svc(waiterOn(d)); }, () => {}));
   unsubs.push(onSnapshot(R('menu', 'main'), (s) => { cats = s.exists() ? (s.data().cats || []).filter((c) => (c.items || []).length) : []; if (!$('vMenu').hidden) renderMenu(); }, () => {}));
   unsubs.push(onSnapshot(R('settings', 'main'), (s) => {
     const d = s.exists() ? s.data() : {};

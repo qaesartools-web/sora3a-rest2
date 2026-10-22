@@ -157,7 +157,7 @@ button{cursor:pointer}
   <button type="button" id="mSnd"></button>
   <button type="button" id="fsBtn">⛶ ملء الشاشة</button>
   <button type="button" id="mReload">🔄 تحديث</button>
-  <button type="button" id="mOut" class="warn">🚪 تسجيل خروج</button>
+  <button type="button" id="mOut" class="warn">🔌 فصل هذه الشاشة</button>
   <button type="button" id="mClose">✕ رجوع</button>
 </div>
 
@@ -172,7 +172,7 @@ button{cursor:pointer}
   <b id="offI">👨‍🍳</b>
   <h1 id="offT">شاشة المجهز موقوفة لهذا المطعم</h1>
   <p id="offP">تتفعّل من برج سرعة أو لوحة الإدارة: المطعم ← الخدمات ← «👨‍🍳 شاشة المجهز». أول ما تتفعّل تشتغل وحدها.</p>
-  <button type="button" id="offOut">🚪 تسجيل خروج</button>
+  <button type="button" id="offOut">🔌 فصل الشاشة</button>
 </div>
 
 <div id="toast"></div>
@@ -224,9 +224,11 @@ button{cursor:pointer}
 })();
 </script>
 
-<script src="device.js?v=2"></script>
+<script src="vendor/qrcode.js"></script>
 <script type="module">
-import { db, staffGate, logout, esc, bagDay, GATE_CSS, doc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from './staff.js';
+import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from './staff.js';
+// الشاشة تنربط بالمطعم برمز (بدون إيميل ولا كلمة سر) — جلستها بتطبيق Firebase خاص بالشاشات
+const db = screenFb().db;
 document.getElementById('gateCss').textContent = GATE_CSS;
 const $ = (id) => document.getElementById(id);
 const toA = (n) => String(n);
@@ -235,7 +237,7 @@ const t12 = (v) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim()
 const nowT = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2200); }
 
-let me = null, orders = [], sections = [], unsubs = [], sound = true, ready = false, baseName = 'المطبخ', secOnSet = true;
+let outArmed = false, me = null, orders = [], sections = [], unsubs = [], sound = true, ready = false, baseName = 'المطبخ', secOnSet = true;
 const seen = new Set();
 try { sound = localStorage.getItem('kds_sound') !== '0'; } catch (e) {}
 
@@ -276,25 +278,35 @@ function showPick(canBack) {
 }
 const needPick = () => SECMODE && (!SEC || (sections.length && !sections.some((x) => x.id === SEC)));
 
-staffGate($('gate'), {
-  title: SECMODE ? 'سرعة — شاشة المطبخ' : 'سرعة — شاشة المجهز', sub: 'سجّل دخول بإيميل المطعم (نفس لوحة الإدارة) أو حساب الكاشير', device: 'claim', remember: true,
+screenGate($('gate'), {
+  title: SECMODE ? 'سرعة — شاشة المطبخ' : 'سرعة — شاشة المجهز', kind: FEAT, label: SECMODE ? 'شاشة المطبخ' : 'شاشة المجهز',
   onIn: (u) => { me = u; start(); },
   onOut: () => { unsubs.forEach((f) => f()); unsubs = []; me = null; orders = []; seen.clear(); $('app').hidden = true; $('off').hidden = true; $('pick').hidden = true; },
 });
-$('offOut').onclick = () => logout();
+let offArmed = false;
+$('offOut').onclick = () => { if (!offArmed) { offArmed = true; $('offOut').textContent = '⚠️ متأكد؟ اضغط مرة ثانية'; return; } unlinkScreen(); };
 
-// كل شاشة بخدمتها (features.kitchen للمجهز، features.kitchenSec للمطبخ) — تنشغّل وتنطفي مباشرة بدون تحديث
-if (SECMODE) {
-  $('offI').textContent = '🔥'; $('offT').textContent = 'شاشة المطبخ (الأقسام) موقوفة لهذا المطعم';
-  $('offP').textContent = 'تتفعّل من برج سرعة أو لوحة الإدارة: المطعم ← الخدمات ← «🔥 شاشة المطبخ (الأقسام)». أول ما تتفعّل تشتغل وحدها.';
+// كل شاشة بخدمتها (features.kitchen للمجهز، features.kitchenSec للمطبخ) — تنشغّل وتنطفي مباشرة بدون تحديث.
+//  البرج يشغّلها، وصاحب المطعم يكدر يوقفها ويرجّعها من لوحة الإدارة (svcOff) — بس إذا البرج مشغّلها
+const SVC_NAME = SECMODE ? '«🔥 شاشة المطبخ (الأقسام)»' : '«👨‍🍳 شاشة المجهز»';
+function svcState(d) { const f = (d && d.features) || {}, o = (d && d.svcOff) || {}; return f[FEAT] !== true ? 'hq' : o[FEAT] === true ? 'owner' : 'on'; }
+function svc(st) {
+  const on = st === 'on';
+  $('app').hidden = !on; $('off').hidden = on; if (!on) $('pick').hidden = true;
+  if (!on) {
+    $('offI').textContent = st === 'owner' ? '⏸️' : SECMODE ? '🔥' : '👨‍🍳';
+    $('offT').textContent = (SECMODE ? 'شاشة المطبخ (الأقسام)' : 'شاشة المجهز') + (st === 'owner' ? ' موقوفة من صاحب المطعم' : ' موقوفة لهذا المطعم');
+    $('offP').textContent = st === 'owner' ? 'صاحب المطعم يرجّعها من لوحة الإدارة ← الشاشات والخدمات ← ' + SVC_NAME + '. أول ما تشتغل ترجع وحدها.'
+      : 'تتفعّل من إدارة سرعة (برج سرعة): المطعم ← الخدمات ← ' + SVC_NAME + '. أول ما تتفعّل تشتغل وحدها.';
+  }
+  if (on) { render(); if (needPick()) showPick(false); }
 }
-function svc(on) { $('app').hidden = !on; $('off').hidden = on; if (!on) $('pick').hidden = true; if (on) { render(); if (needPick()) showPick(false); } }
 
 function start() {
   baseName = me.rest.name || 'المطبخ'; titleUi();
   const R = (...p) => doc(db, 'restaurants', me.rid, ...p);
-  svc(!!(me.rest.features && me.rest.features[FEAT] === true));
-  unsubs.push(onSnapshot(R(), (s) => { const f = (s.exists() && s.data().features) || {}; svc(f[FEAT] === true); }, () => {}));
+  svc(svcState(me.rest));
+  unsubs.push(onSnapshot(R(), (s) => { svc(svcState(s.exists() ? s.data() : {})); }, () => {}));
   unsubs.push(onSnapshot(R('settings', 'main'), (s) => {
     const d = s.exists() ? s.data() : {};
     sections = (d.sections || []).filter((x) => x && x.name); secOnSet = !!d.kSecOn;
@@ -386,7 +398,7 @@ function beep() {
 const menu = $('menu');
 function sndUi() { $('mSnd').textContent = sound ? '🔔 الصوت: يعمل' : '🔕 الصوت: مطفأ'; }
 function secUi() { $('mSec').hidden = !SECMODE; $('mSec').textContent = '🔄 تغيير القسم' + (SEC ? ' (' + secLabel() + ')' : ''); }
-function openMenu() { sndUi(); secUi(); menu.hidden = false; $(SECMODE ? 'mSec' : 'mSnd').focus(); }
+function openMenu() { sndUi(); secUi(); outArmed = false; $('mOut').textContent = '🔌 فصل هذه الشاشة'; menu.hidden = false; $(SECMODE ? 'mSec' : 'mSnd').focus(); }
 function closeMenu() { menu.hidden = true; }
 $('mSec').onclick = () => { closeMenu(); showPick(!!SEC); };
 $('pickG').onclick = (e) => { const b = e.target.closest('[data-pick]'); if (b) setSec(b.dataset.pick); };
@@ -396,8 +408,7 @@ $('mClose').onclick = closeMenu;
 $('mSnd').onclick = () => { sound = !sound; try { localStorage.setItem('kds_sound', sound ? '1' : '0'); } catch (e) {} if (sound) beep(); sndUi(); };
 $('mReload').onclick = () => location.reload();
 $('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else if (d.documentElement.requestFullscreen) d.documentElement.requestFullscreen().catch(() => {}); closeMenu(); };
-let outArmed = false;
-$('mOut').onclick = () => { if (!outArmed) { outArmed = true; $('mOut').textContent = '⚠️ متأكد؟ اضغط مرة ثانية'; return; } logout(); };
+$('mOut').onclick = () => { if (!outArmed) { outArmed = true; $('mOut').textContent = '⚠️ متأكد؟ اضغط مرة ثانية'; return; } $('menu').hidden = true; unlinkScreen(); };
 
 // الوقت على البطاقات يمشي، والشاشة ما تطفي
 setInterval(() => { if (!$('app').hidden) render(); }, 30000);
