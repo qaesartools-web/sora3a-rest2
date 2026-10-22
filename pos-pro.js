@@ -52,8 +52,8 @@
     const subT = list.reduce((s, c) => s + (c.price || 0) * (c.qty || 1), 0);
     let d = disc.type === 'pct' ? Math.round(subT * Math.min(100, disc.value) / 100) : Math.min(disc.value || 0, subT);
     d = Math.max(0, d);
-    const service = type === 'salon' ? Math.round((subT - d) * (settings.servicePct || 0) / 100) : 0;
-    const tax = Math.round((subT - d + service) * (settings.taxPct || 0) / 100);
+    // الضريبة وخدمة الصالة انشالت من الإعدادات ← ما تنحسب (حتى ما تبقى رسوم مخفية ما أحد يكدر يغيّرها)
+    const service = 0, tax = 0;
     return { sub: subT, disc: d, service, tax, total: subT - d + service + tax };
   }
 
@@ -233,7 +233,7 @@
       </div>`).join('') : '<div class="cempty">السلة فارغة<br><small>اضغط على أي صنف لإضافته</small></div>';
     const t = totals(null);
     const rows = [];
-    if (t.disc || settings.taxPct) rows.push(`<div class="trow"><span>المجموع الفرعي</span><b>${money(t.sub)}</b></div>`);
+    if (t.disc) rows.push(`<div class="trow"><span>المجموع الفرعي</span><b>${money(t.sub)}</b></div>`);
     if (t.disc) rows.push(`<div class="trow disc"><span>خصم${disc.type === 'pct' ? ' ' + toA(disc.value) + '٪' : ''}${disc.reason ? ' — ' + esc(disc.reason) : ''}</span><b>- ${money(t.disc)}</b></div>`);
     if (t.tax) rows.push(`<div class="trow"><span>ضريبة ${toA(settings.taxPct)}٪</span><b>${money(t.tax)}</b></div>`);
     $('cartBreak').innerHTML = rows.join('');
@@ -918,8 +918,8 @@
           <div><div class="flbl">عرض ورق الطابعة</div><select class="fsel" id="stPaper"><option value="80" ${s.paper !== 58 ? 'selected' : ''}>80 ملم</option><option value="58" ${s.paper === 58 ? 'selected' : ''}>58 ملم</option></select></div></div>
         <div class="flbl">نص أسفل الفاتورة</div><input class="finp" id="stFooter" maxlength="120" value="${esc(s.receiptFooter)}">
         <label class="set-check"><input type="checkbox" id="stKitchen" ${s.printKitchen ? 'checked' : ''}> طباعة تذكرة مطبخ مع كل فاتورة</label>
-        <label class="set-check"><input type="checkbox" id="stDrawer" ${s.drawer ? 'checked' : ''}> 💵 افتح درج الفلوس تلقائياً عند طباعة الفاتورة</label>
-        <div class="ac-sub" style="line-height:1.8">يشتغل مع تطبيق الكاشير (أندرويد/ويندوز) وبرنامج QZ Tray، والدرج موصول بالطابعة. إذا الكاشير من المتصفح، فعّل «فتح الدرج» من إعدادات الطابعة بالويندوز.</div>
+        <label class="set-check"><input type="checkbox" id="stDrawer" ${s.drawer ? 'checked' : ''}> 💵 درج الفلوس ينفتح وحده مع كل فاتورة</label>
+        <div class="ac-sub" style="line-height:1.8">إذا عندك درج فلوس موصول بطابعة الفواتير بالكيبل: شغّلها، وكل ما تطبع فاتورة الدرج ينفتح وحده. ما عندك درج؟ خليها مطفية.</div>
       </div>
       <div class="sh-card"><div class="sh-title">👨‍🍳 أقسام المطبخ والطابعات</div>
         <label class="set-check"><input type="checkbox" id="stSecOn" ${s.kSecOn ? 'checked' : ''}> تقسيم الطلب على أقسام المطبخ — كل قسم يطبع أصنافه فقط، ورقم الطلب يوحّدها</label>
@@ -944,12 +944,7 @@
         </div>`}`}
       </div>
       ${screenCardHtml()}
-      ${waiterCardHtml()}
-      <div class="sh-card"><div class="sh-title">💰 الأسعار والضرائب</div>
-        <div class="set-row"><div><div class="flbl">ضريبة ٪ (0 = بدون)</div><input class="finp" id="stTax" type="number" min="0" max="50" value="${s.taxPct || 0}"></div>
-          <div><div class="flbl">خدمة الصالة ٪</div><input class="finp" id="stSvc" type="number" min="0" max="50" value="${s.servicePct || 0}"></div></div>
-        <div class="set-row"><div><div class="flbl">أجرة التوصيل الافتراضية</div><input class="finp" id="stFee" type="number" min="0" value="${s.defaultFee || 0}"></div>
-          <div><div class="flbl">أزرار الأجرة السريعة (مفصولة بفاصلة)</div><input class="finp" id="stFees" value="${esc((s.feePresets || []).join(','))}"></div></div>
+      <div class="sh-card"><div class="sh-title">🪑 الطاولات والبيجر</div>
         <div class="set-row"><div><div class="flbl">عدد الطاولات (0 = بدون)</div><input class="finp" id="stTables" type="number" min="0" max="200" value="${s.tables || 0}"></div>
           <div><div class="flbl">📟 عدد أجهزة البيجر (0 = بدون)</div><input class="finp" id="stPagers" type="number" min="0" max="30" value="${s.pagers != null ? s.pagers : 10}"></div></div>
       </div>
@@ -973,8 +968,9 @@
     const next = {
       receiptTitle: $('stTitle').value.trim(), receiptSub: $('stSub').value.trim(), receiptPhone: $('stPhone').value.trim(), receiptFooter: $('stFooter').value.trim(),
       paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked, drawer: $('stDrawer').checked,
-      taxPct: clamp($('stTax').value, 0, 50), servicePct: clamp($('stSvc').value, 0, 50), defaultFee: clamp($('stFee').value, 0, 1e6),
-      feePresets: [...new Set(list($('stFees').value).filter((x) => String(x).trim() !== '').map(num))].filter((x) => x >= 0).slice(0, 10), tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
+      // ما إلها خانات بالإعدادات بعد: تبقى مثل ما هي (أجرة التوصيل الافتراضية تنحط بالطلب وبالمنيو الأونلاين)
+      defaultFee: settings.defaultFee ?? DEFAULTS.defaultFee, feePresets: settings.feePresets || DEFAULTS.feePresets, taxPct: settings.taxPct || 0, servicePct: settings.servicePct || 0,
+      tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
       kSecOn: $('stSecOn').checked,
       sections: (settings.sections || DEFAULTS.sections).map((x, i) => ({ id: x.id, emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
       catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
@@ -2262,16 +2258,6 @@
         <label class="set-check"><input type="checkbox" id="stScrSalon" ${scrCfg().salon ? 'checked' : ''}> 🪑 طلبات الصالة حتى بدون بيجر</label>
         <label class="set-check"><input type="checkbox" id="stScrDel" ${scrCfg().delivery ? 'checked' : ''}> 🏍️ طلبات الدلفري (لحد ما يستلمها الكابتن)</label>
         <label class="set-check"><input type="checkbox" id="stScrQr" ${scrCfg().qr ? 'checked' : ''}> 📱 كود المنيو بزاوية الشاشة — الزبون يمسحه من مكانه (إذا خدمة الباركود شغّالة)</label>
-        <div class="flbl" style="margin-top:10px">رابط الشاشة — افتحه على تلفزيون أو تابلت قدام الزبائن، أو نزّل تطبيق التيفي</div>
-        <div class="on-link"><input class="finp" id="stScreenLink" readonly dir="ltr" value="${esc(SITE + 'screen.html')}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink('${esc(SITE + 'screen.html')}')">📋 نسخ</button></div>
-      </div>`;
-  }
-  function waiterCardHtml() {
-    const title = '<div class="sh-title">🧑‍🍳 تطبيق الويتر</div>';
-    if (!feat('waiter')) return svcOff(title);
-    return `<div class="sh-card">${title}
-        <div class="ac-sub" style="margin-bottom:6px;line-height:1.8">الويتر يفتحه بتلفونه ويدخل بحساب كاشير (سوّيه من لوحة الإدارة)، يختار الطاولة ويطلب — وطلباته تدخل للمطبخ مباشرة.</div>
-        <div class="on-link"><input class="finp" id="stWaiterLink" readonly dir="ltr" value="${esc(SITE + 'waiter.html')}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink('${esc(SITE + 'waiter.html')}')">📋 نسخ</button></div>
       </div>`;
   }
   function onlineCardHtml() {
