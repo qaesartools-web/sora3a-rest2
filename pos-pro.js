@@ -327,7 +327,7 @@ const openVarCore = (ci,ii)=>{
   };
   // الأساس (كان بـ index.html) — نفس الكود
 function openDelivModalCore(){
-  selCapId=null;changingOrderId=null;transferOrderId=null;
+  selCapId=null;changingOrderId=null;
   delivCapMode(false);
   document.getElementById('dName').value='';
   document.getElementById('dPhone').value='';
@@ -488,7 +488,6 @@ function orderActionsCore(o){
   if(s==='cancelled')return '';
   if(t==='takeaway'){
     if(s==='preparing')b.push(['✅ جاهز','ordReady']);
-    if(s==='preparing'||s==='ready')b.push(['🏍️ تحويل للكابتن','holdTransfer']);
     if(s==='preparing'||s==='ready')b.push(['🤝 تسليم للزبون','ordHandover']);
   }
   // مدفوع وينتظر الزبون (يطلع على شاشة «طلبك جاهز»): «تم التسليم» يشيله من الشاشة
@@ -1252,7 +1251,7 @@ const ordCancelCore = id=>{
     const os = $('ordSum'); if (os) os.style.display = isCashierRole() ? 'none' : '';
     syncTypeBtns(); renderPagers(); if (window.callsPermSync) callsPermSync();
     if (window.renderHold) renderHold();
-    if (restData) renderCapWait();
+    if (restData) { renderCapWait(); renderWeb(); }
     const rn = $('restName');
     if (rn) rn.textContent = (restData.name || 'المطعم') + (u.role === 'cashier' ? ' • 👤 ' + (u.name || 'كاشير') : '');
     const bb = $('branchBtn'); if (bb) bb.hidden = !u.branches;
@@ -1962,7 +1961,7 @@ const ordCancelCore = id=>{
   window.renderLoyalty = renderLoyalty;
   function renderLoyalty() {
     const el = $('loyHint'); if (!el) return;
-    const busy = (typeof transferOrderId !== 'undefined' && transferOrderId) || (typeof changingOrderId !== 'undefined' && changingOrderId);
+    const busy = typeof changingOrderId !== 'undefined' && changingOrderId;
     const c = !busy && $('delivOv') && $('delivOv').classList.contains('on') ? loyCustomer() : null;
     const due = c ? loyaltyDue(c.data) : 0;
     if (disc.loyalty && (!c || disc.loyalty.phone !== c.k || !loyaltyOn())) { disc = { type: 'amt', value: 0, reason: '' }; renderCart(); }
@@ -2309,7 +2308,9 @@ const ordCancelCore = id=>{
   const WEB_MODE = { table: '🪑 طاولة', pickup: '🛍️ استلام', delivery: '🏍️ توصيل' };
   // طلبات الويتر: دائماً تطلع للكاشير بتنبيه وتنتظر موافقته («قبول وإرسال للمطبخ»). التلقائي بس لطلبات QR الطاولات إذا مفعّل
   // كل كاشير يشوف الطلبات الأونلاين اللي من اختصاصه: التوصيل لكاشير الدلفري، الطاولات (QR والويتر) لكاشير الصالة، الاستلام لسفري قيد التحضير
-  const webMine = (w) => myPerm(w.mode === 'delivery' ? 'oDeliv' : w.mode === 'table' ? 'oSalon' : 'oHold');
+  //   (الويتر وQR الطاولة ← الصالة؛ QR الاستلام (منها شاشة «طلبك جاهز») ← السفري)
+  const webMine = (w) => (w.mode === 'delivery' ? myPerm('oDeliv') : w.mode === 'table' ? myPerm('oSalon') : myPerm('oHold') || myPerm('oTake'));
+  const webVisible = () => [...webs.values()].filter(webMine);
   const webAutoOk = (w) => webAutoDev() && w.source !== 'waiter' && w.mode === 'table' && onlineCfg().autoTable;
   function listenWeb() {
     const f = fb();
@@ -2322,10 +2323,11 @@ const ordCancelCore = id=>{
         // نسخة محلية قديمة (الكاش يرجّع الطلب «جديد» لحظياً بعد ما نحدّث مرحلته): مو طلب جديد
         if (webGone.has(w.id) || ch.doc.metadata.hasPendingWrites || w.acceptedBy || w.stage || w.orderId) { webs.delete(w.id); return; }
         if (Date.now() - (w.createdAtMs || 0) > 3 * 3600000) return;     // طلب قديم ما انقبل: ما نزعج الكاشير بيه
-        if (!webMine(w)) { webs.delete(w.id); return; }                  // مو من اختصاص هذا الكاشير (توصيل/طاولة/استلام)
-        if (!webs.has(w.id) && !webAutoOk(w)) { fresh = fresh || w; if (w.source === 'waiter') toast('🧑‍🍳 طلب من ' + (w.waiter || 'الويتر') + ' — ' + webWhere(w) + ' — اقبله يروح للمطبخ'); }
+        // كل الطلبات تنحفظ، بس اللي من اختصاص هذا الكاشير تطلع وترن (وتتحدث فوراً إذا تغيّرت صلاحياته)
+        const mine = webMine(w);
+        if (mine && !webs.has(w.id) && !webAutoOk(w)) { fresh = fresh || w; if (w.source === 'waiter') toast('🧑‍🍳 طلب من ' + (w.waiter || 'الويتر') + ' — ' + webWhere(w) + ' — اقبله يروح للمطبخ'); }
         webs.set(w.id, w);
-        if (webAutoOk(w)) setTimeout(() => webAccept(w.id, true), 0);
+        if (mine && webAutoOk(w)) setTimeout(() => webAccept(w.id, true), 0);
       });
       renderWeb();
       if (fresh) notifyWeb(fresh);
@@ -2356,7 +2358,7 @@ const ordCancelCore = id=>{
   function notifyWeb(w) {
     webChime();
     clearInterval(webRingT);
-    let n = 0; webRingT = setInterval(() => { if (!webs.size || ++n > 6) { clearInterval(webRingT); return; } webChime(); }, 4000);
+    let n = 0; webRingT = setInterval(() => { if (!webVisible().length || ++n > 6) { clearInterval(webRingT); return; } webChime(); }, 4000);
     if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
       navigator.serviceWorker && navigator.serviceWorker.getRegistration().then((r) => r && r.showNotification(w && w.source === 'waiter' ? '🧑‍🍳 طلب ويتر — ' + webWhere(w) : '📱 طلب أونلاين جديد', { body: 'افتح الكاشير حتى تقبله', tag: 'web-order', renotify: true, dir: 'rtl', lang: 'ar' }));
     }
@@ -2364,7 +2366,7 @@ const ordCancelCore = id=>{
   const webWhere = (w) => w.mode === 'table' ? WEB_MODE.table + ' ' + toA(w.table || '') : WEB_MODE[w.mode] || '';
   function renderWeb() {
     const el = $('webBox'); if (!el) return;
-    const list = [...webs.values()].sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
+    const list = webVisible().sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
     el.innerHTML = list.slice(0, 3).map((w) => {
       const items = webItems(w), miss = (w.items || []).length - items.length, busy = webBusy.has(w.id);
       const sum = items.reduce((s, i) => s + i.price * i.qty, 0) + (w.mode === 'delivery' ? (settings.defaultFee || 0) : 0);
