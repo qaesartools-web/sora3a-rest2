@@ -69,9 +69,10 @@
     hasLocalMenu = Array.isArray(s) && s.length > 0;
     menu = hasLocalMenu ? s : [{ cat: 'عام', emoji: '🍽️', items: [] }];
   };
-  const _saveMenuLocal = saveMenu;
-  window.saveMenu = saveMenu = function (opts) {
-    _saveMenuLocal();
+  // الأساس (كان بـ index.html) — نفس الكود
+function saveMenuCore(){try{localStorage.setItem(menuKey(),JSON.stringify(menu));}catch(e){toast('⚠️ الذاكرة ممتلئة — قلّل حجم الصور');}}
+  window.saveMenu = function (opts) {
+    saveMenuCore();
     hasLocalMenu = true;
     if (!(opts && opts.local)) { clearTimeout(menuPushT); menuPushT = setTimeout(pushMenu, 1200); }
   };
@@ -100,7 +101,7 @@
         cats.push({ cat: c.cat, emoji: c.emoji, items });
       }
       menuCloudTs = Date.now();
-      _saveMenuLocal();
+      saveMenuCore();
       await f.setDoc(sub('menu', 'main'), { cats, updatedAtMs: menuCloudTs, device: deviceId });
       pubSoon();
     } catch (e) { console.warn('menu push', e); }
@@ -160,13 +161,24 @@
   }
 
   // ══════════ عرض المنيو + البحث ══════════
-  const _renderMenuOrig = renderMenu;
-  window.renderMenu = renderMenu = function () {
+  // الأساس (كان بـ index.html) — نفس الكود
+function renderMenuCore(){
+  document.getElementById('cats').innerHTML=menu.map((c,i)=>
+    `<button class="cb ${i===activeCat?'on':''}" onclick="selCat(${i})">${esc(c.emoji)} ${esc(c.cat)}</button>`
+  ).join('');
+  document.getElementById('prods').innerHTML=menu[activeCat].items.map((p,i)=>{const hs=typeof p.stock==='number',out=hs&&p.stock<=0,low=hs&&p.stock>0&&p.stock<=3;return `
+    <div class="prod ${out?'soldout':''}" onclick="openVar(${activeCat},${i})">${out?'<div class="pstock out">نفذ</div>':low?`<div class="pstock low">باقي ${toA(p.stock)}</div>`:''}
+      <div class="pimg">${safeImg(p.img)?`<img src="${p.img}" alt="">`:`${esc(menu[activeCat].emoji)}`}</div>
+      <div class="pinfo"><div class="pname">${esc(p.name)}</div><div class="pprice">${p.variants.length===1?fmt(p.variants[0].price)+' د.ع':'متعدد'}</div></div>
+      ${p.variants.length>1?`<div class="pbadge">${p.variants.length}</div>`:''}
+    </div>`;}).join('');
+}
+  window.renderMenu = function () {
     if (!menu.length) menu = [{ cat: 'عام', emoji: '🍽️', items: [] }];
     if (activeCat >= menu.length) activeCat = 0;
     const totalItems = menu.reduce((s, c) => s + c.items.length, 0);
     if (!prodQuery) {
-      _renderMenuOrig();
+      renderMenuCore();
       if (!totalItems) {
         $('prods').innerHTML = `<div class="prod-empty"><div class="i">🍔</div><b>لا توجد أصناف بعد</b><br><small>أضف أصنافك من تبويب «المنيو»</small><br>
           <button onclick="goTab('menu')">➕ إضافة أصناف</button> <button onclick="importSampleMenu()">📋 استيراد منيو تجريبي</button></div>`;
@@ -192,12 +204,21 @@
   };
 
   // ══════════ إضافة للسلة: ملاحظات + إضافة سريعة ══════════
-  const _openVar = window.openVar;
+  // الأساس (كان بـ index.html) — نفس الكود
+const openVarCore = (ci,ii)=>{
+  if(typeof menu[ci].items[ii].stock==='number'&&menu[ci].items[ii].stock<=0){toast('⛔ الصنف نفذ من المخزن');return;}
+  selProd=menu[ci].items[ii];selVar=null;qty=1;
+  document.getElementById('varTitle').textContent=selProd.name;
+  document.getElementById('qVal').textContent=toA(qty);
+  document.getElementById('varsGrid').innerHTML=selProd.variants.map((v,i)=>`
+    <div class="vbtn" onclick="selV(${i})" id="v${i}"><div class="vn">${esc(v.name)}</div><div class="vp">${fmt(v.price)} د.ع</div></div>`).join('');
+  selV(0);document.getElementById('varOv').classList.add('on');
+};
   window.openVar = (ci, ii) => {
     const p = menu[ci] && menu[ci].items[ii]; if (!p) return;
     if (typeof p.stock === 'number' && p.stock <= 0) { toast('⛔ الصنف نفذ من المخزن'); return; }
     if (settings.quickAdd && p.variants.length === 1) { addLine(p, p.variants[0], 1, ''); return; }
-    _openVar(ci, ii);
+    openVarCore(ci, ii);
     $('varNote').value = '';
     $('varQuick').innerHTML = (settings.quickNotes || []).map((n) => `<button type="button" data-n="${esc(n)}">${esc(n)}</button>`).join('');
   };
@@ -304,9 +325,19 @@
     else if (type === 'takeaway') openHold();
     else if (type === 'delivery') openDelivModal();
   };
-  const _openDeliv = openDelivModal;
-  window.openDelivModal = openDelivModal = function () {
-    _openDeliv();
+  // الأساس (كان بـ index.html) — نفس الكود
+function openDelivModalCore(){
+  selCapId=null;changingOrderId=null;transferOrderId=null;
+  delivCapMode(false);
+  document.getElementById('dName').value='';
+  document.getElementById('dPhone').value='';
+  document.getElementById('dAddr').value='';
+  document.getElementById('dFee').value='5000';
+  renderCapList();
+  document.getElementById('delivOv').classList.add('on');
+}
+  window.openDelivModal = function () {
+    openDelivModalCore();
     $('dFee').value = settings.defaultFee ?? 5000;
     renderFeePresets();
     $('loyHint').innerHTML = '';
@@ -451,9 +482,28 @@
     && !(o.held && o.status === 'delivered') && Date.now() - (o.createdAtMs || 0) < 12 * 3600000;
 
   // زر «تحصيل» للطلبات المؤجلة الدفع
-  const _orderActions = orderActions;
-  window.orderActions = orderActions = function (o) {
-    let h = _orderActions(o);
+  // الأساس (كان بـ index.html) — نفس الكود
+function orderActionsCore(o){
+  const t=getOrderType(o),s=o.status,b=[];
+  if(s==='cancelled')return '';
+  if(t==='takeaway'){
+    if(s==='preparing')b.push(['✅ جاهز','ordReady']);
+    if(s==='preparing'||s==='ready')b.push(['🏍️ تحويل للكابتن','holdTransfer']);
+    if(s==='preparing'||s==='ready')b.push(['🤝 تسليم للزبون','ordHandover']);
+  }
+  // مدفوع وينتظر الزبون (يطلع على شاشة «طلبك جاهز»): «تم التسليم» يشيله من الشاشة
+  if(window.ordWaiting&&ordWaiting(o)&&s==='delivered'&&(!window.posFeat||posFeat('screen')))b.push(['🤝 تم التسليم','ordServed']);
+  // دلفري أونلاين ينتظر التجهيز: الكاشير يختار الكابتن (والأفضل لما يجهز من المطبخ)
+  const waitCap=t==='delivery'&&o.awaitCap&&['preparing','ready'].includes(s);
+  if(waitCap)b.push(['🛵 اختيار كابتن','openChangeCapForOrder']);
+  if(t==='delivery'&&['pending','accepted'].includes(s))b.push(['🔄 تغيير الكابتن','openChangeCapForOrder']);
+  if(t==='delivery'&&(waitCap||['pending','accepted','pickup'].includes(s)))b.push(['🥡 استلمه بنفسه','ordSelfPickup']);
+  if(EDITABLE.includes(s))b.push(['✏️ تعديل / إضافة','ordEdit']);
+  b.push([s==='delivered'?'↩️ إلغاء / مردود':'❌ إلغاء','ordCancel']);
+  return `<div class="ac-btns">${b.map(([l,fn])=>`<button class="ac-b ${fn==='ordCancel'?'del':''}" onclick="${fn}('${esc(o.id)}')">${l}</button>`).join('')}</div>`;
+}
+  window.orderActions = function (o) {
+    let h = orderActionsCore(o);
     if (h && !can('cancel')) h = h.replace(/<button class="ac-b del"[^>]*ordCancel[^<]*<\/button>/, '');
     if (h && o.payment && o.payment.method === 'later' && o.status !== 'cancelled') {
       h = h.replace('<div class="ac-btns">', `<div class="ac-btns"><button class="ac-b" style="border-color:#d97706;color:#b45309" onclick="ordCollect('${esc(o.id)}')">💵 تحصيل ${money(o.value)}</button>`);
@@ -917,9 +967,55 @@
   setInterval(() => { if (restData && $('kitchenScreen').classList.contains('on')) renderKds(); }, 30000);
 
   // تحديث الشاشات عند وصول الطلبات
-  const _renderOrders = renderOrders;
-  window.renderOrders = renderOrders = function () {
-    _renderOrders();
+  // الأساس (كان بـ index.html) — نفس الكود
+function renderOrdersCore(){
+  const salon=orders.filter(o=>getOrderType(o)==='salon');
+  const take=orders.filter(o=>getOrderType(o)==='takeaway');
+  const deliv=orders.filter(o=>getOrderType(o)==='delivery');
+  const active=orders.filter(o=>['pending','accepted','pickup','delivering','preparing','ready'].includes(o.status));
+  const done=orders.filter(o=>o.status==='delivered');
+  document.getElementById('sAll').textContent=orders.length;
+  document.getElementById('sActive').textContent=active.length;
+  document.getElementById('sDone').textContent=done.length;
+  document.getElementById('sSalon').textContent=salon.length;
+  document.getElementById('sTake').textContent=take.length;
+  document.getElementById('sDeliv').textContent=deliv.length;
+  renderOrdSum();
+  let fil=orders;
+  if(currentFilter==='delivery')fil=deliv;
+  else if(currentFilter==='salon')fil=salon;
+  else if(currentFilter==='takeaway')fil=take;
+  else if(currentFilter==='wait')fil=take.filter(o=>['preparing','ready'].includes(o.status));
+  else if(currentFilter==='cancelled')fil=orders.filter(o=>o.status==='cancelled');
+  const typeBadge=o=>{
+    const t=getOrderType(o);
+    if(t==='salon')return`<span class="bdg bsal">🪑 صالة</span>`;
+    if(t==='takeaway')return`<span class="bdg bsfr">🥡 سفري</span>`;
+    return`<span class="bdg bdlv">🏍️ دلفري</span>`;
+  };
+  const stBadge={pending:'bp',accepted:'ba',pickup:'br',delivering:'br',delivered:'bd',cancelled:'bc',preparing:'ba',ready:'bd'};
+  const stLabel={pending:'🟡 ينتظر',accepted:'🔵 مقبول',pickup:'🟠 في المطعم',delivering:'🛵 يتوصل',delivered:'✅ مسلّم',cancelled:'❌ ملغي',preparing:'🍳 قيد التحضير',ready:'✅ جاهز للاستلام'};
+  document.getElementById('ordersList').innerHTML=fil.length?fil.map(o=>{
+    const items=orderItemsFull(o);
+    return `
+    <div class="ocard">
+      <div class="orow"><span class="oid">${esc(o.id.substring(0,6).toUpperCase())}</span><span class="otime">${esc(t12(o.createdAt))}</span></div>
+      <div style="margin-bottom:4px;">${typeBadge(o)}</div>
+      ${o.customer?`<div class="oinfo">👤 ${esc(o.customer)}${o.phone?' • 📞 '+esc(o.phone):''}</div>`:''}
+      ${o.address?`<div class="oinfo">📍 ${esc(o.address)}</div>`:''}
+      ${items.length?`<div class="ac-sub" style="margin:4px 0">${items.map(i=>'• '+esc(i.name)+(i.variant&&i.variant!=='وحدة'?' ('+esc(i.variant)+')':'')+' ×'+toA(i.qty)).join('<br>')}</div>`:''}
+      <div class="oinfo">💰 ${fmt(o.value)} د.ع${o.fee?` + ${fmt(o.fee)} توصيل`:''}</div>
+      <div class="orow" style="margin-top:5px">
+        ${window.ordWaiting&&ordWaiting(o)&&o.status==='delivered'&&o.kitchen==='ready'?'<span class="bdg bd">🔔 جاهز — ينتظر الزبون</span>':`<span class="bdg ${stBadge[o.status]||'bp'}">${stLabel[o.status]||esc(o.status)}</span>`}
+        <span style="font-size:11px;color:var(--muted)">${esc(o.captainName||'')}</span>
+      </div>
+      ${o.status==='cancelled'?`<div class="oinfo" style="color:#e11d48">❌ ${esc(o.cancelReason||'')}${o.cancelNote?' — '+esc(o.cancelNote):''}</div>`:''}
+      ${o.modifiedAt&&o.status!=='cancelled'?`<div class="ac-sub">✏️ عُدّل الطلب بعد إنشائه</div>`:''}
+      ${orderActions(o)}
+    </div>`;}).join(''):'<div style="text-align:center;color:var(--muted);padding:24px">لا توجد طلبات</div>';
+}
+  window.renderOrders = function () {
+    renderOrdersCore();
     renderKds();
     renderPagers();
     syncWebStages();
@@ -932,10 +1028,18 @@
   };
 
   // ══════════ الإعدادات (واجهة) ══════════
-  const _showMTab = window.showMTab;
+  // الأساس (كان بـ index.html) — نفس الكود
+const showMTabCore = tab=>{
+  document.getElementById('mAddSec').style.display=tab==='add'?'block':'none';
+  document.getElementById('mListSec').style.display=tab==='list'?'block':'none';
+  document.getElementById('mCatsSec').style.display=tab==='cats'?'block':'none';
+  ['mt1','mt2','mt3'].forEach((id,i)=>document.getElementById(id)?.classList.toggle('on',['add','list','cats'][i]===tab));
+  if(tab==='list')renderMList();
+  if(tab==='cats')renderCatsList();
+};
   window.showMTab = (tab) => {
     if (tab === 'settings' ? !can('settings') : !can('menu')) { deny(); return; }
-    if (tab !== 'settings') { $('mSetSec').style.display = 'none'; $('mt4').classList.remove('on'); _showMTab(tab); return; }
+    if (tab !== 'settings') { $('mSetSec').style.display = 'none'; $('mt4').classList.remove('on'); showMTabCore(tab); return; }
     ['mAddSec', 'mListSec', 'mCatsSec'].forEach((id) => { $(id).style.display = 'none'; });
     ['mt1', 'mt2', 'mt3'].forEach((id) => $(id).classList.remove('on'));
     $('mt4').classList.add('on');
@@ -1106,14 +1210,38 @@
     const d = document.querySelector('.dnb[data-tab="acc"]'); if (d) d.textContent = '📦 المخزون والحسابات' + (n ? ' (' + toA(n) + ')' : '');
   };
 
-  const _ordEdit = window.ordEdit;
+  // الأساس (كان بـ index.html) — نفس الكود
+const ordEditCore = id=>{
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  if(!EDITABLE.includes(o.status)){toast(o.status==='delivering'?'🛵 الكابتن بالطريق — ما يمكن تعديل الأصناف':'⚠️ ما يمكن تعديل هذا الطلب');return;}
+  const base=orderItemsFull(o);
+  if(!base.length){toast('⚠️ أصناف هذا الطلب غير محفوظة (طلب قديم)');return;}
+  edState={id,o,base:base.map(x=>({...x})),work:base.map(x=>({...x})),restock:['pending','accepted'].includes(o.status)?'return':'waste',pick:{ci:0,pi:0,vi:0},addQty:1};
+  renderEd();
+};
   window.ordEdit = (id) => {
     const o = orders.find((x) => x.id === id);
     if (o && capPaidHere(o)) { toast('💵 الطلب مدفوع — أي إضافة سوّيها طلب جديد'); return; }
-    _ordEdit(id);
+    ordEditCore(id);
   };
-  const _ordCancel = window.ordCancel;
-  window.ordCancel = (id) => { if (!can('cancel')) { deny(); return; } _ordCancel(id); };
+  // الأساس (كان بـ index.html) — نفس الكود
+const ordCancelCore = id=>{
+  const o=orders.find(x=>x.id===id);if(!o||o.status==='cancelled')return;
+  const prepared=!['pending','accepted'].includes(o.status);
+  const fields=[{id:'why',label:'سبب الإلغاء *',type:'select',options:CANCEL_REASONS.map(x=>({v:x,t:x}))}];
+  if(o.inv)fields.push({id:'stock',label:'وضع الطلب',type:'select',options:[{v:'return',t:'لم يُحضَّر — رجّع المواد للمخزن'},{v:'waste',t:'اتحضّر — سجّله تالف'}],value:prepared?'waste':'return'});
+  fields.push({id:'note',label:'ملاحظة (اختياري)'});
+  acDialog('❌ إلغاء الطلب #'+o.id.substring(0,6).toUpperCase(),o.status==='delivered'?'⚠️ الطلب مُسلَّم — يُسجَّل كمردود مبيعات':(o.status==='delivering'?'⚠️ الكابتن بالطريق':'المبلغ '+fmt(o.value)+' د.ع'),fields,v=>{
+    const items=orderItemsFull(o);
+    orderUpdate(id,{status:'cancelled',cancelReason:v.why,cancelNote:(v.note||'').trim(),cancelledBy:'المطعم',cancelledAt:Date.now(),cancelledFrom:o.status,cancelStock:o.inv?v.stock:'none',...(o.capSettled===false?{capSettled:null}:{}),
+      cancelNotice:{by:'المطعم',time:nowT(),timestamp:Date.now(),seen:true}},'أُلغي الطلب — '+v.why,'cancelled').then(()=>{
+        if(getOrderType(o)==='delivery')syncTracking(id,{status:'cancelled',value:o.value,fee:o.fee});
+        if(o.inv){if(v.stock==='return')consumeItems(items,'sale_return',id,'إلغاء طلب');else wasteItems(items,id,'إلغاء بعد التحضير');saveAcc();saveMenu();renderMenu();}
+        toast('❌ تم إلغاء الطلب');
+      }).catch(e=>toast('❌ '+e.message));
+  },'❌ تأكيد الإلغاء');
+};
+  window.ordCancel = (id) => { if (!can('cancel')) { deny(); return; } ordCancelCore(id); };
 
   // ══════════ الصلاحيات (واجهة) ══════════
   function applyPerms() {
@@ -2441,14 +2569,23 @@
   };
 
   // ══════════ التشغيل بعد تسجيل الدخول ══════════
-  const _enterApp = enterApp;
-  window.enterApp = enterApp = function () {
+  // الأساس (كان بـ index.html) — نفس الكود
+function enterAppCore(){
+  document.getElementById('splash').classList.add('hide');
+  setTimeout(()=>{document.getElementById('splash').style.display='none';},600);
+  document.getElementById('loginPage').style.display='none';
+  document.getElementById('appPage').className='show';
+  document.getElementById('restName').textContent=restData.name||'المطعم';
+  loadAcc();renderMenu();renderCart();startListeners();initMenuManage();updateAccBadge();shrinkOldImages();renderHold();
+  showThemeSwitcher();
+}
+  window.enterApp = function () {
     disc = { type: 'amt', value: 0, reason: '' }; prodQuery = ''; shift = null; kdsSeen.clear(); kdsReady = false;
     if ($('prodSearch')) $('prodSearch').value = '';
     listenSettings();
     listenLoyalty();
     loadPushUrl();
-    _enterApp();
+    enterAppCore();
     listenMenu();
     listenShifts();
     listenCalls();
