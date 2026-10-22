@@ -896,7 +896,7 @@ const defaultMenu=[
 let menu=JSON.parse(JSON.stringify(defaultMenu));
 let restData=null,captains=[],orders=[],unsubs=[];
 let activeCat=0,cart=[],selProd=null,selVar=null,qty=1;
-let selCapId=null,changingOrderId=null,rejOrderId=null,transferOrderId=null;
+let selCapId=null,changingOrderId=null,rejOrderId=null;
 let nVars=[{name:'وحدة',price:0}],nImgData='';
 let orderFilter='all',toastT,installPrompt=null;
 let salonCounter=0; // 1-100 counter for salon orders
@@ -1243,7 +1243,7 @@ function delivCapMode(on){
   const b=document.getElementById('confCapBtn');
   b.textContent=on?'✅ تأكيد وترحيل':'🍳 حفظ — قيد التحضير';b.disabled=on;
 }
-window.closeDeliv=e=>{if(!e||e.target===document.getElementById('delivOv')){document.getElementById('delivOv').classList.remove('on');transferOrderId=null;}};
+window.closeDeliv=e=>{if(!e||e.target===document.getElementById('delivOv')){document.getElementById('delivOv').classList.remove('on');}};
 window.setFee=v=>{document.getElementById('dFee').value=v;};
 
 function renderCapList(){
@@ -1278,7 +1278,7 @@ window.confirmDelivery=async()=>{
   const feeV=parseInt(document.getElementById('dFee').value);const fee=isNaN(feeV)?null:Math.max(0,feeV);
   if(!name){toast('⚠️ أدخل اسم الزبون');return;}
   if(!phone){toast('⚠️ أدخل رقم الهاتف');return;}
-  if(!transferOrderId&&!changingOrderId){
+  if(!changingOrderId){
     document.getElementById('delivOv').classList.remove('on');
     finalOrder('delivery',{id:null,name:'',later:true},{name,phone,addr,fee});
     return;
@@ -1286,7 +1286,6 @@ window.confirmDelivery=async()=>{
   if(!selCapId){toast('⚠️ اختر كابتن');return;}
   const cap=captains.find(c=>c.id===selCapId);
   document.getElementById('delivOv').classList.remove('on');
-  if(transferOrderId){const tid=transferOrderId;transferOrderId=null;await doTransfer(tid,cap,{name,phone,addr,fee});return;}
 
   if(changingOrderId){
     try{
@@ -1353,7 +1352,7 @@ function renderOrdSum(){
 }
 
 window.openChangeCapForOrder=orderId=>{
-  changingOrderId=orderId;transferOrderId=null;
+  changingOrderId=orderId;
   selCapId=null;
   delivCapMode(true);
   // Pre-fill with order info
@@ -2349,7 +2348,7 @@ function printSlip(title,o,items,total,label,note){
   ${note?`<div class="div"></div><div class="row"><span>📝 ${esc(note)}</span></div>`:''}<div class="div"></div><div class="row tot"><span>${esc(label||'المبلغ الجديد للطلب')}</span><span>${fmt(total)} د.ع</span></div></body></html>`);
 }
 
-// ══════════ طلبات قيد التحضير (تبقى بالكاشير لحد التحويل للكابتن) ══════════
+// ══════════ طلبات قيد التحضير (السفري لحد التسليم بالكاونتر، الطاولات لحد الحساب، الدلفري لحد التحويل للكابتن) ══════════
 const takeawayWait=()=>true;
 const HOLD_ST=['preparing','ready'];
 // سفري قيد التحضير + طلبات الطاولات من الويتر أو QR (held) — تبقى لحد ما الكاشير يستلم المبلغ
@@ -2374,7 +2373,7 @@ function renderHold(){
 setInterval(()=>{if(typeof restData!=='undefined'&&restData)renderHold();},30000);
 window.renderHold=renderHold;
 
-// فتح طلب من شريط «قيد التحضير»: تحويل للكابتن، تسليم، تعديل، إلغاء
+// فتح طلب من شريط «قيد التحضير»: تسليم/حساب، تحويل الدلفري للكابتن، تعديل، إلغاء
 window.holdOpen=id=>{
   const o=orders.find(x=>x.id===id);if(!o)return;
   const items=orderItemsFull(o),m=holdMins(o);
@@ -2386,11 +2385,8 @@ window.holdOpen=id=>{
    ${items.map(i=>`<div class="ac-line"><span>${esc(i.name)}${i.variant&&i.variant!=='وحدة'?' ('+esc(i.variant)+')':''}</span><b>×${toA(i.qty)}</b></div>`).join('')}
    <div class="ac-line"><span>المجموع</span><b>${fmt(o.value||0)} د.ع</b></div>
    ${dlv&&o.fee?`<div class="ac-line"><span>أجور التوصيل</span><b>${fmt(o.fee)} د.ع</b></div>`:''}
-   ${tbl?`<button class="confbtn" onclick="viewClose();ordHandover('${o.id}')">💰 استلام المبلغ</button>`:dlv?`<button class="confbtn" onclick="viewClose();openChangeCapForOrder('${o.id}')">🛵 تحويل للكابتن</button>`:`<button class="confbtn" onclick="holdTransfer('${o.id}')">🏍️ تحويل للكابتن</button>`}
-   <div class="ac-btns" style="margin-top:8px">
-     ${o.status==='preparing'?`<button class="ac-b" onclick="viewClose();ordReady('${o.id}')">✅ جاهز</button>`:''}
-     ${tbl||dlv?'':`<button class="ac-b" onclick="viewClose();ordHandover('${o.id}')">🤝 تسليم للزبون</button>`}
-   </div>
+   ${tbl?`<button class="confbtn" onclick="viewClose();ordHandover('${o.id}')">💰 استلام المبلغ</button>`:dlv?`<button class="confbtn" onclick="viewClose();openChangeCapForOrder('${o.id}')">🛵 تحويل للكابتن</button>`:`<button class="confbtn" onclick="viewClose();ordHandover('${o.id}')">🤝 تسليم للزبون</button>`}
+   ${o.status==='preparing'?`<div class="ac-btns" style="margin-top:8px"><button class="ac-b" onclick="viewClose();ordReady('${o.id}')">✅ جاهز</button></div>`:''}
    <div class="ac-btns">
      <button class="ac-b" onclick="ordEdit('${o.id}')">✏️ تعديل / إضافة</button>
      <button class="ac-b" onclick="holdReprint('${o.id}')">🖨️ تذكرة المطبخ</button>
@@ -2399,32 +2395,6 @@ window.holdOpen=id=>{
    <button class="cancel" onclick="viewClose()">إغلاق</button>`);
 };
 window.holdReprint=id=>{const o=orders.find(x=>x.id===id);if(!o)return;printSlip('🍳 تذكرة مطبخ #'+holdLabel(o),o,orderItemsFull(o),o.value||0,'المجموع',o.note);};
-// تحويل الطلب للكابتن: نفس نافذة الدلفري لكن على الطلب الموجود
-window.holdTransfer=id=>{
-  const o=orders.find(x=>x.id===id);if(!o)return;
-  viewClose();
-  selCapId=null;changingOrderId=null;transferOrderId=id;
-  delivCapMode(true);
-  document.getElementById('dName').value=(o.customer&&!/^سفري #/.test(o.customer))?o.customer:'';
-  document.getElementById('dPhone').value=o.phone||'';
-  document.getElementById('dAddr').value=o.address||'';
-  document.getElementById('dFee').value=o.fee??5000;
-  renderCapList();
-  document.getElementById('delivOv').classList.add('on');
-};
-async function doTransfer(id,cap,info){
-  const o=orders.find(x=>x.id===id);if(!o)return;
-  try{
-    await orderUpdate(id,{orderType:'delivery',status:'pending',held:false,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee??5000,
-      captainId:cap.id,captainName:cap.name,commission:Math.round((o.value||0)*.1),deliveryProof:null,rejectedBy:[],transferredAt:Date.now(),assignedAtMs:Date.now(),capSettled:false},
-      'حُوّل الطلب إلى الكابتن '+cap.name,'pending');
-    if(window.notifyCaptain)notifyCaptain(id);
-    syncTracking(id,{status:'pending',value:o.value,fee:info.fee??5000,captainId:cap.id,captainName:''});
-    printOrderReceipt({...o,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee??5000},'delivery',cap);
-    toast('🏍️ تم تحويل الطلب إلى '+cap.name);
-  }catch(e){toast('❌ '+e.message);}
-}
-
 // ── THEME SYSTEM ──
 const themes = {
   sora3a: {bg:'#f3f7f4',panel:'#ffffff',panel2:'#eef3ef',line:'#e1e8e3',text:'#16241c',muted:'#6b7d72',orange:'#008b2c',orange2:'#00a83e',splash:'linear-gradient(135deg,#f3f7f4,#e3efe6,#f3f7f4)',pimg:'linear-gradient(135deg,#e6f2e9,#d4eadb)'},
@@ -2496,7 +2466,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=43"></script>
+<script src="pos-pro.js?v=44"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
