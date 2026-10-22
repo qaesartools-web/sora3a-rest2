@@ -1,4 +1,4 @@
-// سرعة — الأجهزة المعتمدة (مشترك: الكاشير + الويتر)
+// سرعة — الأجهزة المعتمدة (مشترك: الكاشير + الويتر + شاشات المطبخ)
 // كل جهاز إله مفتاح سري (يتولد مرة وحدة ويبقى بالجهاز) ورمز قصير يقراه الكاشير لإدارة سرعة.
 // الكاشير لما يدخل: يسجّل جلسته على هذا الجهاز (sessions/{uid}) — السيرفر يقبلها بس إذا الجهاز معتمد لمطعمه
 // (لما خدمة «الأجهزة المعتمدة» شغّالة). وكل جهاز يسجّل نفسه بطلب اعتماد (deviceReqs) حتى تشوفه الإدارة وتعتمده.
@@ -15,7 +15,9 @@
     const ua = navigator.userAgent;
     const os = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iPhone' : /Mac/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'جهاز';
     const D = window.SoraDesktop;
-    const app = /waiter/.test(location.pathname) ? 'الويتر' : D ? (D.platform === 'android' ? 'تطبيق الكاشير' : 'برنامج الكاشير') : 'الكاشير (متصفح)';
+    const app = /waiter/.test(location.pathname) ? 'الويتر'
+      : /kitchen/.test(location.pathname) ? (/[?&]sec\b/.test(location.search) ? 'شاشة المطبخ' : 'شاشة المجهز')
+      : D ? (D.platform === 'android' ? 'تطبيق الكاشير' : 'برنامج الكاشير') : 'الكاشير (متصفح)';
     return { key, code, platform: os + ' • ' + app };
   }
   const devicesOn = (rest) => !!(rest && rest.features && rest.features.devices === true);
@@ -26,8 +28,10 @@
     const last = { lastAtMs: Date.now(), lastUid: user.uid, lastName: String(ud.name || ud.email || '').slice(0, 80), platform: d.platform };
     try {
       const s = await fs.getDoc(ref);
-      if (!s.exists()) await fs.setDoc(ref, { restaurantId: ud.restaurantId, code: d.code, status: 'pending', createdAtMs: Date.now(), ...last });
-      else if (s.data().status === 'pending') await fs.updateDoc(ref, last);
+      if (!s.exists()) {
+        try { await fs.setDoc(ref, { restaurantId: ud.restaurantId, code: d.code, status: 'pending', createdAtMs: Date.now(), ...last }); }
+        catch (e) { return e && e.code; }   // رمز الخطأ لما ما ينقبل الطلب (قواعد السيرفر القديمة)
+      } else if (s.data().status === 'pending') await fs.updateDoc(ref, last);
     } catch (e) {}
   }
   // يسجّل جلسة الكاشير على هذا الجهاز. يرجّع 'ok' أو 'blocked' (الجهاز مو معتمد والخدمة شغّالة)
@@ -43,6 +47,18 @@
     } catch (e) {
       return e && e.code === 'permission-denied' && devicesOn(rest) ? 'blocked' : 'ok';   // بدون إنترنت أو الخدمة مطفية: يكمل
     }
+  }
+  // شاشات المطعم بإيميل المطعم (المطبخ/المجهز/الويتر): لما الخدمة شغّالة لازم الجهاز معتمد لمطعمه.
+  //  يسجّل طلب اعتماد ويشوف restaurants/{rid}/devices/{مفتاح}. يرجّع 'ok' أو 'blocked'
+  async function check(fs, user, ud, rest) {
+    if (!devicesOn(rest)) return 'ok';
+    const d = info();
+    // قواعد السيرفر القديمة ما تسمح للمطعم يسجّل طلب: ما نقفل الشاشة على طلب محد يشوفه
+    if (await timeout(register(fs, user, ud, d), 9000).catch(() => '') === 'permission-denied') return 'ok';
+    try {
+      const s = await timeout(fs.getDoc(fs.doc(fs.db, 'restaurants', ud.restaurantId, 'devices', d.key)), 9000);
+      return s.exists() ? 'ok' : 'blocked';
+    } catch (e) { return 'ok'; }   // بدون إنترنت: يكمل
   }
   // شاشة «الجهاز مو معتمد» برمز الجهاز، وتنتظر الاعتماد وتفتح وحدها
   function blockHtml(d) {
@@ -71,5 +87,5 @@
 .dev-i{font-size:50px;line-height:1}.dev-box b{font-size:19px}.dev-s{font-size:13.5px;color:#5B6476;line-height:1.7}
 .dev-code{font-family:ui-monospace,Consolas,monospace;font-size:38px;font-weight:900;letter-spacing:6px;background:#EEF1F6;border:2px dashed #4F6BED;border-radius:14px;padding:10px 6px;color:#1E3A8A}
 .dev-st{font-size:13.5px;font-weight:700;color:#0F7A3D}.dev-out{border:1px solid #E3E7EF;background:#F7F8FB;border-radius:12px;padding:11px;font:inherit;font-weight:700;cursor:pointer}`;
-  window.SoraDev = { info, claim, register, blockHtml, watch, devicesOn, CSS };
+  window.SoraDev = { info, claim, check, register, blockHtml, watch, devicesOn, CSS };
 })();

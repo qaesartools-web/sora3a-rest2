@@ -27,7 +27,8 @@ const ERR = { 'auth/invalid-credential': 'الإيميل أو الرمز غلط'
 // el: مكان نموذج الدخول — onIn({uid, role, name, rid, rest}) / onOut()
 // remember: يحفظ آخر إيميل دخل بيه على هذا الجهاز (التلفزيون: بس يكتب الرمز بالريموت)
 // device: 'claim' — حساب الكاشير يسجّل جلسته على هذا الجهاز (الأجهزة المعتمدة)، مثل الويتر.
-//   بدونه (الشاشة): لما الخدمة شغّالة الكاشيرية ما يدخلون — الشاشة تدخل بحساب صاحب المطعم
+//   وبإيميل المطعم: الجهاز نفسه لازم معتمد (المطبخ، المجهز، الويتر) لما الخدمة شغّالة.
+//   بدونه (شاشة طلبك جاهز): لما الخدمة شغّالة الكاشيرية ما يدخلون — الشاشة تدخل بحساب صاحب المطعم
 const EMAIL_KEY = 'sora3a_staff_email';
 const lastEmail = () => { try { return localStorage.getItem(EMAIL_KEY) || ''; } catch (e) { return ''; } };
 export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
@@ -97,12 +98,12 @@ export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
       }
       if (remember && user.email) { try { localStorage.setItem(EMAIL_KEY, user.email); } catch (e) {} }
       const r = await getDoc(doc(db, 'restaurants', rid)), rest = r.exists() ? r.data() : {};
-      // الأجهزة المعتمدة (حساب كاشير)
+      // الأجهزة المعتمدة (حساب كاشير، أو شاشة بإيميل المطعم)
       const SD = window.SoraDev;
       if (d.role === 'cashier' && SD && device !== 'claim' && SD.devicesOn(rest)) return deny('🔐 هذي الصفحة تدخل بحساب صاحب المطعم — حسابات الكاشيرية بس على أجهزة الكاشير المعتمدة');
-      if (d.role === 'cashier' && SD && device === 'claim') {
-        const fsx = { db, doc, getDoc, setDoc, updateDoc, onSnapshot };
-        if (await SD.claim(fsx, user, { ...d, restaurantId: rid }, rest) === 'blocked') {
+      if (SD && device === 'claim') {
+        const fsx = { db, doc, getDoc, setDoc, updateDoc, onSnapshot }, ud = { ...d, restaurantId: rid };
+        if (await (d.role === 'cashier' ? SD.claim(fsx, user, ud, rest) : SD.check(fsx, user, ud, rest)) === 'blocked') {
           if (!document.getElementById('devCss')) { const st = document.createElement('style'); st.id = 'devCss'; st.textContent = SD.CSS; document.head.appendChild(st); }
           el.hidden = false; el.innerHTML = SD.blockHtml(SD.info());
           el.querySelector('#devOut').onclick = async () => { await signOut(auth).catch(() => {}); location.reload(); };
