@@ -124,7 +124,7 @@ export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
   }
 }
 
-// ══ شاشات المطبخ المربوطة برمز ══
+// ══ شاشات المطبخ وتلفونات الويتر المربوطة برمز ══
 // جلسة «مجهولة» بتطبيق Firebase منفصل (sora3a-screen) — ما تمس جلسة الكاشير أو الويتر بنفس المتصفح.
 // الشاشة تطلع رمز (screenPairs/{الرمز}) ← صاحب المطعم (لوحة الإدارة ← الشاشات) أو برج سرعة يكتبه ← screens/{uid}
 // ← تفتح وحدها. إذا «الأجهزة المعتمدة» شغّالة، اللي يربطها صاحب المطعم تنتظر اعتماد البرج.
@@ -154,7 +154,7 @@ const PAIR_CSS = `.pair-code{font-family:ui-monospace,Consolas,monospace;font-si
 .pair-qr{width:170px;height:170px;margin:4px auto 10px;background:#fff;border-radius:12px;padding:8px}.pair-qr svg{width:100%;height:100%;display:block}
 .pair-steps{text-align:right;font-size:13.5px;line-height:1.9;color:var(--muted);margin:0 0 10px;padding-inline-start:20px}.pair-steps b{color:var(--text)}
 .pair-st{font-size:14px;font-weight:700;color:#3DF08B;margin-top:4px}.pair-st.warn{color:#FFB020}.pair-st.bad{color:#FF4D2E}`;
-// kind: 'kitchen' | 'kitchenSec' — onIn({uid, rid, rest, screen}) / onOut()
+// kind: 'kitchen' | 'kitchenSec' | 'waiter' — onIn({uid, rid, rest, screen}) / onOut()
 export function screenGate(el, { title, kind, label, onIn, onOut }) {
   const F = screenFb();
   if (!document.getElementById('pairCss')) { const st = document.createElement('style'); st.id = 'pairCss'; st.textContent = PAIR_CSS; document.head.appendChild(st); }
@@ -190,9 +190,9 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
     if (user !== cur) return;
     lsx.set(key, code);
     const link = new URL('../sora3a-admin/?pair=' + code, location.href).href;
-    box(`<p>اربط هذي الشاشة بالمطعم — بدون إيميل وبدون رمز سري</p>
+    box(`<p>اربط ${kind === 'waiter' ? 'هذا التلفون' : 'هذي الشاشة'} بالمطعم — بدون إيميل وبدون رمز سري</p>
       <div class="pair-code" id="pairCode" dir="ltr">${esc(code)}</div><div class="pair-qr" id="pairQr"></div>
-      <ol class="pair-steps"><li>صاحب المطعم: <b>لوحة الإدارة ← 📺 الشاشات ← 🔗 ربط شاشة</b> ويكتب الرمز، أو يمسح الـQR بكاميرا التلفون</li><li>أو <b>إدارة سرعة</b> تربطها من برج سرعة</li></ol>
+      <ol class="pair-steps"><li>صاحب المطعم: <b>لوحة الإدارة ← 📺 الشاشات والخدمات ← 🔗 ربط جهاز</b> ويكتب الرمز${kind === 'waiter' ? ' واسم الويتر' : ''}، أو يمسح الـQR بكاميرا التلفون</li><li>أو <b>إدارة سرعة</b> تربطه من برج سرعة</li></ol>
       <div class="pair-st" id="pairSt">${ok ? '⏳ بانتظار الربط… تفتح وحدها' : '📶 ننتظر الإنترنت حتى يشتغل الرمز…'}</div>`);
     try { const q = window.qrcode(0, 'M'); q.addData(link); q.make(); el.querySelector('#pairQr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); }
     catch (e) { const b = el.querySelector('#pairQr'); if (b) b.remove(); }
@@ -212,7 +212,7 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
       const wait = e && e.code === 'permission-denied';
       box(`<p>✅ انربطت${d.restName ? ' بـ<b>' + esc(d.restName) + '</b>' : ''}</p>
         <div class="pair-st ${wait ? 'warn' : ''}">${!wait ? '📶 ننتظر الإنترنت…' : d.approved === false ? '⏳ بانتظار اعتماد إدارة سرعة… تفتح وحدها أول ما تنعتمد' : '⛔ المطعم موقوف حالياً — الشاشة ترجع وحدها'}</div>
-        <button class="gate-b gate-out" type="button" id="pairOut">🔌 فصل الشاشة</button>`);
+        <button class="gate-b gate-out" type="button" id="pairOut">🔌 فصل ${kind === 'waiter' ? 'التلفون' : 'الشاشة'}</button>`);
       el.querySelector('#pairOut').onclick = () => unlinkScreen();
       retryT = setTimeout(() => linked(user, d), wait ? 30000 : 10000);
     }
