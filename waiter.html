@@ -123,15 +123,15 @@ button{cursor:pointer}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 <style id="gateCss"></style>
-<script src="device.js?v=2"></script>
+<script src="vendor/qrcode.js"></script>
 </head>
 <body>
 <div class="gate" id="gate" hidden></div>
-<div class="offw" id="off" hidden><div class="offc"><b id="offI">⛔</b><h2 id="offT">تطبيق الويتر موقوف لهذا المطعم</h2><p id="offP">صاحب المطعم يتواصل ويا إدارة سرعة حتى يفعّلونه — وأول ما يتفعّل يرجع يشتغل وحده.</p><button type="button" id="offOut">خروج</button></div></div>
+<div class="offw" id="off" hidden><div class="offc"><b id="offI">⛔</b><h2 id="offT">تطبيق الويتر موقوف لهذا المطعم</h2><p id="offP">صاحب المطعم يتواصل ويا إدارة سرعة حتى يفعّلونه — وأول ما يتفعّل يرجع يشتغل وحده.</p><button type="button" id="offOut">🔌 فصل الجهاز</button></div></div>
 <div id="app" hidden>
   <header class="hd"><div class="wrap">
     <div class="t"><b id="rName"></b><small id="wName"></small></div>
-    <button type="button" class="hb" id="outBtn">خروج</button>
+    <button type="button" class="hb" id="outBtn" title="فصل هذا الجهاز">🔌</button>
   </div></header>
   <div class="wrap">
     <div class="tabs"><button type="button" class="tab on" data-tab="tables">🪑 الطاولات</button><button type="button" class="tab" data-tab="orders">🧾 طلباتي <span class="bd" id="rdBadge" hidden></span></button></div>
@@ -197,7 +197,9 @@ button{cursor:pointer}
 </script>
 
 <script type="module">
-import { db, staffGate, logout, esc, bagDay, GATE_CSS, doc, getDoc, setDoc, collection, query, where, onSnapshot } from './staff.js';
+import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, getDoc, setDoc, collection, query, where, onSnapshot } from './staff.js';
+// تلفون الويتر ينربط بالمطعم برمز (بدون إيميل ولا كلمة سر) — مثل شاشة المطبخ؛ اسم الويتر يكتبه اللي يربطه
+const db = screenFb().db;
 document.getElementById('gateCss').textContent = GATE_CSS;
 const $ = (id) => document.getElementById(id);
 const money = (n) => Math.round(n || 0).toLocaleString('en-US') + ' د.ع';
@@ -211,12 +213,13 @@ const readySeen = new Set(); let firstSnap = true;
 function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2200); }
 const stOf = (w) => (w.status === 'new' ? 'new' : w.status === 'rejected' ? 'rejected' : w.stage || 'preparing');
 
-staffGate($('gate'), {
-  title: 'سرعة — الويتر', sub: 'سجّل دخول بحساب الكاشير الخاص بيك', device: 'claim',
-  onIn: (u) => { me = u; start(); },
+screenGate($('gate'), {
+  title: 'سرعة — الويتر', kind: 'waiter', label: 'الويتر',
+  onIn: (u) => { me = { ...u, name: (u.screen && u.screen.name) || '' }; start(); },
   onOut: () => { unsubs.forEach((f) => f()); unsubs = []; me = null; $('app').hidden = true; $('off').hidden = true; },
 });
-$('offOut').onclick = () => logout();
+const unlink = () => { if (confirm('فصل هذا التلفون عن المطعم؟\nيرجع يطلع رمز ويحتاج ربط مرة ثانية.')) unlinkScreen(); };
+$('offOut').onclick = unlink;
 // خدمة «تطبيق الويتر» يشغّلها أو يوقفها المدير الأعلى — مباشرة بدون تحديث
 // البرج يشغّل الخدمة، وصاحب المطعم يكدر يوقفها ويرجّعها من لوحة الإدارة (svcOff) — بس إذا البرج مشغّلها
 const waiterOn = (d) => !(d && d.features && d.features.waiter === false) && !(d && d.svcOff && d.svcOff.waiter === true);
@@ -229,12 +232,12 @@ function svc(on) {
     $('offP').textContent = own ? 'صاحب المطعم يرجّعه من لوحة الإدارة ← الشاشات والخدمات — وأول ما يشتغل يرجع وحده.' : 'صاحب المطعم يتواصل ويا إدارة سرعة حتى يفعّلونه — وأول ما يتفعّل يرجع يشتغل وحده.';
   }
 }
-$('outBtn').onclick = () => { if (!cart.length || confirm('عندك أصناف ما انرسلت — تطلع؟')) logout(); };
+$('outBtn').onclick = () => { if (!cart.length || confirm('عندك أصناف ما انرسلت — تكمل؟')) unlink(); };
 
 function start() {
   svc(waiterOn(me.rest));
   $('rName').textContent = me.rest.name || 'المطعم';
-  $('wName').textContent = '🧑‍🍳 ' + (me.name || (me.role === 'restaurant' ? 'صاحب المطعم' : 'الويتر'));
+  $('wName').textContent = '🧑‍🍳 ' + (me.name || 'الويتر');
   const R = (...p) => doc(db, 'restaurants', me.rid, ...p);
   unsubs.push(onSnapshot(R(), (s) => { const d = s.exists() ? s.data() : {}; me.rest = { ...me.rest, features: d.features, svcOff: d.svcOff }; svc(waiterOn(d)); }, () => {}));
   unsubs.push(onSnapshot(R('menu', 'main'), (s) => { cats = s.exists() ? (s.data().cats || []).filter((c) => (c.items || []).length) : []; if (!$('vMenu').hidden) renderMenu(); }, () => {}));
@@ -362,7 +365,7 @@ async function send() {
   const note = $('cNote').value.trim();
   const ref = doc(collection(db, 'webOrders'));
   const data = { restaurantId: me.rid, source: 'waiter', mode: 'table', table: String(table).slice(0, 10), status: 'new', createdAtMs: Date.now(), day: bagDay(),
-    waiter: String(me.name || (me.role === 'restaurant' ? 'صاحب المطعم' : 'الويتر')).slice(0, 60), waiterUid: me.uid, total: total(),
+    waiter: String(me.name || 'الويتر').slice(0, 60), waiterUid: me.uid, total: total(),
     items: cart.map((c) => (c.note ? { name: c.name, variant: c.variant, price: c.price, qty: c.qty, note: c.note } : { name: c.name, variant: c.variant, price: c.price, qty: c.qty })) };
   if (note) data.note = note.slice(0, 500);
   sending = true; renderCart();
