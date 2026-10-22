@@ -1097,7 +1097,7 @@
     $('mt1').style.display = $('mt2').style.display = $('mt3').style.display = can('menu') ? '' : 'none';
     $('mt4').style.display = can('settings') ? '' : 'none';
     const os = $('ordSum'); if (os) os.style.display = isCashierRole() ? 'none' : '';
-    syncTypeBtns(); renderPagers();
+    syncTypeBtns(); renderPagers(); if (window.callsPermSync) callsPermSync();
     const rn = $('restName');
     if (rn) rn.textContent = (restData.name || 'المطعم') + (u.role === 'cashier' ? ' • 👤 ' + (u.name || 'كاشير') : '');
     const bb = $('branchBtn'); if (bb) bb.hidden = !u.branches;
@@ -1931,6 +1931,7 @@
         if (ch.type === 'added') {
           const c = { id: ch.doc.id, ...ch.doc.data(), at: Date.now(), data: undefined };
           if (!feat(/(واتس|whats)/i.test(c.line || '') ? 'whatsapp' : 'calls')) return;
+          if (!myPerm('oDeliv')) return;   // الاتصالات لكاشير الدلفري بس (كاشير الصالة ما يرن عنده)
           // واتساب يحدّث إشعار المكالمة أكثر من مرة: نفس الرقم ونفس الخط خلال دقيقة = بطاقة واحدة
           const dup = [...calls.values()].find((x) => x.number === c.number && x.line === c.line && c.at - x.at < 60000);
           if (dup) { dup.at = c.at; return; }
@@ -1977,6 +1978,8 @@
       </div>`).join('');
   }
   setInterval(() => { if (calls.size) renderCalls(); }, 15000);
+  // انطفى الدلفري على هذا الكاشير: تختفي المكالمات الظاهرة ويوكف الرنين
+  window.callsPermSync = () => { if (!myPerm('oDeliv') && calls.size) { calls.clear(); clearInterval(callRingT); renderCalls(); } };
   window.callHide = (id) => { calls.delete(id); renderCalls(); };
   window.callTake = async (id, repeat) => {
     const c = calls.get(id); if (!c) return;
