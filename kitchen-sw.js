@@ -1,7 +1,7 @@
 // سرعة — شاشة المطبخ/المجهز: Service Worker صغير خاص بيها (التثبيت + فتح سريع)
 // نطاقه /sora3a-rest2/kitchen فقط، فما يتدخل بالكاشير. Firebase يشتغل بالشبكة مباشرة.
-const CACHE = 'kitchen-v1';
-const SHELL = ['kitchen.html', 'staff.js', 'device.js', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const CACHE = 'kitchen-v2';
+const SHELL = ['kitchen.html', 'staff.js', 'vendor/qrcode.js', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {})).then(() => self.skipWaiting()));
 });

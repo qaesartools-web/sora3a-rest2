@@ -89,7 +89,8 @@ let user = null, rest = null, authReady = false, loginErr = '', st = null;
 // التطبيق الجديد: أكثر من رقم على نفس التلفون (شريحتين، واتساب، واتساب أعمال). التطبيق القديم: رقم واحد + تنبيه تحديث
 const MULTI = !!(DESK && DESK.canMultiLine);
 let adding = false, editNum = '';
-const feat = (k) => !rest || !rest.features || rest.features[k] !== false;
+// البرج يشغّل الخدمة، وصاحب المطعم يكدر يوقفها (svcOff)
+const feat = (k) => (!rest || !rest.features || rest.features[k] !== false) && !(rest && rest.svcOff && rest.svcOff[k] === true);
 
 // ── الحساب: لازم صاحب المطعم (هو بس يكدر يضيف خط حسب قواعد الحماية) ──
 onAuthStateChanged(auth, async (u) => {
