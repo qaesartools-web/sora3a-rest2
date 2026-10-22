@@ -2647,9 +2647,11 @@ function nextHoldNum(){
   try{localStorage.setItem(k,n);}catch(e){}
   return n;
 }
-function heldOrders(){return orders.filter(o=>HOLD_ST.includes(o.status)&&getOrderType(o)==='takeaway');}
+// سفري قيد التحضير + طلبات الطاولات من الويتر أو QR (held) — تبقى لحد ما الكاشير يستلم المبلغ
+function heldOrders(){return orders.filter(o=>HOLD_ST.includes(o.status)&&(getOrderType(o)==='takeaway'||o.held));}
 function holdMins(o){return Math.max(0,Math.floor((Date.now()-(o.createdAtMs||Date.now()))/60000));}
-function holdLabel(o){return o.holdNum||o.id.substring(0,4).toUpperCase();}
+function holdLabel(o){return o.holdNum||(o.tableNo?'طاولة '+o.tableNo:o.id.substring(0,4).toUpperCase());}
+const holdIsTable=o=>getOrderType(o)==='salon'&&!!o.held;
 function renderHold(){
   const el=document.getElementById('holdStrip');if(!el)return;
   const list=heldOrders().sort((a,b)=>(a.createdAtMs||0)-(b.createdAtMs||0));
@@ -2657,7 +2659,8 @@ function renderHold(){
   el.classList.add('on');
   el.innerHTML=`<div class="hold-title">🍳 قيد التحضير<b>${toA(list.length)}</b></div>`+list.map(o=>{
     const m=holdMins(o),ready=o.status==='ready',late=!ready&&m>=20;
-    return `<div class="hchip ${ready?'ready':''} ${late?'late':''}" onclick="holdOpen('${o.id}')"><b>#${esc(holdLabel(o))}</b> ${esc(o.customer||'')}<small>${ready?'✅ جاهز':'🍳 '+toA(m)+' د'} • ${fmt(o.value)}</small></div>`;}).join('');
+    const head=holdIsTable(o)?`<b>🪑 ${toA(o.tableNo||'')}</b> ${o.waiter?'🧑‍🍳 '+esc(o.waiter):'📱 QR'}`:`<b>#${esc(holdLabel(o))}</b> ${esc(o.customer||'')}`;
+    return `<div class="hchip ${ready?'ready':''} ${late?'late':''}" onclick="holdOpen('${o.id}')">${head}<small>${ready?'✅ جاهز':'🍳 '+toA(m)+' د'} • ${fmt(o.value)}</small></div>`;}).join('');
 }
 setInterval(()=>{if(typeof restData!=='undefined'&&restData)renderHold();},30000);
 
@@ -2687,15 +2690,16 @@ function holdOrder(info){
 window.holdOpen=id=>{
   const o=orders.find(x=>x.id===id);if(!o)return;
   const items=orderItemsFull(o),m=holdMins(o);
-  viewOpen('🍳 طلب #'+holdLabel(o),`
-   <div class="ac-sub" style="margin-bottom:6px">👤 ${esc(o.customer||'')}${o.phone?' • 📞 '+esc(o.phone):''} • ${o.status==='ready'?'✅ جاهز':'🍳 من '+toA(m)+' دقيقة'}</div>
+  const tbl=holdIsTable(o);
+  viewOpen(tbl?'🪑 طاولة '+toA(o.tableNo||''):'🍳 طلب #'+holdLabel(o),`
+   <div class="ac-sub" style="margin-bottom:6px">${tbl?(o.waiter?'🧑‍🍳 '+esc(o.waiter):'📱 طلب QR من الطاولة'):'👤 '+esc(o.customer||'')}${o.phone?' • 📞 '+esc(o.phone):''} • ${o.status==='ready'?'✅ جاهز':'🍳 من '+toA(m)+' دقيقة'}</div>
    ${o.note?`<div class="ac-sub" style="margin-bottom:6px">📝 ${esc(o.note)}</div>`:''}
    ${items.map(i=>`<div class="ac-line"><span>${esc(i.name)}${i.variant&&i.variant!=='وحدة'?' ('+esc(i.variant)+')':''}</span><b>×${toA(i.qty)}</b></div>`).join('')}
    <div class="ac-line"><span>المجموع</span><b>${fmt(o.value||0)} د.ع</b></div>
-   <button class="confbtn" onclick="holdTransfer('${o.id}')">🏍️ تحويل للكابتن</button>
+   ${tbl?`<button class="confbtn" onclick="viewClose();ordHandover('${o.id}')">💰 استلام المبلغ</button>`:`<button class="confbtn" onclick="holdTransfer('${o.id}')">🏍️ تحويل للكابتن</button>`}
    <div class="ac-btns" style="margin-top:8px">
      ${o.status==='preparing'?`<button class="ac-b" onclick="viewClose();ordReady('${o.id}')">✅ جاهز</button>`:''}
-     <button class="ac-b" onclick="viewClose();ordHandover('${o.id}')">🤝 تسليم للزبون</button>
+     ${tbl?'':`<button class="ac-b" onclick="viewClose();ordHandover('${o.id}')">🤝 تسليم للزبون</button>`}
    </div>
    <div class="ac-btns">
      <button class="ac-b" onclick="ordEdit('${o.id}')">✏️ تعديل / إضافة</button>

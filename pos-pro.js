@@ -351,6 +351,7 @@
     const o = baseOrder(type, t, items);
     // دلفري «بعد التجهيز» (طلب أونلاين): يروح للمطبخ أول، والكاشير يحوّله لكابتن لما يجهز — الكباتن ما يشوفونه قبل
     const later = type === 'delivery' && captain && captain.later;
+    let tableWait = false;
     if (type === 'delivery') {
       Object.assign(o, {
         status: later ? 'preparing' : 'pending', customer: custInfo.name, phone: custInfo.phone, address: custInfo.addr,
@@ -362,12 +363,15 @@
     } else {
       const tbl = pay && pay.table ? Number(pay.table) : 0;
       const salonNum = type === 'salon' ? (tbl || getNextSalonNum()) : null;
-      Object.assign(o, { status: 'delivered', deliveredAt: Date.now(), payment: pay ? pay.payment : { method: 'cash', cash: t.total, card: 0 } });
+      // طلب طاولة من الويتر أو QR (بعد موافقة الكاشير): يبقى «قيد التحضير» بالكاشير لحد ما يستلم المبلغ
+      tableWait = !!o.webId && type === 'salon' && !!(pay && pay.payment && pay.payment.method === 'later');
+      if (tableWait) Object.assign(o, { status: 'preparing', held: true, payment: pay.payment });
+      else Object.assign(o, { status: 'delivered', deliveredAt: Date.now(), payment: pay ? pay.payment : { method: 'cash', cash: t.total, card: 0 } });
       if (type === 'salon') { o.salonNum = salonNum; o.customer = tbl ? 'طاولة ' + tbl : 'صالة #' + salonNum; if (tbl) o.tableNo = tbl; }
       else o.customer = 'سفري';
     }
     if (type !== 'delivery' && pagerSel && feat('pager')) { o.pager = pagerSel; pagerSel = 0; }
-    o.timeline = [{ status: o.status, time: now, text: later ? 'تم إنشاء الطلب — يتجهز بالمطبخ وبعدين يتحول لكابتن' : 'تم إنشاء الطلب' }];
+    o.timeline = [{ status: o.status, time: now, text: later ? 'تم إنشاء الطلب — يتجهز بالمطبخ وبعدين يتحول لكابتن' : tableWait ? 'تم إنشاء الطلب — قيد التحضير، يتحاسب بالكاشير' : 'تم إنشاء الطلب' }];
     f.setDoc(ref, o).then(() => { if (type === 'delivery' && !later) notifyCaptain(ref.id); }).catch((e) => toast('❌ تعذّر حفظ الطلب: ' + (e.code || e.message)));
     if (o.webId) webLink(o, ref.id);
     if (type === 'delivery') { syncTracking(ref.id, { ...o, captainName: '' }); saveCustomer(o); }
