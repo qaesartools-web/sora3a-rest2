@@ -968,6 +968,8 @@
     const next = {
       receiptTitle: $('stTitle').value.trim(), receiptSub: $('stSub').value.trim(), receiptPhone: $('stPhone').value.trim(), receiptFooter: $('stFooter').value.trim(),
       paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked, drawer: $('stDrawer').checked,
+      // ما إلها خانات بالإعدادات بعد: تبقى مثل ما هي (أجرة التوصيل الافتراضية تنحط بالطلب وبالمنيو الأونلاين)
+      defaultFee: settings.defaultFee ?? DEFAULTS.defaultFee, feePresets: settings.feePresets || DEFAULTS.feePresets, taxPct: settings.taxPct || 0, servicePct: settings.servicePct || 0,
       tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
       kSecOn: $('stSecOn').checked,
       sections: (settings.sections || DEFAULTS.sections).map((x, i) => ({ id: x.id, emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
