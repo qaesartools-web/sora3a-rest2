@@ -1087,7 +1087,8 @@
     const rn = $('restName');
     if (rn) rn.textContent = (restData.name || 'المطعم') + (u.role === 'cashier' ? ' • 👤 ' + (u.name || 'كاشير') : '');
     const bb = $('branchBtn'); if (bb) bb.hidden = !u.branches;
-    const ts = $('themeSwitcher'); if (ts && u.role === 'cashier' && !can('settings')) ts.style.display = 'none';
+    // لون التطبيق (🎨) لكل الموظفين — ينحفظ على نفس الجهاز بس، فما يأثر على غيره
+    const ts = $('themeSwitcher'); if (ts) ts.style.display = 'block';
     // إذا كان على شاشة لم يعد مسموحاً بها
     const cur = TABS.find((t) => $(t + 'Screen').classList.contains('on'));
     if (cur && !tabAllowed(cur)) goTab('cashier');
