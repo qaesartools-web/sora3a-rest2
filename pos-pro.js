@@ -64,7 +64,7 @@
   const imgSig = (d) => d ? d.length + ':' + d.slice(-32) : '';
 
   // استبدال loadMenu: لا نعرض منيو مطعم آخر للمطاعم الجديدة
-  window.loadMenu = loadMenu = function () {
+  window.loadMenu = function () {
     const s = lsGet(MENU_KEY(), null);
     hasLocalMenu = Array.isArray(s) && s.length > 0;
     menu = hasLocalMenu ? s : [{ cat: 'عام', emoji: '🍽️', items: [] }];
@@ -221,7 +221,7 @@
   };
 
   // ══════════ السلة ══════════
-  window.renderCart = renderCart = function () {
+  window.renderCart = function () {
     const el = $('cartList');
     el.innerHTML = cart.length ? cart.map((c, i) => `
       <div class="citem">
@@ -325,7 +325,7 @@
   }
 
   // عناصر الطلب مع الملاحظات والتكلفة
-  window.cartItemsForOrder = cartItemsForOrder = function () {
+  window.cartItemsForOrder = function () {
     return cart.map((c) => { const it = { name: c.name, variant: c.variant, price: c.price, qty: c.qty, cost: unitCost(c.name, c.variant) }; if (c.note) it.note = c.note; return it; });
   };
 
@@ -351,7 +351,7 @@
   }
 
   // استبدال finalOrder: يحفظ فوراً (يعمل بدون إنترنت) ويطبع فاتورة كاملة
-  window.finalOrder = finalOrder = async function (type, captain, custInfo, pay) {
+  window.finalOrder = async function (type, captain, custInfo, pay) {
     if (!restData || !cart.length) return;
     // خصم الزبون الدائم: للدلفري فقط، ولنفس الزبون، وما دام مفعّل من الإدارة
     if (disc.loyalty && (type !== 'delivery' || !loyaltyOn() || disc.loyalty.phone !== phoneKey(custInfo && custInfo.phone))) {
@@ -398,7 +398,7 @@
   };
 
   // سفري قيد التحضير: نفس الحفظ لكن بدون دفع (يُدفع عند التسليم)
-  window.holdOrder = holdOrder = function (info) {
+  window.holdOrder = function (info) {
     if (!restData || !cart.length) return;
     const t = totals('takeaway'), items = cartItemsForOrder(), now = nowT();
     const f = fb(), ref = f.doc(f.collection(f.db, 'orders'));
@@ -599,7 +599,7 @@
       ${items.map((i) => `<div class="item">${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<div class="n">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}</div>` : '';
     return `<html><head><meta charset="UTF-8"><style>${css}</style></head><body>${rcpt}${kt}</body></html>`;
   }
-  window.printOrderReceipt = printOrderReceipt = function (o, type, captain) { printHTML(receiptHTML(o, captain, null, false)); };
+  window.printOrderReceipt = function (o, type, captain) { printHTML(receiptHTML(o, captain, null, false)); };
   window.reprintOrder = (id) => { const o = orders.find((x) => x.id === id); if (o) printHTML(receiptHTML(o, null, null, false)); };
 
   // ══════════ الوردية ══════════
@@ -1100,7 +1100,7 @@
     if (tab === 'kitchen') renderKds();
     if (tab === 'shift') { renderShift(); loadClosedShifts().then(() => { if ($('shiftScreen').classList.contains('on')) renderShift(); }); }
   };
-  window.updateAccBadge = updateAccBadge = function () {
+  window.updateAccBadge = function () {
     const n = lowCount();
     const b = $('nb5'); if (b) { const ni = b.querySelector('.ni'); if (ni) ni.textContent = n ? '📦❗' : '📦'; }
     const d = document.querySelector('.dnb[data-tab="acc"]'); if (d) d.textContent = '📦 المخزون والحسابات' + (n ? ' (' + toA(n) + ')' : '');

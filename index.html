@@ -903,14 +903,6 @@ let salonCounter=0; // 1-100 counter for salon orders
 
 function menuKey(){return 'pos_menu_'+(restData?.id||'def');}
 function saveMenu(){try{localStorage.setItem(menuKey(),JSON.stringify(menu));}catch(e){toast('⚠️ الذاكرة ممتلئة — قلّل حجم الصور');}}
-function loadMenu(){try{const s=localStorage.getItem(menuKey());if(s)menu=JSON.parse(s);}catch(e){}}
-function salonKey(){return 'salon_counter_'+(restData?.id||'def');}
-function getNextSalonNum(){
-  let n=parseInt(localStorage.getItem(salonKey())||'0')+1;
-  if(n>100)n=1;
-  localStorage.setItem(salonKey(),n);
-  return n;
-}
 
 const safeImg=u=>typeof u==='string'&&/^(data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+|https:\/\/[^"'<>\s]+)$/.test(u);
 const toA=n=>String(n);
@@ -1266,46 +1258,13 @@ window.openVar=(ci,ii)=>{
 window.selV=i=>{selVar=i;document.querySelectorAll('.vbtn').forEach((b,j)=>b.classList.toggle('on',j===i));};
 window.closeVar=e=>{if(!e||e.target===document.getElementById('varOv'))document.getElementById('varOv').classList.remove('on');};
 window.chQ=d=>{qty=Math.max(1,qty+d);document.getElementById('qVal').textContent=toA(qty);};
-window.addToCart=()=>{
-  if(selVar===null)return;
-  const v=selProd.variants[selVar];
-  const ex=cart.find(c=>c.name===selProd.name&&c.variant===v.name);
-  if(typeof selProd.stock==='number'){const inCart=cart.filter(c=>c.name===selProd.name).reduce((s,c)=>s+c.qty,0);if(inCart+qty>selProd.stock){toast('⚠️ المتوفر بالمخزن فقط '+toA(selProd.stock));return;}}
-  if(ex)ex.qty+=qty; else cart.push({name:selProd.name,variant:v.name,price:v.price,qty});
-  closeVar();renderCart();toast('✅ '+selProd.name);
-};
 
 // ── CART ──
-function renderCart(){
-  const el=document.getElementById('cartList');
-  if(!cart.length){el.innerHTML='<div class="cempty">السلة فارغة</div>';}
-  else el.innerHTML=cart.map((c,i)=>`
-    <div class="citem">
-      <div class="cii"><div class="cin">${esc(c.name)}</div><div class="cip">${fmt(c.price*c.qty)} د.ع</div><div class="cis">${esc(c.variant)} ×${toA(c.qty)}</div></div>
-      <div class="cq" onclick="cQ(${i},1)">+</div><div class="cq" onclick="cQ(${i},-1)">${toA(c.qty)}</div>
-      <div class="cdel" onclick="cDel(${i})">✕</div>
-    </div>`).join('');
-  const total=cart.reduce((s,c)=>s+c.price*c.qty,0);
-  document.getElementById('cartTotal').textContent=fmt(total)+' د.ع';
-  document.getElementById('cartCnt').textContent=toA(cart.reduce((s,c)=>s+c.qty,0))+' عنصر';
-  document.getElementById('sendBtn').disabled=cart.length===0;
-}
 window.cQ=(i,d)=>{cart[i].qty+=d;if(cart[i].qty<=0)cart.splice(i,1);renderCart();};
 window.cDel=i=>{cart.splice(i,1);renderCart();};
 
 // ── ORDER TYPE ──
-window.openOrderType=()=>{
-  document.getElementById('sumBox').innerHTML=cart.map(c=>`<div>• ${esc(c.name)} (${esc(c.variant)}) ×${c.qty}</div>`).join('');
-  document.getElementById('typeOv').classList.add('on');
-};
 window.closeType=e=>{if(!e||e.target===document.getElementById('typeOv'))document.getElementById('typeOv').classList.remove('on');};
-
-window.pickType=type=>{
-  document.getElementById('typeOv').classList.remove('on');
-  if(type==='salon'){finalOrder('salon',null,null);}
-  else if(type==='takeaway'){openHold();}
-  else if(type==='delivery'){openDelivModal();}
-};
 
 // ── DELIVERY MODAL ──
 // دلفري جديد: معلومات الزبون بس ← قيد التحضير، ولما يجهز يتحول للكابتن (نفس سفري قيد التحضير)
@@ -1384,108 +1343,13 @@ window.confirmDelivery=async()=>{
   }
 };
 
-// ── FINALIZE ORDER ──
-function buildReceipt(type,custInfo,captain,salonNum,rItems,rTotal){
-  const _its=rItems||cart;
-  const total=rTotal!=null?rTotal:_its.reduce((s,c)=>s+c.price*c.qty,0);
-  const t=nowT();const d=new Date();
-  const typeLabels={salon:'🪑 صالة',takeaway:'🥡 سفري',delivery:'🏍️ دلفري — '+(captain?.name||'')};
-  let header='';
-  if(type==='salon'){
-    header=`<div class="num" style="font-size:32px;color:#000;">#${salonNum}</div><div class="type">🪑 صالة</div>`;
-  }else if(type==='takeaway'){
-    header=`<div class="type">🥡 سفري</div>`;
-  }else{
-    header=`<div class="type">🏍️ دلفري — ${esc(captain?.name||'')}</div>`;
-  }
-  return `<html><head><meta charset="UTF-8">
-  <style>@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
-  *{margin:0;padding:0;}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:12px;width:300px;}
-  .logo{text-align:center;font-size:18px;font-weight:900;}.sub{text-align:center;font-size:11px;color:#555;margin-bottom:6px;}
-  .div{border-top:1px dashed #000;margin:5px 0;}.num{text-align:center;font-size:26px;font-weight:900;margin:4px 0;}
-  .type{text-align:center;background:#000;color:#fff;padding:3px;font-size:13px;font-weight:700;margin:4px 0;}
-  .row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;}
-  .item{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;}
-  .total{display:flex;justify-content:space-between;font-size:14px;font-weight:900;margin-top:4px;padding-top:4px;border-top:2px solid #000;}
-  .foot{text-align:center;font-size:11px;color:#555;margin-top:8px;}
-  </style></head><body>
-  <div class="logo">${esc(restData?.receiptTitle||restData?.name||'سرعة')}</div>
-  <div class="sub">${esc(restData?.receiptSub||restData?.area||'')}</div>
-  <div class="div"></div>
-  ${header}
-  <div class="div"></div>
-  ${custInfo?.name?`<div class="row"><span>الزبون:</span><span>${esc(custInfo.name)}</span></div>`:''}
-  ${custInfo?.phone?`<div class="row"><span>الهاتف:</span><span>${esc(custInfo.phone)}</span></div>`:''}
-  ${custInfo?.addr&&type==='delivery'?`<div class="row"><span>العنوان:</span><span>${esc(custInfo.addr)}</span></div>`:''}
-  ${custInfo?.fee&&type==='delivery'?`<div class="row"><span>أجور التوصيل:</span><span>${fmt(custInfo.fee)} د.ع</span></div>`:''}
-  <div class="row"><span>الوقت:</span><span>${t} ${d.toLocaleDateString('ar-IQ-u-nu-latn')}</span></div>
-  <div class="div"></div>
-  ${_its.map(c=>`<div class="item"><span>${esc(c.name)}(${esc(c.variant)})</span><span>×${c.qty} — ${fmt(c.price*c.qty)}</span></div>`).join('')}
-  <div class="total"><span>المجموع</span><span>${fmt(total)} د.ع</span></div>
-  ${custInfo?.fee&&type==='delivery'?`<div class="row" style="margin-top:4px;font-weight:700;"><span>الإجمالي مع التوصيل:</span><span>${fmt(total+(custInfo.fee||0))} د.ع</span></div>`:''}
-  <div class="div"></div>
-  <div class="foot">شكراً لزيارتكم ❤️${restData?.phone?'<br>'+esc(restData.phone):''}</div>
-  </body></html>`;
-}
+// ── الطباعة (حفظ الطلب نفسه بـ pos-pro.js) ──
 
 function printHTML(html){
   let ifr=document.getElementById('prtFr');
   if(!ifr){ifr=document.createElement('iframe');ifr.id='prtFr';ifr.style.cssText='position:fixed;top:-9999px;left:-9999px;width:320px;height:600px;border:none;';document.body.appendChild(ifr);}
   ifr.onload=()=>{try{ifr.contentWindow.focus();ifr.contentWindow.print();}catch(e){}};
   ifr.srcdoc=html;
-}
-
-async function finalOrder(type,captain,custInfo){
-  const total=cart.reduce((s,c)=>s+c.price*c.qty,0);
-  const t=nowT();
-  let salonNum=null;
-  if(type==='salon'){salonNum=getNextSalonNum();}
-
-  const initStatus=type==='delivery'?'pending':(type==='takeaway'&&takeawayWait()?'preparing':'delivered');
-  let oid=null;
-  // Save ALL order types to Firebase
-  if(restData){
-    try{
-      const notes=cart.map(c=>`${c.name}(${c.variant})×${c.qty}`).join(', ');
-      const orderData={
-        restaurantId:restData.id,restaurantName:restData.name,
-        orderType:type,
-        value:total,notes,items:cartItemsForOrder(),
-        status:initStatus,inv:true,
-        createdAt:t,createdAtMs:Date.now(),
-        timeline:[{status:initStatus,time:t,text:'تم إنشاء الطلب'}],
-      };
-      if(type==='delivery'&&captain){
-        orderData.customer=custInfo.name;
-        orderData.phone=custInfo.phone;
-        orderData.address=custInfo.addr;
-        orderData.fee=custInfo.fee??5000;
-        orderData.captainId=captain.id;
-        orderData.captainName=captain.name;
-        orderData.commission=Math.round(total*.1);
-        orderData.deliveryProof=null;
-        orderData.rejectedBy=[];
-      }else if(type==='salon'){
-        orderData.salonNum=salonNum;
-        orderData.customer='صالة #'+salonNum;
-      }else if(type==='takeaway'){
-        orderData.customer='سفري';
-      }
-      const _ref=await window._fb.addDoc(window._fb.collection(window._fb.db,'orders'),orderData);
-      oid=_ref&&_ref.id;
-      if(type==='delivery')syncTracking(oid,{...orderData,captainName:''});
-    }catch(e){console.error(e);}
-  }
-
-  applySaleToStock(cart.map(c=>({name:c.name,variant:c.variant,qty:c.qty})),oid);
-
-  // Print receipt
-  const receipt=buildReceipt(type,custInfo,captain,salonNum);
-  printHTML(receipt);
-
-  const typeNames={salon:`🪑 صالة #${salonNum}`,takeaway:'🥡 سفري',delivery:'🏍️ دلفري'};
-  toast('✅ تم — '+typeNames[type]+((type==='takeaway'&&takeawayWait())?' (بانتظار الاستلام)':''));
-  setTimeout(()=>{cart=[];renderCart();},800);
 }
 
 // ── ORDERS ──
@@ -1827,21 +1691,6 @@ window.delItem=async(ci,pi)=>{
   menu[ci].items.splice(pi,1);saveMenu();toast('🗑️ تم الحذف');renderMList();if(activeCat===ci)renderMenu();
 };
 
-// ── NAV ──
-window.goTab=tab=>{
-  const tabs=['cashier','orders','reports','menu','acc'];
-  tabs.forEach(t=>document.getElementById(t+'Screen').classList.toggle('on',t===tab));
-  ['nb1','nb2','nb3','nb4','nb5'].forEach((id,i)=>{const b=document.getElementById(id);if(b)b.classList.toggle('on',i===tabs.indexOf(tab));});
-  document.querySelectorAll('.dnb').forEach(b=>b.classList.remove('on'));
-  const dbtns=document.querySelectorAll('.dnb');
-  if(dbtns[tabs.indexOf(tab)])dbtns[tabs.indexOf(tab)].classList.add('on');
-  if(tab==='reports')renderRep();
-  if(tab==='orders')renderOrders();
-  if(tab==='menu')initMenuManage();
-  if(tab==='acc')renderAcc();
-};
-
-
 // ── CATEGORIES MANAGEMENT ──
 window.addNewCat=()=>{
   const name=document.getElementById('nCatName').value.trim();
@@ -1938,7 +1787,6 @@ window.editItem=(ci,pi)=>{
   }
 };
 
-
 // ══════════ INVENTORY & ACCOUNTING (v2) ══════════
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const r2=n=>Math.round((Number(n)||0)*100)/100;
@@ -2012,11 +1860,6 @@ function lowCount(){
   return acc.materials.filter(m=>matStatus(m)!=='ok').length+
     menu.reduce((s,c)=>s+c.items.filter(p=>typeof p.stock==='number'&&p.stock<=3).length,0);
 }
-function updateAccBadge(){
-  const n=lowCount();
-  const b=document.getElementById('nb5');if(b){const ni=b.querySelector('.ni');if(ni)ni.textContent=n?'📦❗':'📦';}
-  const d=document.querySelectorAll('.dnb')[4];if(d)d.textContent='📦 المخزون والحسابات'+(n?' ('+toA(n)+')':'');
-}
 
 // ── سجل الحركات (دفتر المخزون) ──
 function mvAdd(m,type,qty,unitCost,note,ref,valueOverride){
@@ -2041,7 +1884,6 @@ function unitCost(name,variant){
   if(rec&&rec.length)return r2(rec.reduce((s,r)=>{const m=matById(r.mid);return s+(m?(Number(m.cost)||0)*(Number(r.q)||0):0);},0));
   return r2(acc.costs[key]);
 }
-function cartItemsForOrder(){return cart.map(c=>({name:c.name,variant:c.variant,price:c.price,qty:c.qty,cost:unitCost(c.name,c.variant)}));}
 const notesOf=items=>items.map(c=>`${c.name}(${c.variant})×${c.qty}`).join(', ');
 function orderItemsFull(o){
   let raw=[];
@@ -2551,16 +2393,6 @@ async function orderUpdate(id,fields,text,status){
   await fb.updateDoc(fb.doc(fb.db,'orders',id),upd);
 }
 window.ordReady=async id=>{try{await orderUpdate(id,{status:'ready',readyAt:Date.now()},'الطلب جاهز للاستلام','ready');toast('✅ الطلب جاهز');}catch(e){toast('❌ '+e.message);}};
-window.ordHandover=async id=>{const o=orders.find(x=>x.id===id);try{await orderUpdate(id,{status:'delivered',deliveredAt:Date.now()},'سُلّم للزبون','delivered');if(o)printOrderReceipt(o,'takeaway',null);toast('🤝 تم التسليم للزبون');}catch(e){toast('❌ '+e.message);}};
-window.ordSelfPickup=async id=>{
-  const o=orders.find(x=>x.id===id);if(!o)return;
-  if(!(await askOk('الزبون استلم الطلب بنفسه؟\nيتحول من دلفري إلى سفري، يتحرر الكابتن، وتنلغي أجور التوصيل.')))return;
-  try{
-    await orderUpdate(id,{orderType:'takeaway',status:'delivered',fee:0,prevFee:o.fee||0,commission:0,captainId:null,captainName:'',releasedCaptain:{id:o.captainId||null,name:o.captainName||''},deliveredAt:Date.now()},'الزبون استلم الطلب بنفسه (تحوّل من دلفري إلى سفري) — أجور التوصيل أُلغيت','delivered');
-    syncTracking(id,{status:'delivered',value:o.value,fee:0,captainId:'',captainName:''});
-    toast('🥡 تم — سُلّم للزبون واتحرر الكابتن');
-  }catch(e){toast('❌ '+e.message);}
-};
 window.ordCancel=id=>{
   const o=orders.find(x=>x.id===id);if(!o||o.status==='cancelled')return;
   const prepared=!['pending','accepted'].includes(o.status);
@@ -2654,16 +2486,9 @@ function printSlip(title,o,items,total,label,note){
   ${note?`<div class="div"></div><div class="row"><span>📝 ${esc(note)}</span></div>`:''}<div class="div"></div><div class="row tot"><span>${esc(label||'المبلغ الجديد للطلب')}</span><span>${fmt(total)} د.ع</span></div></body></html>`);
 }
 
-
 // ══════════ طلبات قيد التحضير (تبقى بالكاشير لحد التحويل للكابتن) ══════════
 const takeawayWait=()=>true;
 const HOLD_ST=['preparing','ready'];
-function nextHoldNum(){
-  const k='hold_counter_'+(restData?.id||'def');
-  let n=parseInt(localStorage.getItem(k)||'0')+1;if(n>99)n=1;
-  try{localStorage.setItem(k,n);}catch(e){}
-  return n;
-}
 // سفري قيد التحضير + طلبات الطاولات من الويتر أو QR (held) — تبقى لحد ما الكاشير يستلم المبلغ
 // + دلفري ينتظر التجهيز (بعدين يتحول للكابتن)
 const holdIsDeliv=o=>getOrderType(o)==='delivery'&&!!o.awaitCap&&!o.captainId;
@@ -2686,29 +2511,7 @@ function renderHold(){
 setInterval(()=>{if(typeof restData!=='undefined'&&restData)renderHold();},30000);
 window.renderHold=renderHold;
 
-// عند «ترحيل الطلب» ← سفري / قيد التحضير
-window.openHold=()=>{
-  if(!cart.length)return;
-  acDialog('🍳 حفظ الطلب قيد التحضير','يبقى بالكاشير لحد ما تحوله للكابتن أو يستلمه الزبون',[
-    {id:'name',label:'اسم الزبون (اختياري)',ph:'مثال: أبو علي'},
-    {id:'phone',label:'رقم الهاتف (اختياري)',type:'tel',ph:'07xxxxxxxxx'},
-    {id:'note',label:'ملاحظة للمطبخ (اختياري)',ph:'بدون بصل...'}
-  ],v=>{holdOrder({name:v.name.trim(),phone:v.phone.trim(),note:v.note.trim()});},'🍳 حفظ وطباعة تذكرة المطبخ');
-};
-function holdOrder(info){
-  if(!restData||!cart.length)return;
-  const fb=window._fb,items=cartItemsForOrder(),total=cart.reduce((s,c)=>s+c.price*c.qty,0),num=nextHoldNum(),t=nowT();
-  const ref=fb.doc(fb.collection(fb.db,'orders'));
-  const data={restaurantId:restData.id,restaurantName:restData.name,orderType:'takeaway',held:true,holdNum:num,
-    customer:info.name||('سفري #'+num),phone:info.phone||'',note:info.note||'',
-    value:total,notes:notesOf(items),items,status:'preparing',inv:true,createdAt:t,createdAtMs:Date.now(),
-    timeline:[{status:'preparing',time:t,text:'تم إنشاء الطلب — قيد التحضير'}]};
-  fb.setDoc(ref,data).catch(e=>toast('❌ تعذر حفظ الطلب: '+e.message));
-  applySaleToStock(cart.map(c=>({name:c.name,variant:c.variant,qty:c.qty})),ref.id);
-  printSlip('🍳 تذكرة مطبخ #'+num,{customer:data.customer,phone:data.phone},items,total,'المجموع',data.note);
-  toast('🍳 حُفظ الطلب #'+num+' — قيد التحضير');
-  cart=[];renderCart();
-}
+// فتح طلب من شريط «قيد التحضير»: تحويل للكابتن، تسليم، تعديل، إلغاء
 window.holdOpen=id=>{
   const o=orders.find(x=>x.id===id);if(!o)return;
   const items=orderItemsFull(o),m=holdMins(o);
@@ -2758,11 +2561,6 @@ async function doTransfer(id,cap,info){
     toast('🏍️ تم تحويل الطلب إلى '+cap.name);
   }catch(e){toast('❌ '+e.message);}
 }
-function printOrderReceipt(o,type,captain){
-  const items=orderItemsFull(o);
-  printHTML(buildReceipt(type,{name:o.customer,phone:o.phone,addr:o.address,fee:o.fee},captain,o.salonNum,items,o.value));
-}
-
 
 // ── THEME SYSTEM ──
 const themes = {
@@ -2835,7 +2633,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=41"></script>
+<script src="pos-pro.js?v=42"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
