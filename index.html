@@ -473,7 +473,6 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="dnb" data-tab="orders" onclick="goTab('orders')">📋 الطلبات</button>
     <button class="dnb" data-tab="kitchen" onclick="goTab('kitchen')">👨‍🍳 المطبخ <span class="nav-pill" id="kdsPillD"></span></button>
     <button class="dnb" data-tab="shift" onclick="goTab('shift')">🧮 الوردية</button>
-    <button class="dnb" data-tab="reports" onclick="goTab('reports')" title="التقارير والأرباح بلوحة الإدارة">📊 التقارير ↗</button>
     <button class="dnb" data-tab="menu" onclick="goTab('menu')">🍔 المنيو والإعدادات</button>
     <button class="dnb" data-tab="acc" onclick="goTab('acc')">📦 المخزون والحسابات</button>
   </div>
@@ -647,7 +646,6 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nb" id="nb2" data-tab="orders" onclick="goTab('orders')"><div class="ni">📋</div><div>الطلبات</div></button>
     <button class="nb" id="nb6" data-tab="kitchen" onclick="goTab('kitchen')"><div class="ni">👨‍🍳<span class="nav-pill" id="kdsPillM"></span></div><div>المطبخ</div></button>
     <button class="nb" id="nb7" data-tab="shift" onclick="goTab('shift')"><div class="ni">🧮</div><div>الوردية</div></button>
-    <button class="nb" id="nb3" data-tab="reports" onclick="goTab('reports')" title="التقارير والأرباح بلوحة الإدارة"><div class="ni">📊</div><div>التقارير ↗</div></button>
     <button class="nb" id="nb4" data-tab="menu" onclick="goTab('menu')"><div class="ni">🍔</div><div>المنيو</div></button>
     <button class="nb" id="nb5" data-tab="acc" onclick="goTab('acc')"><div class="ni">📦</div><div>المخزون</div></button>
   </nav>
@@ -1816,7 +1814,7 @@ window.delItem=async(ci,pi)=>{
 window.goTab=tab=>{
   const tabs=['cashier','orders','reports','menu','acc'];
   tabs.forEach(t=>document.getElementById(t+'Screen').classList.toggle('on',t===tab));
-  ['nb1','nb2','nb3','nb4','nb5'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i===tabs.indexOf(tab)));
+  ['nb1','nb2','nb3','nb4','nb5'].forEach((id,i)=>{const b=document.getElementById(id);if(b)b.classList.toggle('on',i===tabs.indexOf(tab));});
   document.querySelectorAll('.dnb').forEach(b=>b.classList.remove('on'));
   const dbtns=document.querySelectorAll('.dnb');
   if(dbtns[tabs.indexOf(tab)])dbtns[tabs.indexOf(tab)].classList.add('on');
