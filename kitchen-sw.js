@@ -1,0 +1,20 @@
+// سرعة — شاشة المطبخ/المجهز: Service Worker صغير خاص بيها (التثبيت + فتح سريع)
+// نطاقه /sora3a-rest2/kitchen فقط، فما يتدخل بالكاشير. Firebase يشتغل بالشبكة مباشرة.
+const CACHE = 'kitchen-v1';
+const SHELL = ['kitchen.html', 'staff.js', 'device.js', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {})).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', (e) => {
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith('kitchen-') && k !== CACHE).map((k) => caches.delete(k))))
+    .then(() => self.clients.claim()));
+});
+// الشبكة أولاً (حتى توصل التحديثات فوراً)، والنسخة المحفوظة إذا ماكو نت
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  e.respondWith(fetch(req).then((r) => {
+    if (r && r.ok) { const c = r.clone(); caches.open(CACHE).then((cc) => cc.put(req, c)).catch(() => {}); }
+    return r;
+  }).catch(() => caches.match(req, { ignoreSearch: req.mode === 'navigate' }).then((r) => r || caches.match('kitchen.html'))));
+});
