@@ -2068,7 +2068,8 @@
   const webBusy = new Set(), webGone = new Set();   // webGone: انقبل أو انرفض من هذا الجهاز
   let webAttach = null, webRingT = null, webSt = null;
   const WEB_MODE = { table: '🪑 طاولة', pickup: '🛍️ استلام', delivery: '🏍️ توصيل' };
-  const webAutoOk = (w) => webAutoDev() && (w.source === 'waiter' || (w.mode === 'table' && onlineCfg().autoTable));
+  // طلبات الويتر: دائماً تطلع للكاشير بتنبيه وتنتظر موافقته («قبول وإرسال للمطبخ»). التلقائي بس لطلبات QR الطاولات إذا مفعّل
+  const webAutoOk = (w) => webAutoDev() && w.source !== 'waiter' && w.mode === 'table' && onlineCfg().autoTable;
   function listenWeb() {
     const f = fb();
     webs.clear(); renderWeb();
@@ -2080,12 +2081,12 @@
         // نسخة محلية قديمة (الكاش يرجّع الطلب «جديد» لحظياً بعد ما نحدّث مرحلته): مو طلب جديد
         if (webGone.has(w.id) || ch.doc.metadata.hasPendingWrites || w.acceptedBy || w.stage || w.orderId) { webs.delete(w.id); return; }
         if (Date.now() - (w.createdAtMs || 0) > 3 * 3600000) return;     // طلب قديم ما انقبل: ما نزعج الكاشير بيه
-        if (!webs.has(w.id) && !webAutoOk(w)) fresh = true;
+        if (!webs.has(w.id) && !webAutoOk(w)) { fresh = fresh || w; if (w.source === 'waiter') toast('🧑‍🍳 طلب من ' + (w.waiter || 'الويتر') + ' — ' + webWhere(w) + ' — اقبله يروح للمطبخ'); }
         webs.set(w.id, w);
         if (webAutoOk(w)) setTimeout(() => webAccept(w.id, true), 0);
       });
       renderWeb();
-      if (fresh) notifyWeb();
+      if (fresh) notifyWeb(fresh);
     }, (e) => console.warn('web orders', e.code)));
   }
   // الأسعار والأصناف من منيو الكاشير — الصنف اللي مو موجود ما ينحسب
@@ -2110,12 +2111,12 @@
         g.gain.setValueAtTime(.0001, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.35, ctx.currentTime + d + .03); g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d + .24); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .26); });
     } catch (e) {}
   }
-  function notifyWeb() {
+  function notifyWeb(w) {
     webChime();
     clearInterval(webRingT);
     let n = 0; webRingT = setInterval(() => { if (!webs.size || ++n > 6) { clearInterval(webRingT); return; } webChime(); }, 4000);
     if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-      navigator.serviceWorker && navigator.serviceWorker.getRegistration().then((r) => r && r.showNotification('📱 طلب أونلاين جديد', { body: 'افتح الكاشير حتى تقبله', tag: 'web-order', renotify: true, dir: 'rtl', lang: 'ar' }));
+      navigator.serviceWorker && navigator.serviceWorker.getRegistration().then((r) => r && r.showNotification(w && w.source === 'waiter' ? '🧑‍🍳 طلب ويتر — ' + webWhere(w) : '📱 طلب أونلاين جديد', { body: 'افتح الكاشير حتى تقبله', tag: 'web-order', renotify: true, dir: 'rtl', lang: 'ar' }));
     }
   }
   const webWhere = (w) => w.mode === 'table' ? WEB_MODE.table + ' ' + toA(w.table || '') : WEB_MODE[w.mode] || '';
