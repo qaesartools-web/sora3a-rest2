@@ -277,8 +277,18 @@
   };
 
   // ══════════ ترحيل الطلب ══════════
+  // صلاحيات أنواع الطلب لكل كاشير (من لوحة الإدارة أو برج سرعة) — غير المحدد مسموح
+  const ORD_PERM = { salon: 'oSalon', quick: 'oTake', takeaway: 'oHold', delivery: 'oDeliv' };
+  const myPerm = (k) => !isCashierRole() || (window.posUser.perms || {})[k] !== false;
+  const typeOk = (t) => (t !== 'delivery' || feat('captain')) && myPerm(ORD_PERM[t]);
+  function syncTypeBtns() {
+    let n = 0;
+    document.querySelectorAll('#typeOv .otype[data-t]').forEach((b) => { const ok = typeOk(b.dataset.t); b.style.display = ok ? '' : 'none'; if (ok) n++; });
+    const z = $('typeNone'); if (z) z.style.display = n ? 'none' : '';
+  }
   window.openOrderType = () => {
     if (!cart.length) return;
+    syncTypeBtns();
     const t = totals(null);
     $('sumBox').innerHTML = cart.map((c) => `<div>• ${esc(c.name)} (${esc(c.variant)}) ×${c.qty}${c.note ? ' — 📝 ' + esc(c.note) : ''}</div>`).join('') +
       `<div style="font-weight:900;margin-top:4px;">الإجمالي: ${money(t.total)}</div>`;
@@ -286,6 +296,7 @@
   };
   window.pickType = (type) => {
     if (type === 'delivery' && !feat('captain')) { toast('⛔ خدمة الدلفري غير مفعّلة لهذا المطعم'); return; }
+    if (!typeOk(type)) { toast('⛔ ما عندك صلاحية لهذا النوع من الطلبات'); return; }
     $('typeOv').classList.remove('on');
     if (type === 'salon') openPay({ kind: 'new', type: 'salon' });
     else if (type === 'quick') openPay({ kind: 'new', type: 'takeaway' });
@@ -380,7 +391,7 @@
     applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
     if (o.webId && type === 'salon') webKitchenPrint({ id: ref.id, ...o }, items, t.total);
     else printOrderAll({ id: ref.id, ...o }, receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen && !o.kSec));
-    const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: later ? '🏍️ دلفري للمطبخ — لما يجهز اختار الكابتن' : '🏍️ دلفري — ' + (captain ? captain.name : '') };
+    const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: later ? '🏍️ دلفري قيد التحضير — لما يجهز حوّله للكابتن' : '🏍️ دلفري — ' + (captain ? captain.name : '') };
     toast('✅ تم — ' + names[type] + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : '') + (pay && pay.payment.change ? ' • الباقي ' + money(pay.payment.change) : ''));
     cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
   };
@@ -1086,6 +1097,7 @@
     $('mt1').style.display = $('mt2').style.display = $('mt3').style.display = can('menu') ? '' : 'none';
     $('mt4').style.display = can('settings') ? '' : 'none';
     const os = $('ordSum'); if (os) os.style.display = isCashierRole() ? 'none' : '';
+    syncTypeBtns(); renderPagers();
     const rn = $('restName');
     if (rn) rn.textContent = (restData.name || 'المطعم') + (u.role === 'cashier' ? ' • 👤 ' + (u.name || 'كاشير') : '');
     const bb = $('branchBtn'); if (bb) bb.hidden = !u.branches;
@@ -1508,7 +1520,7 @@
   // خدمات مطفية إلا إذا شغّلها المدير الأعلى (مثل محاكي الطابعات)
   function featOn(k) { return !!(restData && restData.features && restData.features[k] === true) && !ownerOff(k); }
   function applyFeatures() {
-    document.querySelectorAll('.otype[onclick*="delivery"]').forEach((b) => { b.style.display = feat('captain') ? '' : 'none'; });
+    syncTypeBtns();
     ['readyScrBtn', 'screenApkBtn'].forEach((id) => { const b = $(id); if (b) b.style.display = feat('screen') ? '' : 'none'; });
     // «شاشة المجهز» مفعّلة ← المطبخ ينشال من الكاشير (المجهز يحضّر على جهازه، ويرجع الطلب للكاشير أول ما يصير جاهز)
     document.querySelectorAll('[data-tab="capPay"]').forEach((b) => { b.style.display = feat('captain') ? '' : 'none'; });
@@ -1714,7 +1726,7 @@
       anchor.parentNode.insertBefore(el, anchor);
       el.addEventListener('click', (e) => { const b = e.target.closest('[data-pg]'); if (b) pagerClick(+b.dataset.pg); });
     }
-    if (!n || !restData || !feat('pager')) { el.style.display = 'none'; pagerSel = 0; return; }
+    if (!n || !restData || !feat('pager') || !myPerm('pager')) { el.style.display = 'none'; pagerSel = 0; return; }
     el.style.display = '';
     const busy = pagerOrders();
     // تنبيه عند صيرورة طلب جاهزاً
@@ -1830,10 +1842,13 @@
     if (x.length === 10 && x[0] === '7') x = '0' + x;
     return x;
   }
+  // custSeq: إذا انحفظ الزبون أثناء البحث، ما نخزّن نتيجة قديمة («زبون جديد») بالكاش
+  const custSeq = new Map();
   async function getCustomer(phone) {
     const k = phoneKey(phone); if (k.length < 7) return null;
     if (custCache.has(k)) return custCache.get(k);
-    try { const s = await fb().getDoc(sub('customers', k)); const d = s.exists() ? s.data() : null; custCache.set(k, d); return d; }
+    const v = custSeq.get(k);
+    try { const s = await fb().getDoc(sub('customers', k)); const d = s.exists() ? s.data() : null; if (custSeq.get(k) === v) custCache.set(k, d); return d; }
     catch (e) { return null; }
   }
   function saveCustomer(o) {
@@ -1849,7 +1864,7 @@
     if (o.orderType === 'delivery') d.dOrders = cached && cached.dOrders == null ? (cached.orders || 0) + 1 : f.increment(1);
     if (o.loyalty) { d.loyaltyGiven = f.increment(1); d.lastLoyaltyAt = Date.now(); }
     f.setDoc(sub('customers', k), d, { merge: true }).catch(() => {});
-    custCache.delete(k);
+    custCache.delete(k); custSeq.set(k, (custSeq.get(k) || 0) + 1);
   }
   const ago = (ms) => { const d = Math.floor((Date.now() - ms) / 86400000); return d <= 0 ? 'اليوم' : d === 1 ? 'أمس' : 'قبل ' + toA(d) + ' يوم'; };
   function favs(d, n) { return Object.entries((d && d.itemCounts) || {}).sort((a, b) => b[1] - a[1]).slice(0, n || 3); }
