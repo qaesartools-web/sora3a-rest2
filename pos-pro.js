@@ -357,6 +357,7 @@
         status: later ? 'preparing' : 'pending', customer: custInfo.name, phone: custInfo.phone, address: custInfo.addr,
         fee: custInfo.fee ?? settings.defaultFee ?? 0, captainId: later ? null : captain.id, captainName: later ? '' : captain.name,
         commission: Math.round(t.total * .1), deliveryProof: null, rejectedBy: [], payment: { method: 'cod' },
+        capSettled: false,           // الكابتن يستلم المبلغ من الزبون ويسدده للكاشير (تبويب «تسديد طلبات الكابتن»)
       });
       if (later) o.awaitCap = true;
       if (disc.loyalty && t.disc) o.loyalty = { n: disc.loyalty.n, amount: t.disc };
@@ -1037,11 +1038,11 @@
   }
 
   // ══════════ التنقل ══════════
-  const TABS = ['cashier', 'orders', 'kitchen', 'shift', 'reports', 'menu', 'acc'];
+  const TABS = ['cashier', 'orders', 'capPay', 'kitchen', 'shift', 'reports', 'menu', 'acc'];
   const TAB_PERM = { reports: 'reports', acc: 'inventory' };
   const isCashierRole = () => !!(window.posUser && window.posUser.role === 'cashier');
   // التقارير والأرباح والمبيعات الشهرية: للمالك فقط (الكاشير يطبع تقرير اليوم من الوردية)
-  const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'kitchen' ? !featOn('kitchen') : t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
+  const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'kitchen' ? !featOn('kitchen') : t === 'capPay' ? feat('captain') : t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
   // التحديث التلقائي ينتظر لحد ما الكاشير يكون فاضي: سلة فارغة، لا نافذة مفتوحة، لا مكالمة
   window.auIdle = () => !restData || (!cart.length && !document.querySelector('[id$="Ov"].on, .duty-lock.on, .call-card'));
   window.auSave = () => ({ tab: TABS.find((t) => { const e = $(t + 'Screen'); return e && e.classList.contains('on'); }) || 'cashier' });
@@ -1055,7 +1056,8 @@
     if (tab === 'reports') { if (tabAllowed('reports')) openAdminPanel(); else deny(); return; }
     if (!TABS.includes(tab)) tab = 'cashier';
     if (!tabAllowed(tab)) { deny(); return; }
-    TABS.forEach((t) => $(t + 'Screen').classList.toggle('on', t === tab));
+    TABS.forEach((t) => { const e = $(t + 'Screen'); if (e) e.classList.toggle('on', t === tab); });
+    if (tab === 'capPay') renderCapPay();
     document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     if (tab === 'reports') renderRep();
     if (tab === 'orders') renderOrders();
@@ -1509,6 +1511,8 @@
     document.querySelectorAll('.otype[onclick*="delivery"]').forEach((b) => { b.style.display = feat('captain') ? '' : 'none'; });
     ['readyScrBtn', 'screenApkBtn'].forEach((id) => { const b = $(id); if (b) b.style.display = feat('screen') ? '' : 'none'; });
     // «شاشة المجهز» مفعّلة ← المطبخ ينشال من الكاشير (المجهز يحضّر على جهازه، ويرجع الطلب للكاشير أول ما يصير جاهز)
+    document.querySelectorAll('[data-tab="capPay"]').forEach((b) => { b.style.display = feat('captain') ? '' : 'none'; });
+    if (!feat('captain') && $('capPayScreen') && $('capPayScreen').classList.contains('on')) goTab('cashier');
     const kOff = featOn('kitchen');
     document.querySelectorAll('[data-tab="kitchen"]').forEach((b) => { b.style.display = kOff ? 'none' : ''; });
     if ($('kdsLink')) $('kdsLink').style.display = kOff ? '' : 'none';
@@ -2067,6 +2071,49 @@
   }
   window.publishMenu = publishMenu;
 
+  // ══════════ تسديد طلبات الكابتن ══════════
+  // الكابتن ياخذ طلب (أو أكثر) ويستلم المبلغ من الزبون — أجرة التوصيل إله — ولما يرجع يسدد قيمة كل طلب للكاشير.
+  // كل طلب دلفري ينحفظ capSettled:false، و«✅ تم التسديد» يخليه true فينشال من التبويب وينقص من المجموع.
+  let capDue = [];
+  const capPaidHere = (o) => o.payment && o.payment.method && !['cod', 'later'].includes(o.payment.method);   // انسدد بالمطعم أصلاً
+  function listenCapPay() {
+    const f = fb(); capDue = []; renderCapPay();
+    unsubs.push(f.onSnapshot(f.query(f.collection(f.db, 'orders'), f.where('restaurantId', '==', rid()), f.where('capSettled', '==', false)), (s) => {
+      capDue = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((o) => o.captainId && o.status !== 'cancelled' && !capPaidHere(o))
+        .sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
+      renderCapPay();
+    }, (e) => console.warn('cap pay', e.code)));
+  }
+  const CAP_ST = { pending: 'ينتظر الكابتن', accepted: 'وافق الكابتن', pickup: 'بالمطعم', delivering: 'بالطريق', delivered: 'وصل للزبون', ready: 'جاهز', preparing: 'يتحضر' };
+  function renderCapPay() {
+    ['capPayPillD', 'capPayPillM'].forEach((id) => { const p = $(id); if (p) { p.textContent = capDue.length; p.classList.toggle('on', capDue.length > 0); } });
+    const el = $('capPayBody'); if (!el) return;
+    const total = capDue.reduce((s, o) => s + (Number(o.value) || 0), 0);
+    if (!capDue.length) { el.innerHTML = '<div class="sh-card"><div class="sh-title">💵 تسديد طلبات الكابتن</div><div class="ac-sub">✅ ماكو طلبات تنتظر التسديد — كل الكباتن مسددين.</div></div>'; return; }
+    const by = new Map();
+    capDue.forEach((o) => { const k = o.captainId; if (!by.has(k)) by.set(k, { name: o.captainName || 'كابتن', list: [] }); by.get(k).list.push(o); });
+    el.innerHTML = `<div class="sh-card cp-total"><div><div class="sh-title" style="margin:0">💵 المجموع الكلي عند الكباتن</div>
+        <div class="ac-sub">${toA(capDue.length)} طلب — قيمة الطلبات بدون أجرة التوصيل (الأجرة للكابتن)</div></div><b id="capPayTotal">${money(total)}</b></div>`
+      + [...by.values()].map((g) => {
+        const sum = g.list.reduce((s, o) => s + (Number(o.value) || 0), 0);
+        return `<div class="sh-card" data-cap-group="${esc(g.name)}"><div class="cp-cap"><div class="sh-title">🛵 ${esc(g.name)}</div><small>${toA(g.list.length)} طلب • ${money(sum)}</small></div>`
+          + g.list.map((o) => `<div class="cp-row" data-cap-order="${esc(o.id)}"><div class="cp-i"><b>#${esc(String(kNum(o)))}</b> ${esc(o.customer || '')}
+              <small>${o.address ? '📍 ' + esc(String(o.address).slice(0, 60)) + ' • ' : ''}<span class="cp-st ${o.status === 'delivered' ? 'done' : ''}">${esc(CAP_ST[o.status] || o.status || '')}</span>${o.fee ? ' • أجرة ' + money(o.fee) : ''}</small></div>
+              <div class="cp-amt">${money(o.value || 0)}</div>
+              <button type="button" class="btn-main" onclick="capSettle('${esc(o.id)}')">✅ تم التسديد</button></div>`).join('')
+          + '</div>';
+      }).join('');
+  }
+  window.capSettle = async (id) => {
+    const o = capDue.find((x) => x.id === id); if (!o) return;
+    capDue = capDue.filter((x) => x.id !== id); renderCapPay();            // ينشال فوراً وينقص من المجموع
+    try {
+      await fb().updateDoc(fb().doc(fb().db, 'orders', id), { capSettled: true, capSettledAtMs: Date.now(), capSettledShift: shift ? shift.id : null,
+        capSettledBy: String((window.posUser && (window.posUser.name || window.posUser.email)) || '').slice(0, 80) });
+      toast('✅ تم تسديد #' + kNum(o) + ' — ' + money(o.value || 0) + ' من ' + (o.captainName || 'الكابتن'));
+    } catch (e) { toast('❌ ما انحفظ التسديد — تأكد من الإنترنت'); capDue.push(o); capDue.sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0)); renderCapPay(); }
+  };
+
   // ── استلام الطلبات ──
   const webs = new Map();            // طلبات جديدة بانتظار القبول
   const webBusy = new Set(), webGone = new Set();   // webGone: انقبل أو انرفض من هذا الجهاز
@@ -2334,6 +2381,7 @@
     listenShifts();
     listenCalls();
     webSt = null; listenWeb();
+    listenCapPay();
     listenMe();
     listenRest();
     applyFeatures();

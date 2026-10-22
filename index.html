@@ -471,6 +471,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
   <div class="desktop-nav" id="desktopNav">
     <button class="dnb on" data-tab="cashier" onclick="goTab('cashier')">🧾 الكاشير</button>
     <button class="dnb" data-tab="orders" onclick="goTab('orders')">📋 الطلبات</button>
+    <button class="dnb" data-tab="capPay" onclick="goTab('capPay')">💵 تسديد طلبات الكابتن <span class="nav-pill" id="capPayPillD"></span></button>
     <button class="dnb" data-tab="kitchen" onclick="goTab('kitchen')">👨‍🍳 المطبخ <span class="nav-pill" id="kdsPillD"></span></button>
     <button class="dnb" data-tab="shift" onclick="goTab('shift')">🧮 الوردية</button>
     <button class="dnb" data-tab="menu" onclick="goTab('menu')">🍔 المنيو والإعدادات</button>
@@ -522,6 +523,9 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 
     <!-- SHIFT -->
     <div class="screen" id="shiftScreen"><div id="shiftBody"></div></div>
+
+    <!-- تسديد طلبات الكابتن: الفلوس اللي استلمها الكابتن من الزبائن ويسلّمها للكاشير -->
+    <div class="screen" id="capPayScreen"><div id="capPayBody"></div></div>
 
     <!-- ORDERS -->
     <div class="screen" id="ordersScreen">
@@ -644,6 +648,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
   <nav class="bnav">
     <button class="nb on" id="nb1" data-tab="cashier" onclick="goTab('cashier')"><div class="ni">🧾</div><div>الكاشير</div></button>
     <button class="nb" id="nb2" data-tab="orders" onclick="goTab('orders')"><div class="ni">📋</div><div>الطلبات</div></button>
+    <button class="nb" id="nbCap" data-tab="capPay" onclick="goTab('capPay')"><div class="ni">💵<span class="nav-pill" id="capPayPillM"></span></div><div>تسديد الكابتن</div></button>
     <button class="nb" id="nb6" data-tab="kitchen" onclick="goTab('kitchen')"><div class="ni">👨‍🍳<span class="nav-pill" id="kdsPillM"></span></div><div>المطبخ</div></button>
     <button class="nb" id="nb7" data-tab="shift" onclick="goTab('shift')"><div class="ni">🧮</div><div>الوردية</div></button>
     <button class="nb" id="nb4" data-tab="menu" onclick="goTab('menu')"><div class="ni">🍔</div><div>المنيو</div></button>
@@ -2726,7 +2731,7 @@ async function doTransfer(id,cap,info){
   const o=orders.find(x=>x.id===id);if(!o)return;
   try{
     await orderUpdate(id,{orderType:'delivery',status:'pending',held:false,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee??5000,
-      captainId:cap.id,captainName:cap.name,commission:Math.round((o.value||0)*.1),deliveryProof:null,rejectedBy:[],transferredAt:Date.now()},
+      captainId:cap.id,captainName:cap.name,commission:Math.round((o.value||0)*.1),deliveryProof:null,rejectedBy:[],transferredAt:Date.now(),capSettled:false},
       'حُوّل الطلب إلى الكابتن '+cap.name,'pending');
     if(window.notifyCaptain)notifyCaptain(id);
     syncTracking(id,{status:'pending',value:o.value,fee:info.fee??5000,captainId:cap.id,captainName:''});
