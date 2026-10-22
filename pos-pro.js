@@ -281,6 +281,7 @@
   const ORD_PERM = { salon: 'oSalon', quick: 'oTake', takeaway: 'oHold', delivery: 'oDeliv' };
   const myPerm = (k) => !isCashierRole() || (window.posUser.perms || {})[k] !== false;
   const typeOk = (t) => (t !== 'delivery' || feat('captain')) && myPerm(ORD_PERM[t]);
+  window.posPerm = myPerm;
   function syncTypeBtns() {
     let n = 0;
     document.querySelectorAll('#typeOv .otype[data-t]').forEach((b) => { const ok = typeOk(b.dataset.t); b.style.display = ok ? '' : 'none'; if (ok) n++; });
@@ -374,7 +375,7 @@
       if (disc.loyalty && t.disc) o.loyalty = { n: disc.loyalty.n, amount: t.disc };
     } else {
       const tbl = pay && pay.table ? Number(pay.table) : 0;
-      const salonNum = type === 'salon' ? (tbl || getNextSalonNum()) : null;
+      const salonNum = type === 'salon' ? (tbl || o.ticketNo) : null;      // نفس رقم الطلب بكل الشاشات
       // طلب طاولة من الويتر أو QR (بعد موافقة الكاشير): يبقى «قيد التحضير» بالكاشير لحد ما يستلم المبلغ
       tableWait = !!o.webId && type === 'salon' && !!(pay && pay.payment && pay.payment.method === 'later');
       if (tableWait) Object.assign(o, { status: 'preparing', held: true, payment: pay.payment });
@@ -399,9 +400,10 @@
   // سفري قيد التحضير: نفس الحفظ لكن بدون دفع (يُدفع عند التسليم)
   window.holdOrder = holdOrder = function (info) {
     if (!restData || !cart.length) return;
-    const t = totals('takeaway'), items = cartItemsForOrder(), num_ = nextHoldNum(), now = nowT();
+    const t = totals('takeaway'), items = cartItemsForOrder(), now = nowT();
     const f = fb(), ref = f.doc(f.collection(f.db, 'orders'));
     const o = baseOrder('takeaway', t, items);
+    const num_ = o.ticketNo;          // نفس رقم الطلب اللي يطلع بشاشة المجهز و«طلبك جاهز» (مو عدّاد خاص بالجهاز)
     Object.assign(o, { held: true, holdNum: num_, customer: info.name || ('سفري #' + num_), phone: info.phone || '', note: info.note || '',
       status: 'preparing', timeline: [{ status: 'preparing', time: now, text: 'تم إنشاء الطلب — قيد التحضير' }] });
     if (pagerSel && feat('pager')) { o.pager = pagerSel; pagerSel = 0; }
@@ -426,6 +428,14 @@
     openPay({ kind: 'collect', order: o, handover: true });
   };
   window.ordCollect = (id) => { const o = orders.find((x) => x.id === id); if (o) openPay({ kind: 'collect', order: o }); };
+  // دلفري والزبون إجا استلمه بنفسه: يتحول لسفري، يتحرر الكابتن، تنلغي الأجرة — ويتحاسب هسه (حتى ينحسب بالدرج)
+  window.ordSelfPickup = async (id) => {
+    const o = orders.find((x) => x.id === id); if (!o) return;
+    if (!(await askOk('الزبون استلم الطلب بنفسه؟\nيتحول من دلفري إلى سفري، يتحرر الكابتن، تنلغي أجور التوصيل، وتستلم المبلغ هسه.'))) return;
+    const convert = { orderType: 'takeaway', fee: 0, prevFee: o.fee || 0, commission: 0, captainId: null, captainName: '', awaitCap: false, capSettled: null,
+      releasedCaptain: { id: o.captainId || null, name: o.captainName || '' } };
+    openPay({ kind: 'collect', order: { ...o, orderType: 'takeaway' }, handover: true, convert });
+  };
   // «🤝 تم التسليم» للطلب المدفوع (سفري/صالة): الزبون استلم ← ينشال فوراً من شاشة «طلبك جاهز» ويتحرر البيجر
   window.ordServed = async (id) => {
     const o = orders.find((x) => x.id === id); if (!o) return;
@@ -457,7 +467,7 @@
     const type = ctx.kind === 'new' ? ctx.type : (ctx.order.orderType || 'takeaway');
     const t = ctx.kind === 'new' ? totals(type) : { sub: ctx.order.value, disc: 0, service: 0, tax: 0, total: ctx.order.value || 0 };
     payCtx = { ...ctx, typeName: type, due: t.total, method: 'cash', received: '', card: '', table: '' };
-    $('payTitle').textContent = ctx.kind === 'new' ? (type === 'salon' ? '🪑 دفع — صالة' : '🛍️ دفع — سفري فوري') : '💵 تحصيل الطلب #' + (ctx.order.holdNum || ctx.order.id.substring(0, 6).toUpperCase());
+    $('payTitle').textContent = ctx.kind === 'new' ? (type === 'salon' ? '🪑 دفع — صالة' : '🛍️ دفع — سفري فوري') : '💵 تحصيل الطلب #' + kNum(ctx.order);
     $('payDue').textContent = money(t.total);
     const br = [];
     if (t.disc) br.push(`<div><span>المجموع</span><span>${money(t.sub)}</span></div><div><span>الخصم</span><span>- ${money(t.disc)}</span></div>`);
@@ -529,7 +539,9 @@
       const fields = { payment };
       let text = 'تم تحصيل ' + money(o.value);
       if (c.handover) { Object.assign(fields, { status: 'delivered', deliveredAt: Date.now(), servedAtMs: Date.now(), kitchen: 'ready', ...(o.pager ? { pagerDone: true } : {}) }); text = 'سُلّم للزبون — ' + text; }
+      if (c.convert) { Object.assign(fields, c.convert); text = 'الزبون استلم الطلب بنفسه (تحوّل من دلفري إلى سفري) — ' + text; }
       await orderUpdate(o.id, fields, text, c.handover ? 'delivered' : o.status);
+      if (c.convert) syncTracking(o.id, { status: 'delivered', value: o.value, fee: 0, captainId: '', captainName: '' });
       printHTML(receiptHTML({ ...o, ...fields }, null, { payment }, false));
       toast(c.handover ? '🤝 تم التسليم والتحصيل' : '💵 تم التحصيل' + (payment.change ? ' • الباقي ' + money(payment.change) : ''));
     } catch (e) { toast('❌ تعذّر الحفظ'); }
@@ -544,9 +556,11 @@
     const phone = settings.receiptPhone || restData.phone || '';
     const d = new Date(o.createdAtMs || Date.now());
     const type = o.orderType || 'delivery';
-    const head = type === 'salon' ? `<div class="num">#${esc(o.tableNo ? 'طاولة ' + o.tableNo : o.salonNum)}</div><div class="type">🪑 صالة</div>`
-      : type === 'takeaway' ? `${o.holdNum ? `<div class="num">#${esc(o.holdNum)}</div>` : ''}<div class="type">🥡 سفري</div>`
-      : `<div class="type">🏍️ دلفري — ${esc(o.captainName || (captain && captain.name) || '')}</div>`;
+    // رقم الطلب الكبير = نفس الرقم بشاشة المجهز وشاشة «طلبك جاهز»
+    const big = `<div class="num">#${esc(kNum(o))}</div>`;
+    const head = type === 'salon' ? `${big}<div class="type">🪑 صالة${o.tableNo ? ' — طاولة ' + esc(o.tableNo) : ''}</div>`
+      : type === 'takeaway' ? `${big}<div class="type">🥡 سفري</div>`
+      : `${big}<div class="type">🏍️ دلفري${(o.captainName || (captain && captain.name)) ? ' — ' + esc(o.captainName || captain.name) : ''}</div>`;
     const pg = o.pager ? `<div class="type" style="font-size:18px">📟 بيجر رقم ${esc(o.pager)}</div>` : '';
     const sub_ = o.subtotal != null ? o.subtotal : items.reduce((s, i) => s + (i.price || 0) * i.qty, 0);
     const p = (pay && pay.payment) || o.payment || {};
@@ -589,6 +603,9 @@
   window.reprintOrder = (id) => { const o = orders.find((x) => x.id === id); if (o) printHTML(receiptHTML(o, null, null, false)); };
 
   // ══════════ الوردية ══════════
+  // دلفري انسدد بالمطعم أصلاً (نقد/بطاقة) ← ما يمر على الكابتن. غيره: الكابتن يستلم من الزبون ويسدد للكاشير
+  function capPaidHere(o) { return !!(o.payment && o.payment.method && !['cod', 'later'].includes(o.payment.method)); }
+  const capOwes = (o) => !capPaidHere(o) && o.capSettled !== true;
   function listenShifts() {
     const f = fb();
     unsubs.push(f.onSnapshot(f.query(subCol('shifts'), f.where('status', '==', 'open')), (s) => {
@@ -644,7 +661,7 @@
       r.sales += o.value || 0; r.sub += o.subtotal != null ? o.subtotal : (o.value || 0); r.disc += o.discount || 0; r.service += o.service || 0; r.tax += o.tax || 0;
       const t = getOrderType(o); r.byType[t].n++; r.byType[t].v += o.value || 0;
       if (o.payment && o.payment.method === 'later') r.later += o.value || 0;
-      if (t === 'delivery') r.cod += (o.value || 0) + (o.fee || 0);
+      if (t === 'delivery' && capOwes(o)) r.cod += o.value || 0;
     });
     paidHere.forEach((o) => {
       if (o.status === 'cancelled') { r.refunds += o.payment.cash || 0; return; }
@@ -653,7 +670,8 @@
     const mv = sh.cashMoves || [];
     r.cashIn = mv.filter((m) => m.type === 'in').reduce((s, m) => s + m.amount, 0);
     r.cashOut = mv.filter((m) => m.type === 'out').reduce((s, m) => s + m.amount, 0);
-    r.expected = (sh.openingCash || 0) + r.cash - r.refunds + r.cashIn - r.cashOut;
+    r.capIn = mv.filter((m) => m.type === 'cap').reduce((s, m) => s + m.amount, 0);      // تسديد الكباتن
+    r.expected = (sh.openingCash || 0) + r.cash - r.refunds + r.cashIn + r.capIn - r.cashOut;
     return r;
   }
   function renderShift() {
@@ -689,10 +707,11 @@
       ${ln('(+) مبيعات نقدية', money(r.cash), 'pos')}
       ${r.refunds ? ln('(−) مرتجع نقدي (طلبات ملغية)', '- ' + money(r.refunds), 'neg') : ''}
       ${r.cashIn ? ln('(+) إيداعات', money(r.cashIn), 'pos') : ''}
+      ${r.capIn ? ln('(+) تسديد الكباتن', money(r.capIn), 'pos') : ''}
       ${r.cashOut ? ln('(−) مسحوبات', '- ' + money(r.cashOut), 'neg') : ''}
       ${ln('= المتوقع بالدرج', money(r.expected))}
       ${r.later ? ln('⏳ غير محصّل (آجل)', money(r.later), 'neg') : ''}
-      ${r.cod ? ln('🏍️ دلفري عند الكباتن', money(r.cod)) : ''}
+      ${r.cod ? ln('🏍️ عند الكباتن (ما مسدد)', money(r.cod)) : ''}
       ${r.disc ? ln('٪ الخصومات', money(r.disc)) : ''}
       <div class="sh-btns">
         <button class="btn-soft" onclick="shiftMove('in')">➕ إيداع نقدي</button>
@@ -780,7 +799,7 @@
       const t = getOrderType(o), v = o.value || 0;
       r.sales += v; r.disc += o.discount || 0; r.byType[t].n++; r.byType[t].v += v;
       (o.items || []).forEach((i) => { r.items += i.qty || 1; });
-      if (t === 'delivery') { r.fees += o.fee || 0; r.cod += v + (o.fee || 0); return; }
+      if (t === 'delivery' && !capPaidHere(o)) { r.fees += o.fee || 0; if (o.capSettled === true) r.cash += v; else r.cod += v; return; }
       const p = o.payment || {};
       if (p.method === 'later') r.later += v; else { r.cash += p.cash != null ? p.cash : (p.method === 'card' ? 0 : v); r.card += p.card || 0; }
     });
@@ -794,8 +813,8 @@
       <h2>${esc(title)}</h2><div class="sub">${esc(settings.receiptTitle || restData.name || '')}<br>${sub}</div><div class="div"></div>
       ${row('عدد الطلبات', r.n)}${row('عدد الأصناف المباعة', r.items)}<div class="div"></div>
       ${row('🪑 صالة (' + r.byType.salon.n + ')', fmt(r.byType.salon.v))}${row('🥡 سفري (' + r.byType.takeaway.n + ')', fmt(r.byType.takeaway.v))}${row('🏍️ دلفري (' + r.byType.delivery.n + ')', fmt(r.byType.delivery.v))}
-      ${r.fees ? row('أجور التوصيل', fmt(r.fees)) : ''}<div class="div"></div>
-      ${row('💵 نقداً', fmt(r.cash))}${row('💳 بطاقة', fmt(r.card))}${r.later ? row('⏳ آجل غير محصّل', fmt(r.later)) : ''}${r.cod ? row('🏍️ عند الكباتن', fmt(r.cod)) : ''}
+      ${r.fees ? row('أجور التوصيل (للكباتن)', fmt(r.fees)) : ''}<div class="div"></div>
+      ${row('💵 نقداً', fmt(r.cash))}${row('💳 بطاقة', fmt(r.card))}${r.later ? row('⏳ آجل غير محصّل', fmt(r.later)) : ''}${r.cod ? row('🏍️ عند الكباتن (ما مسدد)', fmt(r.cod)) : ''}
       ${r.disc ? row('٪ الخصومات', '-' + fmt(r.disc)) : ''}${r.cancN ? row('❌ ملغي (' + r.cancN + ')', fmt(r.cancV)) : ''}<div class="div"></div>
       ${row('مجموع المبيعات', fmt(r.sales) + ' د.ع', true)}${r.exp ? row('💸 المصروفات', '-' + fmt(r.exp)) : ''}
       <div class="div"></div><div style="text-align:center;font-size:10px">طُبع ${esc(new Date().toLocaleString('ar-IQ-u-nu-latn'))}${window.posUser && window.posUser.name ? ' • ' + esc(window.posUser.name) : ''}</div></body></html>`;
@@ -824,12 +843,12 @@
       ${row('عدد الطلبات', r.orders)}${row('المجموع قبل الخصم', fmt(r.sub))}${r.disc ? row('الخصومات', '-' + fmt(r.disc)) : ''}${r.service ? row('الخدمة', fmt(r.service)) : ''}${r.tax ? row('الضريبة', fmt(r.tax)) : ''}
       ${row('صافي المبيعات', fmt(r.sales), true)}<div class="div"></div>
       ${row('🪑 صالة (' + r.byType.salon.n + ')', fmt(r.byType.salon.v))}${row('🥡 سفري (' + r.byType.takeaway.n + ')', fmt(r.byType.takeaway.v))}${row('🏍️ دلفري (' + r.byType.delivery.n + ')', fmt(r.byType.delivery.v))}
-      <div class="div"></div>${row('💵 نقداً', fmt(r.cash))}${row('💳 بطاقة', fmt(r.card))}${r.later ? row('⏳ آجل غير محصّل', fmt(r.later)) : ''}${r.cod ? row('🏍️ عند الكباتن', fmt(r.cod)) : ''}
+      <div class="div"></div>${row('💵 نقداً', fmt(r.cash))}${row('💳 بطاقة', fmt(r.card))}${r.later ? row('⏳ آجل غير محصّل', fmt(r.later)) : ''}${r.cod ? row('🏍️ عند الكباتن (ما مسدد)', fmt(r.cod)) : ''}
       ${r.cancelled ? row('❌ ملغي (' + r.cancelled + ')', fmt(r.cancelledV)) : ''}<div class="div"></div>
-      ${row('رصيد افتتاحي', fmt(sh.openingCash || 0))}${row('(+) مبيعات نقدية', fmt(r.cash))}${r.refunds ? row('(−) مرتجع نقدي', '-' + fmt(r.refunds)) : ''}${r.cashIn ? row('(+) إيداعات', fmt(r.cashIn)) : ''}${r.cashOut ? row('(−) مسحوبات', '-' + fmt(r.cashOut)) : ''}
+      ${row('رصيد افتتاحي', fmt(sh.openingCash || 0))}${row('(+) مبيعات نقدية', fmt(r.cash))}${r.refunds ? row('(−) مرتجع نقدي', '-' + fmt(r.refunds)) : ''}${r.cashIn ? row('(+) إيداعات', fmt(r.cashIn)) : ''}${r.capIn ? row('(+) تسديد الكباتن', fmt(r.capIn)) : ''}${r.cashOut ? row('(−) مسحوبات', '-' + fmt(r.cashOut)) : ''}
       ${row('= المتوقع بالدرج', fmt(r.expected), true)}
       ${sh.countedCash != null ? row('النقد الفعلي', fmt(sh.countedCash), true) + row(sh.diff >= 0 ? 'زيادة' : 'عجز', fmt(Math.abs(sh.diff)), true) : ''}
-      ${(sh.cashMoves || []).length ? '<div class="div"></div>' + sh.cashMoves.map((m) => row((m.type === 'in' ? '➕ ' : '➖ ') + esc(m.note || ''), fmt(m.amount))).join('') : ''}
+      ${(sh.cashMoves || []).length ? '<div class="div"></div>' + sh.cashMoves.map((m) => row((m.type === 'cap' ? '🛵 ' : m.type === 'in' ? '➕ ' : '➖ ') + esc(m.note || ''), fmt(m.amount))).join('') : ''}
       ${sh.note ? '<div class="div"></div><div style="font-size:11px">📝 ' + esc(sh.note) + '</div>' : ''}
       </body></html>`);
   }
@@ -1053,7 +1072,7 @@
   const TAB_PERM = { reports: 'reports', acc: 'inventory' };
   const isCashierRole = () => !!(window.posUser && window.posUser.role === 'cashier');
   // التقارير والأرباح والمبيعات الشهرية: للمالك فقط (الكاشير يطبع تقرير اليوم من الوردية)
-  const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'kitchen' ? !featOn('kitchen') : t === 'capPay' ? feat('captain') : t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
+  const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'kitchen' ? !featOn('kitchen') : t === 'capPay' ? feat('captain') && myPerm('oDeliv') : t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
   // التحديث التلقائي ينتظر لحد ما الكاشير يكون فاضي: سلة فارغة، لا نافذة مفتوحة، لا مكالمة
   window.auIdle = () => !restData || (!cart.length && !document.querySelector('[id$="Ov"].on, .duty-lock.on, .call-card'));
   window.auSave = () => ({ tab: TABS.find((t) => { const e = $(t + 'Screen'); return e && e.classList.contains('on'); }) || 'cashier' });
@@ -1087,6 +1106,12 @@
     const d = document.querySelector('.dnb[data-tab="acc"]'); if (d) d.textContent = '📦 المخزون والحسابات' + (n ? ' (' + toA(n) + ')' : '');
   };
 
+  const _ordEdit = window.ordEdit;
+  window.ordEdit = (id) => {
+    const o = orders.find((x) => x.id === id);
+    if (o && capPaidHere(o)) { toast('💵 الطلب مدفوع — أي إضافة سوّيها طلب جديد'); return; }
+    _ordEdit(id);
+  };
   const _ordCancel = window.ordCancel;
   window.ordCancel = (id) => { if (!can('cancel')) { deny(); return; } _ordCancel(id); };
 
@@ -1098,6 +1123,8 @@
     $('mt4').style.display = can('settings') ? '' : 'none';
     const os = $('ordSum'); if (os) os.style.display = isCashierRole() ? 'none' : '';
     syncTypeBtns(); renderPagers(); if (window.callsPermSync) callsPermSync();
+    if (window.renderHold) renderHold();
+    if (restData) renderCapWait();
     const rn = $('restName');
     if (rn) rn.textContent = (restData.name || 'المطعم') + (u.role === 'cashier' ? ' • 👤 ' + (u.name || 'كاشير') : '');
     const bb = $('branchBtn'); if (bb) bb.hidden = !u.branches;
@@ -1523,8 +1550,8 @@
     syncTypeBtns();
     ['readyScrBtn', 'screenApkBtn'].forEach((id) => { const b = $(id); if (b) b.style.display = feat('screen') ? '' : 'none'; });
     // «شاشة المجهز» مفعّلة ← المطبخ ينشال من الكاشير (المجهز يحضّر على جهازه، ويرجع الطلب للكاشير أول ما يصير جاهز)
-    document.querySelectorAll('[data-tab="capPay"]').forEach((b) => { b.style.display = feat('captain') ? '' : 'none'; });
-    if (!feat('captain') && $('capPayScreen') && $('capPayScreen').classList.contains('on')) goTab('cashier');
+    document.querySelectorAll('[data-tab="capPay"]').forEach((b) => { b.style.display = tabAllowed('capPay') ? '' : 'none'; });
+    if (!tabAllowed('capPay') && $('capPayScreen') && $('capPayScreen').classList.contains('on')) goTab('cashier');
     const kOff = featOn('kitchen');
     document.querySelectorAll('[data-tab="kitchen"]').forEach((b) => { b.style.display = kOff ? 'none' : ''; });
     if ($('kdsLink')) $('kdsLink').style.display = kOff ? '' : 'none';
@@ -1921,12 +1948,21 @@
 
   // ══════════ المكالمات الواردة (توكن جوكر) ══════════
   const calls = new Map();      // id -> {id, number, line, data, at}
-  let callsReady = false, callRingT = null;
+  let callsReady = false, callRingT = null, ringingNow = new Set();
+  const CALL_TTL = () => window.__callTtl || 120000;   // البطاقة تختفي بعد دقيقتين
+  const callMissed = (id) => { fb().updateDoc(fb().doc(fb().db, 'incomingCalls', id), { status: 'missed' }).catch(() => {}); };
   function listenCalls() {
     const f = fb();
     callsReady = false; calls.clear(); renderCalls();
     unsubs.push(f.onSnapshot(f.query(f.collection(f.db, 'incomingCalls'), f.where('restaurantId', '==', rid()), f.where('status', '==', 'ringing')), (s) => {
-      if (!callsReady) { callsReady = true; return; }   // مكالمات قديمة قبل فتح الكاشير لا تُعرض
+      ringingNow = new Set(s.docs.map((d) => d.id));
+      if (!callsReady) {                                 // مكالمات قديمة قبل فتح الكاشير لا تُعرض
+        callsReady = true;
+        // اللي بقت «ترن» بعد ٣ دقايق أكيد فاتت ← «فائتة» (وما ننزعج بيها بكل فتحة)
+        const old = s.docs.map((d) => d.id);
+        if (old.length) setTimeout(() => old.filter((id) => ringingNow.has(id)).slice(0, 200).forEach(callMissed), CALL_TTL() + 60000);
+        return;
+      }
       s.docChanges().forEach((ch) => {
         if (ch.type === 'added') {
           const c = { id: ch.doc.id, ...ch.doc.data(), at: Date.now(), data: undefined };
@@ -1964,7 +2000,7 @@
   function renderCalls() {
     const el = $('callsBox'); if (!el) return;
     // تختفي تلقائياً بعد دقيقتين
-    [...calls.values()].forEach((c) => { if (Date.now() - c.at > 120000) calls.delete(c.id); });
+    [...calls.values()].forEach((c) => { if (Date.now() - c.at > CALL_TTL()) { calls.delete(c.id); callMissed(c.id); } });
     el.innerHTML = [...calls.values()].sort((a, b) => b.at - a.at).slice(0, 4).map((c) => `
       <div class="call-card">
         <div class="call-top"><span class="call-pulse">📞</span> مكالمة واردة <span class="call-line">خط ${esc(c.line || '—')}</span>
@@ -1977,7 +2013,7 @@
         </div>
       </div>`).join('');
   }
-  setInterval(() => { if (calls.size) renderCalls(); }, 15000);
+  setInterval(() => { if (calls.size) renderCalls(); }, Math.min(15000, CALL_TTL()));
   // انطفى الدلفري على هذا الكاشير: تختفي المكالمات الظاهرة ويوكف الرنين
   window.callsPermSync = () => { if (!myPerm('oDeliv') && calls.size) { calls.clear(); clearInterval(callRingT); renderCalls(); } };
   window.callHide = (id) => { calls.delete(id); renderCalls(); };
@@ -2093,7 +2129,6 @@
   // الكابتن ياخذ طلب (أو أكثر) ويستلم المبلغ من الزبون — أجرة التوصيل إله — ولما يرجع يسدد قيمة كل طلب للكاشير.
   // كل طلب دلفري ينحفظ capSettled:false، و«✅ تم التسديد» يخليه true فينشال من التبويب وينقص من المجموع.
   let capDue = [];
-  const capPaidHere = (o) => o.payment && o.payment.method && !['cod', 'later'].includes(o.payment.method);   // انسدد بالمطعم أصلاً
   function listenCapPay() {
     const f = fb(); capDue = []; renderCapPay();
     unsubs.push(f.onSnapshot(f.query(f.collection(f.db, 'orders'), f.where('restaurantId', '==', rid()), f.where('capSettled', '==', false)), (s) => {
@@ -2128,7 +2163,14 @@
     try {
       await fb().updateDoc(fb().doc(fb().db, 'orders', id), { capSettled: true, capSettledAtMs: Date.now(), capSettledShift: shift ? shift.id : null,
         capSettledBy: String((window.posUser && (window.posUser.name || window.posUser.email)) || '').slice(0, 80) });
-      toast('✅ تم تسديد #' + kNum(o) + ' — ' + money(o.value || 0) + ' من ' + (o.captainName || 'الكابتن'));
+      // المبلغ ينحسب بالدرج (النقد المتوقع بالوردية وتقرير الإغلاق)
+      const amt = Number(o.value) || 0;
+      if (shift && amt > 0) {
+        const mv = { type: 'cap', amount: amt, note: (o.captainName || 'كابتن') + ' — #' + kNum(o), ts: Date.now(), orderId: o.id };
+        shift.cashMoves = [...(shift.cashMoves || []), mv];
+        fb().updateDoc(sub('shifts', shift.id), { cashMoves: fb().arrayUnion(mv) }).catch(() => {});
+      }
+      toast('✅ تم تسديد #' + kNum(o) + ' — ' + money(o.value || 0) + ' من ' + (o.captainName || 'الكابتن') + (shift ? '' : ' • ⚠️ ماكو وردية مفتوحة — المبلغ ما ينحسب بالدرج'));
     } catch (e) { toast('❌ ما انحفظ التسديد — تأكد من الإنترنت'); capDue.push(o); capDue.sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0)); renderCapPay(); }
   };
 
@@ -2138,6 +2180,8 @@
   let webAttach = null, webRingT = null, webSt = null;
   const WEB_MODE = { table: '🪑 طاولة', pickup: '🛍️ استلام', delivery: '🏍️ توصيل' };
   // طلبات الويتر: دائماً تطلع للكاشير بتنبيه وتنتظر موافقته («قبول وإرسال للمطبخ»). التلقائي بس لطلبات QR الطاولات إذا مفعّل
+  // كل كاشير يشوف الطلبات الأونلاين اللي من اختصاصه: التوصيل لكاشير الدلفري، الطاولات (QR والويتر) لكاشير الصالة، الاستلام لسفري قيد التحضير
+  const webMine = (w) => myPerm(w.mode === 'delivery' ? 'oDeliv' : w.mode === 'table' ? 'oSalon' : 'oHold');
   const webAutoOk = (w) => webAutoDev() && w.source !== 'waiter' && w.mode === 'table' && onlineCfg().autoTable;
   function listenWeb() {
     const f = fb();
@@ -2150,6 +2194,7 @@
         // نسخة محلية قديمة (الكاش يرجّع الطلب «جديد» لحظياً بعد ما نحدّث مرحلته): مو طلب جديد
         if (webGone.has(w.id) || ch.doc.metadata.hasPendingWrites || w.acceptedBy || w.stage || w.orderId) { webs.delete(w.id); return; }
         if (Date.now() - (w.createdAtMs || 0) > 3 * 3600000) return;     // طلب قديم ما انقبل: ما نزعج الكاشير بيه
+        if (!webMine(w)) { webs.delete(w.id); return; }                  // مو من اختصاص هذا الكاشير (توصيل/طاولة/استلام)
         if (!webs.has(w.id) && !webAutoOk(w)) { fresh = fresh || w; if (w.source === 'waiter') toast('🧑‍🍳 طلب من ' + (w.waiter || 'الويتر') + ' — ' + webWhere(w) + ' — اقبله يروح للمطبخ'); }
         webs.set(w.id, w);
         if (webAutoOk(w)) setTimeout(() => webAccept(w.id, true), 0);
@@ -2287,8 +2332,13 @@
   // ══════════ دلفري جاهز ينتظر كابتن ══════════
   // طلب التوصيل الأونلاين يروح للمطبخ أول؛ أول ما يجهز يطلع هنا ← الكاشير يختار أي كابتن متوفر
   const capWaitSeen = new Set();
+  const CAP_NOANS = () => window.__capNoAns || 5 * 60000;
+  const capNoAns = () => orders.filter((o) => getOrderType(o) === 'delivery' && o.status === 'pending' && o.captainId
+    && !(o.rejectedBy || []).includes(o.captainId) && Date.now() - (o.assignedAtMs || o.createdAtMs || Date.now()) > CAP_NOANS());
+  setInterval(() => { if (restData) renderCapWait(); }, 30000);
   function renderCapWait() {
     const el = $('capWaitBox'); if (!el || !restData) return;
+    if (!myPerm('oDeliv')) { el.innerHTML = ''; return; }
     const list = orders.filter((o) => o.awaitCap && getOrderType(o) === 'delivery' && o.status !== 'cancelled' && !o.captainId && (o.kitchen === 'ready' || o.status === 'ready'))
       .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
     let fresh = false;
@@ -2299,7 +2349,11 @@
       <div class="call-info"><b>${esc(o.customer || '')}</b>${o.phone ? ' • <span dir="ltr">' + esc(o.phone) + '</span>' : ''}${o.address ? '<div class="ac-sub">📍 ' + esc(o.address) + '</div>' : ''}
         <div class="ac-sub">💰 ${money((o.value || 0) + (o.fee || 0))} مع التوصيل</div></div>
       <div class="call-btns"><button type="button" class="call-go" onclick="openChangeCapForOrder('${esc(o.id)}')">🛵 اختيار كابتن</button></div></div>`).join('')
-      + (list.length > 3 ? `<div class="ac-sub" style="text-align:center">+ ${toA(list.length - 3)} طلبات ثانية جاهزة — من تبويب الطلبات</div>` : '');
+      + (list.length > 3 ? `<div class="ac-sub" style="text-align:center">+ ${toA(list.length - 3)} طلبات ثانية جاهزة — من تبويب الطلبات</div>` : '')
+      + capNoAns().slice(0, 3).map((o) => `<div class="call-card cap-wait cap-noans">
+      <div class="call-top"><span class="call-pulse">⏰</span> الكابتن ما رد — ${esc(o.captainName || '')} <span class="call-line">#${esc(kNum(o))}</span></div>
+      <div class="call-info"><b>${esc(o.customer || '')}</b> • من ${toA(Math.floor((Date.now() - (o.assignedAtMs || o.createdAtMs)) / 60000))} دقيقة ما قبل الطلب</div>
+      <div class="call-btns"><button type="button" class="call-go" onclick="openChangeCapForOrder('${esc(o.id)}')">🔄 تغيير الكابتن</button></div></div>`).join('');
   }
   window.renderCapWait = renderCapWait;
   function syncWebStages() {

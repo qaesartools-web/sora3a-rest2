@@ -1211,6 +1211,7 @@ function startListeners2(){
 
 // ── REJECT NOTIFICATION ──
 function showRejectNotification(order,notice,type='reject'){
+  if(window.posPerm&&!posPerm('oDeliv'))return;   // رفض الكابتن يطلع لكاشير الدلفري بس
   rejOrderId=order.id;
   const title=type==='cancel'?'ألغى الكابتن الطلب':'رفض الكابتن الطلب';
   document.getElementById('rejTitle').textContent=title;
@@ -1371,7 +1372,7 @@ window.confirmDelivery=async()=>{
   if(changingOrderId){
     try{
       await window._fb.updateDoc(window._fb.doc(window._fb.db,'orders',changingOrderId),{
-        captainId:cap.id,captainName:cap.name,status:'pending',rejectedBy:[],awaitCap:false,
+        captainId:cap.id,captainName:cap.name,status:'pending',rejectedBy:[],awaitCap:false,assignedAtMs:Date.now(),
         customer:name,phone,address:addr,fee:fee??((orders.find(x=>x.id===changingOrderId)||{}).fee??5000)
       });
       if(window.notifyCaptain)notifyCaptain(changingOrderId);
@@ -2568,7 +2569,7 @@ window.ordCancel=id=>{
   fields.push({id:'note',label:'ملاحظة (اختياري)'});
   acDialog('❌ إلغاء الطلب #'+o.id.substring(0,6).toUpperCase(),o.status==='delivered'?'⚠️ الطلب مُسلَّم — يُسجَّل كمردود مبيعات':(o.status==='delivering'?'⚠️ الكابتن بالطريق':'المبلغ '+fmt(o.value)+' د.ع'),fields,v=>{
     const items=orderItemsFull(o);
-    orderUpdate(id,{status:'cancelled',cancelReason:v.why,cancelNote:(v.note||'').trim(),cancelledBy:'المطعم',cancelledAt:Date.now(),cancelledFrom:o.status,cancelStock:o.inv?v.stock:'none',
+    orderUpdate(id,{status:'cancelled',cancelReason:v.why,cancelNote:(v.note||'').trim(),cancelledBy:'المطعم',cancelledAt:Date.now(),cancelledFrom:o.status,cancelStock:o.inv?v.stock:'none',...(o.capSettled===false?{capSettled:null}:{}),
       cancelNotice:{by:'المطعم',time:nowT(),timestamp:Date.now(),seen:true}},'أُلغي الطلب — '+v.why,'cancelled').then(()=>{
         if(getOrderType(o)==='delivery')syncTracking(id,{status:'cancelled',value:o.value,fee:o.fee});
         if(o.inv){if(v.stock==='return')consumeItems(items,'sale_return',id,'إلغاء طلب');else wasteItems(items,id,'إلغاء بعد التحضير');saveAcc();saveMenu();renderMenu();}
@@ -2666,9 +2667,11 @@ function nextHoldNum(){
 // سفري قيد التحضير + طلبات الطاولات من الويتر أو QR (held) — تبقى لحد ما الكاشير يستلم المبلغ
 // + دلفري ينتظر التجهيز (بعدين يتحول للكابتن)
 const holdIsDeliv=o=>getOrderType(o)==='delivery'&&!!o.awaitCap&&!o.captainId;
-function heldOrders(){return orders.filter(o=>HOLD_ST.includes(o.status)&&(getOrderType(o)==='takeaway'||o.held||holdIsDeliv(o)));}
+// كل كاشير يشوف بالشريط اللي من اختصاصه (صلاحيات أنواع الطلبات)
+const holdMine=o=>!window.posPerm||posPerm(holdIsDeliv(o)?'oDeliv':holdIsTable(o)?'oSalon':'oHold');
+function heldOrders(){return orders.filter(o=>HOLD_ST.includes(o.status)&&(getOrderType(o)==='takeaway'||o.held||holdIsDeliv(o))&&holdMine(o));}
 function holdMins(o){return Math.max(0,Math.floor((Date.now()-(o.createdAtMs||Date.now()))/60000));}
-function holdLabel(o){return o.holdNum||(o.tableNo?'طاولة '+o.tableNo:(window.kNum?kNum(o):o.id.substring(0,4).toUpperCase()));}
+function holdLabel(o){return o.tableNo?'طاولة '+o.tableNo:(window.kNum?kNum(o):(o.holdNum||o.id.substring(0,4).toUpperCase()));}
 const holdIsTable=o=>getOrderType(o)==='salon'&&!!o.held;
 function renderHold(){
   const el=document.getElementById('holdStrip');if(!el)return;
@@ -2681,6 +2684,7 @@ function renderHold(){
     return `<div class="hchip ${ready?'ready':''} ${late?'late':''}" onclick="holdOpen('${o.id}')">${head}<small>${ready?'✅ جاهز':'🍳 '+toA(m)+' د'} • ${fmt(o.value)}</small></div>`;}).join('');
 }
 setInterval(()=>{if(typeof restData!=='undefined'&&restData)renderHold();},30000);
+window.renderHold=renderHold;
 
 // عند «ترحيل الطلب» ← سفري / قيد التحضير
 window.openHold=()=>{
@@ -2746,7 +2750,7 @@ async function doTransfer(id,cap,info){
   const o=orders.find(x=>x.id===id);if(!o)return;
   try{
     await orderUpdate(id,{orderType:'delivery',status:'pending',held:false,customer:info.name,phone:info.phone,address:info.addr,fee:info.fee??5000,
-      captainId:cap.id,captainName:cap.name,commission:Math.round((o.value||0)*.1),deliveryProof:null,rejectedBy:[],transferredAt:Date.now(),capSettled:false},
+      captainId:cap.id,captainName:cap.name,commission:Math.round((o.value||0)*.1),deliveryProof:null,rejectedBy:[],transferredAt:Date.now(),assignedAtMs:Date.now(),capSettled:false},
       'حُوّل الطلب إلى الكابتن '+cap.name,'pending');
     if(window.notifyCaptain)notifyCaptain(id);
     syncTracking(id,{status:'pending',value:o.value,fee:info.fee??5000,captainId:cap.id,captainName:''});
@@ -2831,7 +2835,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=40"></script>
+<script src="pos-pro.js?v=41"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
