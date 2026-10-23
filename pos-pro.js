@@ -1311,7 +1311,7 @@ const ordCancelCore = id=>{
     if (last.d === d0.getTime() && last.n > m) m = last.n;
     return tkSeen.day === bagDay() && tkSeen.n > m ? tkSeen.n : m;
   }
-  function tkRefill() {
+  function tkRefill(tries = 0) {
     const f = fb();
     if (tkBusy || !rid() || !f || !f.runTransaction || navigator.onLine === false) return;
     const day = bagDay();
@@ -1322,17 +1322,25 @@ const ordCancelCore = id=>{
       tx.set(ref, { day, n: n + TK_BLOCK, updatedAtMs: Date.now() });
       return Array.from({ length: TK_BLOCK }, (_, i) => n + 1 + i);
     }).then((nums) => { tkSeen = { day, n: Math.max(tkSeen.day === day ? tkSeen.n : 0, nums[nums.length - 1]) }; if (bagDay() !== day) return; if (tkPool.day !== day) tkPool = { day, nums: [] }; tkPool.nums.push(...nums); })
-      .catch((e) => console.warn('tickets', e.code || e.message))
-      .finally(() => { tkBusy = null; });
+      .catch((e) => { console.warn('tickets', e.code || e.message); return e; })
+      .then((e) => {
+        tkBusy = null;
+        // الحجز فشل (كاشيرين حجزوا بنفس اللحظة، أو النت تقطّع): نعيد بعد لحظة بدل ما نرجع للعدّ المحلي اللي يكرر الأرقام
+        if (e instanceof Error && tries < 3 && navigator.onLine !== false && !tkPool.nums.length) {
+          tkBusy = new Promise((r) => setTimeout(r, 200 + Math.random() * 600)).then(() => { tkBusy = null; tkRefill(tries + 1); return tkBusy; });
+        }
+      });
   }
   window.posTicketRefill = tkRefill;
   // قبل كل طلب: إذا خلصت الأرقام المحجوزة ننتظر الحجز الجاي (عادةً أقل من ثانية) بدل العدّ المحلي
-  //  (العدّ المحلي يكرر رقم كاشير ثاني) — بدون إنترنت أو إذا السيرفر تأخر أكثر من ثانيتين ونص نكمل محلياً
+  //  (العدّ المحلي يكرر رقم كاشير ثاني) — بدون إنترنت أو إذا السيرفر تأخر أكثر من 4 ثواني نكمل محلياً
   async function ensureTicket() {
     if (tkPool.day === bagDay() && tkPool.nums.length) return;
     if (navigator.onLine === false) return;
     tkRefill();
-    if (tkBusy) await Promise.race([tkBusy, new Promise((r) => setTimeout(r, 2500))]);
+    const until = Date.now() + 4000;
+    // ننتظر الحجز (ومحاولاته الثانية إذا فشل) لحد 4 ثواني
+    while (tkBusy && !(tkPool.day === bagDay() && tkPool.nums.length) && Date.now() < until) await Promise.race([tkBusy, new Promise((r) => setTimeout(r, until - Date.now()))]);
   }
   window.addEventListener('online', () => tkRefill());
   function nextTicket() {
