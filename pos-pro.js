@@ -660,7 +660,11 @@ function orderActionsCore(o){
   function listenShifts() {
     const f = fb();
     unsubs.push(f.onSnapshot(f.query(subCol('shifts'), f.where('status', '==', 'open')), (s) => {
-      const list = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.openedAtMs - a.openedAtMs);
+      // كل كاشير ورديته: بمطعم بيه أكثر من كاشير (دلفري وصالة) بنفس الوقت، كل واحد يفتح ويسكّر درجه بروحه
+      //  (نفس الحساب على أكثر من جهاز = نفس الوردية؛ والوردية القديمة بدون حساب تبقى لجهازها)
+      const me = (window.posUser && window.posUser.uid) || '';
+      const list = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => (me && x.uid === me) || (!x.uid && x.device === deviceId))
+        .sort((a, b) => b.openedAtMs - a.openedAtMs);
       shift = list[0] || null;
       if (shift) ensureShiftOrders(shift);
       $('shiftWarn').classList.toggle('on', !shift);
