@@ -391,7 +391,9 @@ function openDelivModalCore(){
       disc = { type: 'amt', value: 0, reason: '' };
       if (type === 'delivery') toast('⚠️ أُزيل خصم الزبون الدائم (الخدمة موقوفة أو الرقم تغيّر)');
     }
-    const t = totals(type), items = cartItemsForOrder(), now = nowT();
+    // السلة لحظة الضغط: إذا انتظرنا رقم الطلب، الأصناف اللي تنضاف بعدها تبقى للطلب الجاي
+    const sold = cart.slice(), t = totals(type), items = cartItemsForOrder(), now = nowT(), discUsed = disc;
+    await ensureTicket();
     const f = fb(), ref = f.doc(f.collection(f.db, 'orders'));
     const o = baseOrder(type, t, items);
     // دلفري «بعد التجهيز» (طلب أونلاين): يروح للمطبخ أول، والكاشير يحوّله لكابتن لما يجهز — الكباتن ما يشوفونه قبل
@@ -405,7 +407,7 @@ function openDelivModalCore(){
         capSettled: false,           // الكابتن يستلم المبلغ من الزبون ويسدده للكاشير (تبويب «تسديد طلبات الكابتن»)
       });
       if (later) o.awaitCap = true;
-      if (disc.loyalty && t.disc) o.loyalty = { n: disc.loyalty.n, amount: t.disc };
+      if (discUsed.loyalty && t.disc) o.loyalty = { n: discUsed.loyalty.n, amount: t.disc };
     } else {
       const tbl = pay && pay.table ? Number(pay.table) : 0;
       const salonNum = type === 'salon' ? (tbl || o.ticketNo) : null;      // نفس رقم الطلب بكل الشاشات
@@ -422,18 +424,19 @@ function openDelivModalCore(){
     if (o.webId) webLink(o, ref.id);
     if (type === 'delivery') { syncTracking(ref.id, { ...o, captainName: '' }); saveCustomer(o); }
     curCust = null;
-    applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
+    applySaleToStock(sold.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
     if (o.webId && type === 'salon') webKitchenPrint({ id: ref.id, ...o }, items, t.total);
     else printOrderAll({ id: ref.id, ...o }, receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen && !o.kSec));
     const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: later ? '🏍️ دلفري قيد التحضير — لما يجهز حوّله للكابتن' : '🏍️ دلفري — ' + (captain ? captain.name : '') };
     toast('✅ تم — ' + names[type] + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : '') + (pay && pay.payment.change ? ' • الباقي ' + money(pay.payment.change) : ''));
-    cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
+    cart = cart.filter((c) => !sold.includes(c)); if (disc === discUsed) disc = { type: 'amt', value: 0, reason: '' }; renderCart();
   };
 
   // سفري قيد التحضير: نفس الحفظ لكن بدون دفع (يُدفع عند التسليم)
-  window.holdOrder = function (info) {
+  window.holdOrder = async function (info) {
     if (!restData || !cart.length) return;
-    const t = totals('takeaway'), items = cartItemsForOrder(), now = nowT();
+    const sold = cart.slice(), t = totals('takeaway'), items = cartItemsForOrder(), now = nowT();
+    await ensureTicket();
     const f = fb(), ref = f.doc(f.collection(f.db, 'orders'));
     const o = baseOrder('takeaway', t, items);
     const num_ = o.ticketNo;          // نفس رقم الطلب اللي يطلع بشاشة المجهز و«طلبك جاهز» (مو عدّاد خاص بالجهاز)
@@ -444,11 +447,11 @@ function openDelivModalCore(){
     if (o.webId) webLink(o, ref.id);
     if (info.phone) saveCustomer({ ...o, customer: info.name || '' });
     curCust = null;
-    applySaleToStock(cart.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
+    applySaleToStock(sold.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
     if (o.kSec) printOrderAll({ id: ref.id, ...o }, null);
     else printSlip('🍳 تذكرة مطبخ #' + num_, { customer: o.customer, phone: o.phone }, items.map((i) => ({ ...i, name: i.name + (i.note ? ' [' + i.note + ']' : '') })), t.total, 'المجموع', o.note);
     toast('🍳 حُفظ الطلب #' + num_ + ' — قيد التحضير' + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : ''));
-    cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
+    cart = cart.filter((c) => !sold.includes(c)); disc = { type: 'amt', value: 0, reason: '' }; renderCart();
   };
 
   // التسليم للزبون: يطلب الدفع إن لم يُدفع
@@ -663,7 +666,7 @@ function orderActionsCore(o){
       // كل كاشير ورديته: بمطعم بيه أكثر من كاشير (دلفري وصالة) بنفس الوقت، كل واحد يفتح ويسكّر درجه بروحه
       //  (نفس الحساب على أكثر من جهاز = نفس الوردية؛ والوردية القديمة بدون حساب تبقى لجهازها)
       const me = (window.posUser && window.posUser.uid) || '';
-      const list = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => (me && x.uid === me) || (!x.uid && x.device === deviceId))
+      const list = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => (me && x.uid === me) || (!x.uid && (!x.device || x.device === deviceId)))
         .sort((a, b) => b.openedAtMs - a.openedAtMs);
       shift = list[0] || null;
       if (shift) ensureShiftOrders(shift);
@@ -1296,15 +1299,17 @@ const ordCancelCore = id=>{
   }
   // رقم يومي يتسلسل لكل الطلبات (يظهر كبيراً على تذاكر الأقسام والبيجر و«طلبك جاهز»)
   // رقم واحد لكل المطعم حتى لو أكثر من كاشير يشتغلون سوا: كل جهاز يحجز من السيرفر دفعة صغيرة أرقام مقدماً
-  // (restaurants/{rid}/counters/tickets) فالطلب ينطبع فوراً بدون انتظار؛ وبدون إنترنت (والدفعة خلصت) نرجع للعدّ المحلي
-  const TK_BLOCK = 3;
-  let tkPool = { day: '', nums: [] }, tkBusy = null;
+  // (restaurants/{rid}/counters/tickets) فالطلب ينطبع فوراً بدون انتظار؛ وبدون إنترنت نرجع للعدّ المحلي.
+  //  نحجز رقم واحد مقدماً بس: إذا الصفحة انسدت، أقصى شي يتخطى رقم واحد
+  const TK_BLOCK = 1;
+  let tkPool = { day: '', nums: [] }, tkBusy = null, tkSeen = { day: '', n: 0 };   // آخر رقم شفناه بالعدّاد
   function localTicketMax() {
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     let m = 0;
     orders.forEach((o) => { if ((o.createdAtMs || 0) >= d0.getTime() && (o.ticketNo || 0) > m) m = o.ticketNo; });
     const last = lsGet('pos_ticket_' + rid(), { d: 0, n: 0 });
-    return last.d === d0.getTime() && last.n > m ? last.n : m;
+    if (last.d === d0.getTime() && last.n > m) m = last.n;
+    return tkSeen.day === bagDay() && tkSeen.n > m ? tkSeen.n : m;
   }
   function tkRefill() {
     const f = fb();
@@ -1316,11 +1321,19 @@ const ordCancelCore = id=>{
       const n = Math.max(d.day === day ? Number(d.n) || 0 : 0, localTicketMax());
       tx.set(ref, { day, n: n + TK_BLOCK, updatedAtMs: Date.now() });
       return Array.from({ length: TK_BLOCK }, (_, i) => n + 1 + i);
-    }).then((nums) => { if (bagDay() !== day) return; if (tkPool.day !== day) tkPool = { day, nums: [] }; tkPool.nums.push(...nums); })
+    }).then((nums) => { tkSeen = { day, n: Math.max(tkSeen.day === day ? tkSeen.n : 0, nums[nums.length - 1]) }; if (bagDay() !== day) return; if (tkPool.day !== day) tkPool = { day, nums: [] }; tkPool.nums.push(...nums); })
       .catch((e) => console.warn('tickets', e.code || e.message))
       .finally(() => { tkBusy = null; });
   }
   window.posTicketRefill = tkRefill;
+  // قبل كل طلب: إذا خلصت الأرقام المحجوزة ننتظر الحجز الجاي (عادةً أقل من ثانية) بدل العدّ المحلي
+  //  (العدّ المحلي يكرر رقم كاشير ثاني) — بدون إنترنت أو إذا السيرفر تأخر أكثر من ثانيتين ونص نكمل محلياً
+  async function ensureTicket() {
+    if (tkPool.day === bagDay() && tkPool.nums.length) return;
+    if (navigator.onLine === false) return;
+    tkRefill();
+    if (tkBusy) await Promise.race([tkBusy, new Promise((r) => setTimeout(r, 2500))]);
+  }
   window.addEventListener('online', () => tkRefill());
   function nextTicket() {
     const d0 = new Date(), day = bagDay(); d0.setHours(0, 0, 0, 0);
@@ -1328,7 +1341,7 @@ const ordCancelCore = id=>{
     let n = tkPool.nums.shift();
     if (n == null) n = localTicketMax() + 1;            // ما عندنا رقم محجوز (أول طلب قبل ما يوصل الحجز، أو بدون إنترنت)
     lsSet('pos_ticket_' + rid(), { d: d0.getTime(), n: Math.max(n, localTicketMax()) });
-    if (tkPool.nums.length < 2) tkRefill();
+    if (!tkPool.nums.length) tkRefill();
     return n;
   }
   const kNum = (o) => o.ticketNo || o.salonNum || o.holdNum || String(o.id || '').slice(0, 4).toUpperCase();
@@ -2437,7 +2450,7 @@ const ordCancelCore = id=>{
     webAttach = w;
     try {
       if (w.mode === 'table') await finalOrder('salon', null, null, { table: w.table, payment: { method: 'later', cash: 0, card: 0, received: 0, change: 0 } });
-      else if (w.mode === 'pickup') holdOrder({ name: w.customer || '', phone: w.phone || '', note: w.note || '' });
+      else if (w.mode === 'pickup') await holdOrder({ name: w.customer || '', phone: w.phone || '', note: w.note || '' });
       else await finalOrder('delivery', { id: null, name: '', later: true }, { name: w.customer || '', phone: w.phone || '', addr: w.address || '', fee: settings.defaultFee || 0 });
     } finally {
       webAttach = null;
