@@ -1294,15 +1294,42 @@ const ordCancelCore = id=>{
     const sid = c ? (settings.catSection || {})[c.cat] : '';
     return sid && secById(sid) ? sid : '';
   }
-  // رقم يومي يتسلسل لكل الطلبات (يظهر كبيراً على تذاكر الأقسام والبيجر)
-  function nextTicket() {
+  // رقم يومي يتسلسل لكل الطلبات (يظهر كبيراً على تذاكر الأقسام والبيجر و«طلبك جاهز»)
+  // رقم واحد لكل المطعم حتى لو أكثر من كاشير يشتغلون سوا: كل جهاز يحجز من السيرفر دفعة صغيرة أرقام مقدماً
+  // (restaurants/{rid}/counters/tickets) فالطلب ينطبع فوراً بدون انتظار؛ وبدون إنترنت (والدفعة خلصت) نرجع للعدّ المحلي
+  const TK_BLOCK = 3;
+  let tkPool = { day: '', nums: [] }, tkBusy = null;
+  function localTicketMax() {
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     let m = 0;
     orders.forEach((o) => { if ((o.createdAtMs || 0) >= d0.getTime() && (o.ticketNo || 0) > m) m = o.ticketNo; });
-    const k = 'pos_ticket_' + rid(), last = lsGet(k, { d: 0, n: 0 });
-    if (last.d === d0.getTime() && last.n > m) m = last.n;
-    lsSet(k, { d: d0.getTime(), n: m + 1 });
-    return m + 1;
+    const last = lsGet('pos_ticket_' + rid(), { d: 0, n: 0 });
+    return last.d === d0.getTime() && last.n > m ? last.n : m;
+  }
+  function tkRefill() {
+    const f = fb();
+    if (tkBusy || !rid() || !f || !f.runTransaction || navigator.onLine === false) return;
+    const day = bagDay();
+    tkBusy = f.runTransaction(f.db, async (tx) => {
+      const ref = sub('counters', 'tickets'), s = await tx.get(ref), d = s.exists() ? s.data() : {};
+      // ما نرجع ورا أي رقم انطبع (حتى لو انطبع بدون إنترنت أو من جهاز بنسخة قديمة)
+      const n = Math.max(d.day === day ? Number(d.n) || 0 : 0, localTicketMax());
+      tx.set(ref, { day, n: n + TK_BLOCK, updatedAtMs: Date.now() });
+      return Array.from({ length: TK_BLOCK }, (_, i) => n + 1 + i);
+    }).then((nums) => { if (bagDay() !== day) return; if (tkPool.day !== day) tkPool = { day, nums: [] }; tkPool.nums.push(...nums); })
+      .catch((e) => console.warn('tickets', e.code || e.message))
+      .finally(() => { tkBusy = null; });
+  }
+  window.posTicketRefill = tkRefill;
+  window.addEventListener('online', () => tkRefill());
+  function nextTicket() {
+    const d0 = new Date(), day = bagDay(); d0.setHours(0, 0, 0, 0);
+    if (tkPool.day !== day) tkPool = { day, nums: [] };
+    let n = tkPool.nums.shift();
+    if (n == null) n = localTicketMax() + 1;            // ما عندنا رقم محجوز (أول طلب قبل ما يوصل الحجز، أو بدون إنترنت)
+    lsSet('pos_ticket_' + rid(), { d: d0.getTime(), n: Math.max(n, localTicketMax()) });
+    if (tkPool.nums.length < 2) tkRefill();
+    return n;
   }
   const kNum = (o) => o.ticketNo || o.salonNum || o.holdNum || String(o.id || '').slice(0, 4).toUpperCase();
   window.kNum = kNum;
@@ -2596,6 +2623,7 @@ function enterAppCore(){
     enterAppCore();
     listenMenu();
     listenShifts();
+    tkRefill();          // نحجز أرقام الطلبات من أول ما يفتح الكاشير
     listenCalls();
     webSt = null; listenWeb();
     listenCapPay();

@@ -263,7 +263,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 /* Order type modal */
 .cov{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:300;display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .25s;}
 .cov.on{opacity:1;pointer-events:all;}
-.cmodal{background:var(--panel);border-radius:20px;width:100%;max-width:360px;padding:20px 16px;transform:scale(.9);transition:transform .3s cubic-bezier(.4,0,.2,1);}
+.cmodal{background:var(--panel);border-radius:20px;width:100%;max-width:360px;padding:20px 16px;transform:scale(.9);transition:transform .3s cubic-bezier(.4,0,.2,1);max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;}
 .cov.on .cmodal{transform:scale(1);}
 .ctit{font-size:17px;font-weight:900;text-align:center;margin-bottom:4px;}
 .csub{font-size:12px;color:var(--muted);text-align:center;margin-bottom:14px;}
@@ -2466,7 +2466,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=45"></script>
+<script src="pos-pro.js?v=46"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
