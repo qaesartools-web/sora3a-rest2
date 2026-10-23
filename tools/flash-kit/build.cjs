@@ -15,6 +15,7 @@ const apks = [
 const web = [
   ['🛡️', 'لوحة الإدارة', 'https://qaesartools-web.github.io/sora3a-admin/', 'المنيو، الموظفين، التقارير، الفروع والخدمات.'],
   ['🧾', 'الكاشير (من المتصفح)', 'https://qaesartools-web.github.io/sora3a-rest2/', 'نفس الكاشير بدون تنصيب — لأي جهاز.'],
+  ['🍳', 'شاشة المجهز (المطبخ)', 'https://qaesartools-web.github.io/sora3a-rest2/kitchen.html', 'لشاشة أو تابلت المطبخ: كل قسم يشوف طلباته ويعلّم «جاهز». تنربط برمز.'],
   ['🧑‍🍳', 'الويتر', 'https://qaesartools-web.github.io/sora3a-rest2/waiter.html', 'الويتر يفتحه بتلفونه ويطلب للطاولات.'],
   ['📺', 'شاشة «طلبك جاهز»', 'https://qaesartools-web.github.io/sora3a-rest2/screen.html', 'تنفتح على أي تلفزيون ذكي أو تابلت.'],
   ['🛵', 'الكابتن (للآيفون)', 'https://qaesartools-web.github.io/sora3a-captain/captain.html', 'للكابتن اللي عنده آيفون.'],
