@@ -1301,8 +1301,9 @@ const ordCancelCore = id=>{
   // رقم واحد لكل المطعم حتى لو أكثر من كاشير يشتغلون سوا: كل جهاز يحجز من السيرفر دفعة صغيرة أرقام مقدماً
   // (restaurants/{rid}/counters/tickets) فالطلب ينطبع فوراً بدون انتظار؛ وبدون إنترنت نرجع للعدّ المحلي.
   //  نحجز رقم واحد مقدماً بس: إذا الصفحة انسدت، أقصى شي يتخطى رقم واحد
-  const TK_BLOCK = 1;
-  let tkPool = { day: '', nums: [] }, tkBusy = null, tkSeen = { day: '', n: 0 };   // آخر رقم شفناه بالعدّاد
+  //  وإذا النت بطيء (الحجز ياخذ أكثر من ثانية) نحجز 3 مقدماً حتى ما يخلص المحجوز ونرجع للعدّ المحلي اللي يكرر الأرقام
+  let TK_BLOCK = 1;
+  let tkPool = { day: '', nums: [] }, tkBusy = null, tkBusyAt = 0, tkSeen = { day: '', n: 0 };   // آخر رقم شفناه بالعدّاد
   function localTicketMax() {
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     let m = 0;
@@ -1313,20 +1314,24 @@ const ordCancelCore = id=>{
   }
   function tkRefill(tries = 0) {
     const f = fb();
-    if (tkBusy || !rid() || !f || !f.runTransaction || navigator.onLine === false) return;
-    const day = bagDay();
-    tkBusy = f.runTransaction(f.db, async (tx) => {
+    // حجز معلّق أكثر من 8 ثواني (النت انقطع بنصه) ما يوقف الحجوزات الجاية — وإذا وصل بعدين أرقامه تنضاف عادي
+    if ((tkBusy && Date.now() - tkBusyAt < 8000) || !rid() || !f || !f.runTransaction || navigator.onLine === false) return;
+    const day = bagDay(), t0 = Date.now(), block = TK_BLOCK;
+    tkBusyAt = t0;
+    const job = tkBusy = f.runTransaction(f.db, async (tx) => {
       const ref = sub('counters', 'tickets'), s = await tx.get(ref), d = s.exists() ? s.data() : {};
       // ما نرجع ورا أي رقم انطبع (حتى لو انطبع بدون إنترنت أو من جهاز بنسخة قديمة)
       const n = Math.max(d.day === day ? Number(d.n) || 0 : 0, localTicketMax());
-      tx.set(ref, { day, n: n + TK_BLOCK, updatedAtMs: Date.now() });
-      return Array.from({ length: TK_BLOCK }, (_, i) => n + 1 + i);
-    }).then((nums) => { tkSeen = { day, n: Math.max(tkSeen.day === day ? tkSeen.n : 0, nums[nums.length - 1]) }; if (bagDay() !== day) return; if (tkPool.day !== day) tkPool = { day, nums: [] }; tkPool.nums.push(...nums); })
-      .catch((e) => { console.warn('tickets', e.code || e.message); return e; })
+      tx.set(ref, { day, n: n + block, updatedAtMs: Date.now() });
+      return Array.from({ length: block }, (_, i) => n + 1 + i);
+    }).then((nums) => { TK_BLOCK = Date.now() - t0 > 1000 ? 3 : 1; tkSeen = { day, n: Math.max(tkSeen.day === day ? tkSeen.n : 0, nums[nums.length - 1]) }; if (bagDay() !== day) return; if (tkPool.day !== day) tkPool = { day, nums: [] }; tkPool.nums.push(...nums); })
+      .catch((e) => { TK_BLOCK = 3; console.warn('tickets', e.code || e.message); return e; })
       .then((e) => {
+        if (tkBusy !== job) return;
         tkBusy = null;
         // الحجز فشل (كاشيرين حجزوا بنفس اللحظة، أو النت تقطّع): نعيد بعد لحظة بدل ما نرجع للعدّ المحلي اللي يكرر الأرقام
         if (e instanceof Error && tries < 3 && navigator.onLine !== false && !tkPool.nums.length) {
+          tkBusyAt = Date.now();
           tkBusy = new Promise((r) => setTimeout(r, 200 + Math.random() * 600)).then(() => { tkBusy = null; tkRefill(tries + 1); return tkBusy; });
         }
       });
@@ -1347,9 +1352,9 @@ const ordCancelCore = id=>{
     const d0 = new Date(), day = bagDay(); d0.setHours(0, 0, 0, 0);
     if (tkPool.day !== day) tkPool = { day, nums: [] };
     let n = tkPool.nums.shift();
-    if (n == null) n = localTicketMax() + 1;            // ما عندنا رقم محجوز (أول طلب قبل ما يوصل الحجز، أو بدون إنترنت)
+    if (n == null) { n = localTicketMax() + 1; window.__tkLocal = (window.__tkLocal || 0) + 1; }   // ما عندنا رقم محجوز (أول طلب قبل ما يوصل الحجز، أو بدون إنترنت)
     lsSet('pos_ticket_' + rid(), { d: d0.getTime(), n: Math.max(n, localTicketMax()) });
-    if (!tkPool.nums.length) tkRefill();
+    if (tkPool.nums.length < (TK_BLOCK > 1 ? 2 : 1)) tkRefill();
     return n;
   }
   const kNum = (o) => o.ticketNo || o.salonNum || o.holdNum || String(o.id || '').slice(0, 4).toUpperCase();
