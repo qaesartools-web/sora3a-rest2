@@ -1348,14 +1348,17 @@ const ordCancelCore = id=>{
     while (tkBusy && !(tkPool.day === bagDay() && tkPool.nums.length) && Date.now() < until) await Promise.race([tkBusy, new Promise((r) => setTimeout(r, until - Date.now()))]);
   }
   window.addEventListener('online', () => tkRefill());
+  // رقم العدّ المحلي (بدون إنترنت) ياخذ حرف الجهاز: «#12ب» — حتى لو كاشير ثاني عدّ هو هم بدون إنترنت ما يتكرر نفس الرقم
+  const TK_TAGS = 'أبجدهوزحطيكلمنسعفصقرشتثخذضظغ';
+  const tkTag = () => { let h = 0; for (const c of String(deviceId || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return TK_TAGS[h % TK_TAGS.length]; };
   function nextTicket() {
     const d0 = new Date(), day = bagDay(); d0.setHours(0, 0, 0, 0);
     if (tkPool.day !== day) tkPool = { day, nums: [] };
-    let n = tkPool.nums.shift();
-    if (n == null) { n = localTicketMax() + 1; window.__tkLocal = (window.__tkLocal || 0) + 1; }   // ما عندنا رقم محجوز (أول طلب قبل ما يوصل الحجز، أو بدون إنترنت)
+    let n = tkPool.nums.shift(), local = false;
+    if (n == null) { n = localTicketMax() + 1; local = true; window.__tkLocal = (window.__tkLocal || 0) + 1; }   // ما عندنا رقم محجوز (أول طلب قبل ما يوصل الحجز، أو بدون إنترنت)
     lsSet('pos_ticket_' + rid(), { d: d0.getTime(), n: Math.max(n, localTicketMax()) });
     if (tkPool.nums.length < (TK_BLOCK > 1 ? 2 : 1)) tkRefill();
-    return n;
+    return local ? n + tkTag() : n;
   }
   const kNum = (o) => o.ticketNo || o.salonNum || o.holdNum || String(o.id || '').slice(0, 4).toUpperCase();
   window.kNum = kNum;
