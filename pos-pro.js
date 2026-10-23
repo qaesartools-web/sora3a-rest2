@@ -2410,10 +2410,13 @@ const ordCancelCore = id=>{
     }
   }
   const webWhere = (w) => w.mode === 'table' ? WEB_MODE.table + ' ' + toA(w.table || '') : WEB_MODE[w.mode] || '';
+  // نرسم البطاقات من جديد بس إذا تغيّر محتواها: طلبات تخص كاشير ثاني أو تحديثات ما تبين هنا ما تعيد الرسم
+  // (إعادة الرسم وقت الضغط تضيّع الضغطة، وبالزحمة كل طلب جديد كان يعيد رسمها)
+  const setHtml = (el, html) => { if (el.__html !== html) { el.__html = html; el.innerHTML = html; } };
   function renderWeb() {
     const el = $('webBox'); if (!el) return;
     const list = webVisible().sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
-    el.innerHTML = list.slice(0, 3).map((w) => {
+    setHtml(el, list.slice(0, 3).map((w) => {
       const items = webItems(w), miss = (w.items || []).length - items.length, busy = webBusy.has(w.id);
       const sum = items.reduce((s, i) => s + i.price * i.qty, 0) + (w.mode === 'delivery' ? (settings.defaultFee || 0) : 0);
       const mins = Math.max(0, Math.floor((Date.now() - (w.createdAtMs || Date.now())) / 60000));
@@ -2430,7 +2433,7 @@ const ordCancelCore = id=>{
           <button type="button" class="call-go" onclick="webAccept('${esc(w.id)}')" ${busy || !items.length ? 'disabled' : ''}>${busy ? '⏳ …' : '✅ قبول وإرسال للمطبخ'}</button>
           <button type="button" onclick="webReject('${esc(w.id)}')" ${busy ? 'disabled' : ''}>✕ رفض</button>
         </div></div>`;
-    }).join('') + (list.length > 3 ? `<div class="call-card web-more">+ ${toA(list.length - 3)} طلبات ثانية بالانتظار</div>` : '');
+    }).join('') + (list.length > 3 ? `<div class="call-card web-more">+ ${toA(list.length - 3)} طلبات ثانية بالانتظار</div>` : ''));
   }
   setInterval(() => { if (webs.size) renderWeb(); }, 30000);
   // القبول مرة وحدة بس حتى لو أكثر من جهاز ضغط سوا
@@ -2514,13 +2517,13 @@ const ordCancelCore = id=>{
   setInterval(() => { if (restData) renderCapWait(); }, 30000);
   function renderCapWait() {
     const el = $('capWaitBox'); if (!el || !restData) return;
-    if (!myPerm('oDeliv')) { el.innerHTML = ''; return; }
+    if (!myPerm('oDeliv')) { setHtml(el, ''); return; }
     const list = orders.filter((o) => o.awaitCap && getOrderType(o) === 'delivery' && o.status !== 'cancelled' && !o.captainId && (o.kitchen === 'ready' || o.status === 'ready'))
       .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
     let fresh = false;
     list.forEach((o) => { if (!capWaitSeen.has(o.id)) { capWaitSeen.add(o.id); fresh = true; } });
     if (fresh) { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} try { kdsBeep(); } catch (e) {} }
-    el.innerHTML = list.slice(0, 3).map((o) => `<div class="call-card cap-wait">
+    setHtml(el, list.slice(0, 3).map((o) => `<div class="call-card cap-wait">
       <div class="call-top"><span class="call-pulse">🛵</span> دلفري جاهز — اختار الكابتن <span class="call-line">#${esc(kNum(o))}</span></div>
       <div class="call-info"><b>${esc(o.customer || '')}</b>${o.phone ? ' • <span dir="ltr">' + esc(o.phone) + '</span>' : ''}${o.address ? '<div class="ac-sub">📍 ' + esc(o.address) + '</div>' : ''}
         <div class="ac-sub">💰 ${money((o.value || 0) + (o.fee || 0))} مع التوصيل</div></div>
@@ -2529,7 +2532,7 @@ const ordCancelCore = id=>{
       + capNoAns().slice(0, 3).map((o) => `<div class="call-card cap-wait cap-noans">
       <div class="call-top"><span class="call-pulse">⏰</span> الكابتن ما رد — ${esc(o.captainName || '')} <span class="call-line">#${esc(kNum(o))}</span></div>
       <div class="call-info"><b>${esc(o.customer || '')}</b> • من ${toA(Math.floor((Date.now() - (o.assignedAtMs || o.createdAtMs)) / 60000))} دقيقة ما قبل الطلب</div>
-      <div class="call-btns"><button type="button" class="call-go" onclick="openChangeCapForOrder('${esc(o.id)}')">🔄 تغيير الكابتن</button></div></div>`).join('');
+      <div class="call-btns"><button type="button" class="call-go" onclick="openChangeCapForOrder('${esc(o.id)}')">🔄 تغيير الكابتن</button></div></div>`).join(''));
   }
   window.renderCapWait = renderCapWait;
   function syncWebStages() {
