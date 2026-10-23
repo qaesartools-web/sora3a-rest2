@@ -185,7 +185,8 @@ textarea.inp{resize:vertical;min-height:70px}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, setDoc, collection, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, doc, setDoc, collection, onSnapshot, getDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const app = initializeApp({
   apiKey: "AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ",
@@ -196,6 +197,9 @@ const app = initializeApp({
   appId: "1:516304449260:web:0110ba6c2621d6a16dbfc9"
 }, "menu");
 const db = getFirestore(app);
+// الزبون يدخل «مجهول» تلقائياً (بدون ما يحس) — حتى السيرفر يحدد طلب واحد لكل جهاز كل 20 ثانية ويوقف الطلبات الوهمية
+const auth = getAuth(app);
+const GAP = 20000, GAP_KEY = 'sora3a_web_gap';   // وقت آخر طلب من هذا الجهاز (لأي مطعم)
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -430,6 +434,8 @@ async function send() {
   if (mode !== 'table' && !/^[0-9+]{7,20}$/.test(phone)) return err('اكتب رقم موبايل صحيح', 'cPhone');
   if ($('cPhone')) $('cPhone').value = phone;
   if (mode === 'delivery' && addr.length < 3) return err('اكتب العنوان حتى يوصلك الكابتن', 'cAddr');
+  const wait = () => GAP - (Date.now() - (Number(ls.get(GAP_KEY, 0)) || 0));
+  if (wait() > 0) return err('⏳ استنى ' + Math.ceil(wait() / 1000) + ' ثانية قبل الطلب الجديد');
   Object.assign(who, { name, phone: phone || who.phone || '', addr: addr || who.addr || '' });
   ls.set('sora3a_cust', who);
   const ref = doc(collection(db, 'webOrders'));
@@ -443,14 +449,19 @@ async function send() {
   sending = true; renderCart();
   const slow = setTimeout(() => { const e = $('cErr'); if (e && sending) { e.textContent = '📶 الشبكة ضعيفة — لا تسكّر الصفحة، الطلب راح يوصل'; e.hidden = false; } }, 8000);
   try {
-    await setDoc(ref, data);
-    ls.set(LAST, { id: ref.id, at: Date.now() });
+    if (!auth.currentUser) await signInAnonymously(auth);
+    // الطلب + ختم الحد بنفس الدفعة: السيرفر يرفض إذا نفس الجهاز طلب قبل أقل من 20 ثانية
+    const b = writeBatch(db);
+    b.set(ref, data);
+    b.set(doc(db, 'webRate', auth.currentUser.uid), { at: serverTimestamp() });
+    await b.commit();
+    ls.set(LAST, { id: ref.id, at: Date.now() }); ls.set(GAP_KEY, Date.now());
     cart = []; sending = false;
     closeSheets(); renderList(); renderBar();
     watchOrder(ref.id);
   } catch (e) {
     sending = false; renderCart();
-    err(e && e.code === 'permission-denied' ? '⏸️ المطعم ما يستقبل طلبات أونلاين هسه — جرّب بعدين أو اتصل بيهم' : '❌ ما وصل الطلب — تأكد من الإنترنت وجرّب مرة ثانية');
+    err(e && e.code === 'permission-denied' ? (wait() > -5000 ? '⏳ استنى شوية قبل الطلب الجديد' : '⏸️ المطعم ما يستقبل طلبات أونلاين هسه — جرّب بعدين أو اتصل بيهم') : '❌ ما وصل الطلب — تأكد من الإنترنت وجرّب مرة ثانية');
   } finally { clearTimeout(slow); }
 }
 
