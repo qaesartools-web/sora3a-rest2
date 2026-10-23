@@ -126,6 +126,8 @@ function saveMenuCore(){try{localStorage.setItem(menuKey(),JSON.stringify(menu))
     saveMenu({ local: true });
     renderMenu();
     if ($('menuScreen').classList.contains('on')) { initMenuManage(); if ($('mListSec').style.display !== 'none') renderMList(); }
+    // منيو جاي من جهاز ثاني أو من برج سرعة (رفع إكسل) ← نحدّث منيو الباركود للزبائن
+    pubSoon();
   }
 
   let menuUnsub = null;
