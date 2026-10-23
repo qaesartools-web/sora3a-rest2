@@ -15,6 +15,11 @@ const CFG = {
   appId: "1:516304449260:web:0110ba6c2621d6a16dbfc9"
 };
 export const app = initializeApp(CFG, "pos-v2");
+// App Check (reCAPTCHA v3): السيرفر يعرف إن الطلب جاي من تطبيقاتنا الحقيقية (بدون ما يحس المستخدم) — على الموقع بس، مو بالتجارب المحلية
+const APPCHECK_KEY = '6LdWa_0tAAAAAEWXuLi8yrdnPjQmx-r-ayyoZ07h';
+const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; if (!document.getElementById('acHide')) document.head.insertAdjacentHTML('beforeend', '<style id="acHide">.grecaptcha-badge{visibility:hidden}</style>');
+  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => m.initializeAppCheck(a, { provider: new m.ReCaptchaV3Provider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true })).catch(() => {}); };
+appCheck(app);
 export const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
 export const db = getFirestore(app);
 export const logout = () => signOut(auth);
@@ -132,6 +137,7 @@ let scrFb = null;
 export function screenFb() {
   if (!scrFb) {
     const a = initializeApp(CFG, 'sora3a-screen');
+    appCheck(a);
     scrFb = { app: a, auth: initializeAuth(a, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] }), db: getFirestore(a) };
   }
   return scrFb;
