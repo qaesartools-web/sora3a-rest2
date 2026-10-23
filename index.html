@@ -1486,7 +1486,7 @@ window.printRep=()=>{
       if(o.status==='delivered')capMap[o.captainId].delivered++;
     });
     detailsHTML=Object.values(capMap).map(cap=>`
-      <div class="row"><span>🏍️ ${cap.name}</span><span>${cap.delivered} مسلّمة / ${cap.count} طلب</span></div>`).join('');
+      <div class="row"><span>🏍️ ${esc(cap.name)}</span><span>${cap.delivered} مسلّمة / ${cap.count} طلب</span></div>`).join('');
   }else{
     detailsHTML=fil.map(o=>`
       <div class="row"><span>${o.id.substring(0,6).toUpperCase()} ${esc(t12(o.createdAt))}</span><span>${fmt(o.value||0)} د.ع</span></div>`).join('');
@@ -1529,7 +1529,7 @@ window.initMenuManage=()=>{
 window.renderNVars=()=>{
   document.getElementById('nVarsList').innerHTML=nVars.map((v,i)=>`
     <div class="vrow">
-      <input class="finp" style="margin-bottom:0;" placeholder="الاسم" value="${v.name}" oninput="nVars[${i}].name=this.value">
+      <input class="finp" style="margin-bottom:0;" placeholder="الاسم" value="${esc(v.name)}" oninput="nVars[${i}].name=this.value">
       <input class="finp" style="margin-bottom:0;width:80px;" placeholder="السعر" type="number" value="${v.price||''}" oninput="nVars[${i}].price=parseInt(this.value)||0">
       ${nVars.length>1?`<button class="vdel" onclick="delNVar(${i})">✕</button>`:''}
     </div>`).join('');
@@ -1559,7 +1559,7 @@ window.renderMList=()=>{
   document.getElementById('mItemsList').innerHTML=all.map(p=>`
     <div class="micard">
       <div class="miimg">${p.img?`<img src="${p.img}">`:`<span>${p.emoji}</span>`}</div>
-      <div class="miinfo"><div class="miname">${p.name}</div><div class="micat">${p.emoji} ${p.catName}</div><div class="miprice">${p.variants.map(v=>fmt(v.price)+' د.ع').join(' / ')}</div>${typeof p.stock==='number'?`<div class="micat">📦 المخزون: ${toA(p.stock)}</div>`:''}${!isOwnerPOS()?'':(()=>{const parts=p.variants.map(v=>{const cs=unitCost(p.name,v.name);return cs>0&&v.price>0?(v.name!=='وحدة'?v.name+': ':'')+'تكلفة '+fmt(Math.round(cs))+' • ربح '+toA(Math.round((v.price-cs)/v.price*100))+'٪':null;}).filter(Boolean);return parts.length?`<div class="micat" style="color:#16a34a">💰 ${parts.join(' | ')}</div>`:`<div class="micat" style="color:#d97706">⚠️ بدون تكلفة</div>`;})()}</div>
+      <div class="miinfo"><div class="miname">${esc(p.name)}</div><div class="micat">${esc(p.emoji)} ${esc(p.catName)}</div><div class="miprice">${p.variants.map(v=>fmt(v.price)+' د.ع').join(' / ')}</div>${typeof p.stock==='number'?`<div class="micat">📦 المخزون: ${toA(p.stock)}</div>`:''}${!isOwnerPOS()?'':(()=>{const parts=p.variants.map(v=>{const cs=unitCost(p.name,v.name);return cs>0&&v.price>0?(v.name!=='وحدة'?v.name+': ':'')+'تكلفة '+fmt(Math.round(cs))+' • ربح '+toA(Math.round((v.price-cs)/v.price*100))+'٪':null;}).filter(Boolean);return parts.length?`<div class="micat" style="color:#16a34a">💰 ${parts.join(' | ')}</div>`:`<div class="micat" style="color:#d97706">⚠️ بدون تكلفة</div>`;})()}</div>
       <div class="miacts">
         <button class="mibtn" style="background:var(--orange);" onclick="editItem(${p.ci},${p.pi})">✏️</button>
         <button class="mibtn" style="background:var(--green);" onclick="setItemStock(${p.ci},${p.pi})">📦</button>
