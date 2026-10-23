@@ -344,3 +344,10 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 .cp-row .btn-main{padding:9px 12px;font-size:12.5px;white-space:nowrap}
 .cp-st{display:inline-block;font-size:10.5px;font-weight:800;border-radius:999px;padding:1px 8px;background:var(--panel2)}
 .cp-st.done{background:color-mix(in srgb,#16a34a 14%,var(--panel));color:#16a34a}
+
+/* الأقسام بشاشة الكاشير: كلها تبين — تنزل لسطر ثاني بدل ما تنقص من اليسار (بالموبايل تبقى سطر واحد يتسحب) */
+@media (min-width: 700px) {
+  .cats { flex-wrap: wrap !important; overflow-x: visible !important; row-gap: 8px !important; max-height: 34vh; overflow-y: auto !important; align-content: flex-start; }
+  .cats::-webkit-scrollbar { width: 6px; }
+  .cats::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+}
