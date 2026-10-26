@@ -1,6 +1,6 @@
 // سرعة — الويتر: Service Worker صغير خاص بالويتر (التثبيت + فتح سريع)
 // نطاقه /sora3a-rest2/waiter فقط، فما يتدخل بالكاشير. Firebase يشتغل بالشبكة مباشرة.
-const CACHE = 'waiter-v3';
+const CACHE = 'waiter-v4';
 const SHELL = ['waiter.html', 'staff.js', 'vendor/qrcode.js', 'waiter.webmanifest', 'waiter-192.png', 'waiter-512.png'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {})).then(() => self.skipWaiting()));
