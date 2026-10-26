@@ -5,25 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>المنيو — اطلب من تلفونك</title>
 <meta name="description" content="منيو المطعم — اطلب من الطاولة أو من البيت، وتابع طلبك لحظة بلحظة.">
-<meta name="theme-color" content="#0A100D">
+<meta name="theme-color" content="#102A43">
 <link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@600;700&display=swap" rel="stylesheet">
 <style>
+/* تصميم «بحري ومرجاني»: رأس كحلي، وأزرار مرجانية تفتح النفس — نفس الشكل حتى لو تلفون الزبون على الوضع الغامق */
 :root{
-  --ink:#0A100D; --neon:#3DF08B; --saf:#FFB627; --chili:#FF4D2E;
-  --bg:#FAF7F0; --card:#FFFFFF; --soft:#F1EDE2; --line:#E6E0D2; --text:#0A100D; --muted:#676C64;
-  --btn:#0A100D; --btn-fg:#3DF08B; --ok:#0F9D58; --shadow:0 10px 30px rgba(10,16,13,.10);
+  --ink:#102A43; --neon:#FFB4A8; --saf:#FFB020; --chili:#DC2626;
+  --bg:#F5F8FB; --card:#FFFFFF; --soft:#E7EEF6; --line:#D3DEEB; --text:#0D1B2A; --muted:#5E6E80;
+  --btn:#FF6B57; --btn-fg:#FFFFFF; --ok:#0E9F6E; --shadow:0 10px 30px rgba(16,42,67,.10);
+  --hd-bg:linear-gradient(150deg,#1B3B5F,#0A1B2E); --hd-sub:#B7C8DB; --hd-glow:rgba(255,107,87,.4);
   --font:'IBM Plex Sans Arabic',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif; --kufi:'Reem Kufi','IBM Plex Sans Arabic',sans-serif;
-}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0A100D; --card:#131B16; --soft:#1A241E; --line:#26322B; --text:#F1EFE8; --muted:#9AA39C;
-  --btn:#3DF08B; --btn-fg:#0A100D; --ok:#3DF08B; --shadow:0 10px 30px rgba(0,0,0,.4);
-}}
-:root[data-theme="dark"]{
-  --bg:#0A100D; --card:#131B16; --soft:#1A241E; --line:#26322B; --text:#F1EFE8; --muted:#9AA39C;
-  --btn:#3DF08B; --btn-fg:#0A100D; --ok:#3DF08B; --shadow:0 10px 30px rgba(0,0,0,.4);
+  color-scheme:light;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
@@ -34,12 +29,12 @@ button{cursor:pointer}
 .wrap{max-width:720px;margin:0 auto;padding:0 16px}
 
 /* رأس الصفحة */
-.hd{background:var(--ink);color:#FAF7F0;padding:22px 0 26px;border-radius:0 0 28px 28px;position:relative;overflow:hidden}
-.hd::after{content:"";position:absolute;inset:auto -60px -90px auto;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(61,240,139,.28),transparent 65%);pointer-events:none}
+.hd{background:var(--hd-bg);color:#FFFFFF;padding:22px 0 26px;border-radius:0 0 28px 28px;position:relative;overflow:hidden}
+.hd::after{content:"";position:absolute;inset:auto -60px -90px auto;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,var(--hd-glow),transparent 65%);pointer-events:none}
 .hd h1{font-family:var(--kufi);font-size:28px;line-height:1.3;text-wrap:balance}
-.hd .sub{color:#B9C2BB;font-size:14px;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 12px}
-.hd .sub a{color:#B9C2BB;text-decoration:none}
-.pill{display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:6px 14px;border-radius:999px;background:var(--neon);color:var(--ink);font-weight:700;font-size:14px}
+.hd .sub{color:var(--hd-sub);font-size:14px;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 12px}
+.hd .sub a{color:var(--hd-sub);text-decoration:none}
+.pill{display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:6px 14px;border-radius:999px;background:var(--btn);color:var(--btn-fg);font-weight:700;font-size:14px}
 .banner{margin:14px 0 0;padding:12px 14px;border-radius:16px;background:var(--card);border:1px solid var(--line);font-size:14px;box-shadow:var(--shadow)}
 .banner.warn{border-color:var(--saf);background:color-mix(in srgb,var(--saf) 14%,var(--card))}
 
@@ -71,7 +66,7 @@ button{cursor:pointer}
 
 /* شريط السلة */
 .bar{position:fixed;inset:auto 0 0 0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));z-index:40;background:linear-gradient(transparent,var(--bg) 35%)}
-.bar button{display:flex;align-items:center;gap:10px;width:100%;max-width:688px;margin:0 auto;border:none;border-radius:18px;padding:15px 18px;background:var(--btn);color:var(--btn-fg);font-weight:700;font-size:16px;box-shadow:0 12px 30px rgba(10,16,13,.3)}
+.bar button{display:flex;align-items:center;gap:10px;width:100%;max-width:688px;margin:0 auto;border:none;border-radius:18px;padding:15px 18px;background:var(--btn);color:var(--btn-fg);font-weight:700;font-size:16px;box-shadow:0 12px 30px rgba(16,42,67,.3)}
 .bar .n{background:var(--btn-fg);color:var(--btn);border-radius:10px;min-width:28px;height:28px;display:grid;place-items:center;font-size:14px;padding:0 6px}
 .bar .t{margin-inline-start:auto}
 
@@ -133,19 +128,19 @@ textarea.inp{resize:vertical;min-height:70px}
 .btn2.hl{background:var(--btn);color:var(--btn-fg);border-color:var(--btn)}
 .state{text-align:center;padding:60px 20px;color:var(--muted);font-size:16px}
 .state b{display:block;font-size:44px;margin-bottom:8px}
-.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-20px);background:var(--ink);color:#FAF7F0;padding:10px 18px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;transition:.2s;z-index:90;pointer-events:none;max-width:calc(100vw - 32px)}
+.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-20px);background:var(--ink);color:#FFFFFF;padding:10px 18px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;transition:.2s;z-index:90;pointer-events:none;max-width:calc(100vw - 32px)}
 .toast.on{opacity:1;transform:translateX(-50%)}
 .ft{text-align:center;color:var(--muted);font-size:12.5px;padding:30px 0 10px}
 .ft a{color:inherit;font-weight:700}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
 /* تثبيت تطبيق المطعم (PWA) */
-.inst{position:fixed;inset:calc(10px + env(safe-area-inset-top)) 10px auto 10px;z-index:200;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:12px;background:#0A100D;color:#FAF7F0;border-radius:16px;padding:11px 13px;box-shadow:0 12px 34px rgba(10,16,13,.3)}
+.inst{position:fixed;inset:calc(10px + env(safe-area-inset-top)) 10px auto 10px;z-index:200;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:12px;background:var(--ink);color:#FFFFFF;border-radius:16px;padding:11px 13px;box-shadow:0 12px 34px rgba(16,42,67,.3)}
 .inst img{width:46px;height:46px;border-radius:12px;flex:none;background:#fff}
 .inst-t{flex:1;min-width:0;line-height:1.5}
 .inst-t b{display:block;font-size:15px}
-.inst-t span{display:block;font-size:12.5px;color:#B9C2BB}
-.inst-t span b{display:inline;font-size:inherit;color:#FAF7F0}
-.inst-go{flex:none;border:none;border-radius:12px;background:#3DF08B;color:#0A100D;font-weight:700;font-size:15px;padding:10px 15px;font-family:inherit}
+.inst-t span{display:block;font-size:12.5px;color:var(--hd-sub)}
+.inst-t span b{display:inline;font-size:inherit;color:#FFFFFF}
+.inst-go{flex:none;border:none;border-radius:12px;background:var(--btn);color:var(--btn-fg);font-weight:700;font-size:15px;padding:10px 15px;font-family:inherit}
 .inst-x{flex:none;border:none;background:none;color:#8E978F;font-size:19px;padding:4px 6px;cursor:pointer}
 </style>
 </head>
@@ -552,7 +547,7 @@ start();
   function roundRect(x, a, b, w, h, r) { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
   function iconUrl(size, name) {
     var c = document.createElement('canvas'); c.width = c.height = size; var x = c.getContext('2d');
-    var g = x.createLinearGradient(0, 0, size, size); g.addColorStop(0, '#4F6BED'); g.addColorStop(1, '#1E3A8A');
+    var g = x.createLinearGradient(0, 0, size, size); g.addColorStop(0, '#FF8A75'); g.addColorStop(1, '#E04A36');
     x.fillStyle = g; roundRect(x, 0, 0, size, size, size * 0.22); x.fill();
     var letter = (String(name || '').trim().replace(/^مطعم\s+/, '')[0] || 'س');
     x.fillStyle = '#fff'; x.font = '700 ' + Math.round(size * 0.5) + 'px "IBM Plex Sans Arabic", system-ui, sans-serif';
@@ -570,7 +565,7 @@ start();
     var dir = location.href.replace(/[^/]*(\?.*)?(#.*)?$/, '');
     var manifest = {
       name: name, short_name: name.slice(0, 12), description: 'منيو ' + name + ' — اطلب من تلفونك',
-      start_url: location.href, scope: dir, display: 'standalone', background_color: '#FAF7F0', theme_color: '#0A100D', lang: 'ar', dir: 'rtl',
+      start_url: location.href, scope: dir, display: 'standalone', background_color: '#F5F8FB', theme_color: '#102A43', lang: 'ar', dir: 'rtl',
       icons: [{ src: iconUrl(192, name), sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: iconUrl(512, name), sizes: '512x512', type: 'image/png', purpose: 'any maskable' }]
     };
     if (manUrl) { try { URL.revokeObjectURL(manUrl); } catch (e) {} }

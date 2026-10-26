@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>سرعة — الويتر</title>
-<meta name="theme-color" content="#0A100D">
+<meta name="theme-color" content="#0B0E1A">
 <link rel="icon" href="waiter-192.png">
 <link rel="manifest" href="waiter.webmanifest">
 <link rel="apple-touch-icon" href="waiter-apple-180.png">
@@ -16,28 +16,27 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
+/* تصميم «ليلي»: غامق مريح للعين طول الدوام، والأزرار وردية مثل لوگو الويتر */
 :root{
-  --ink:#0A100D; --neon:#3DF08B; --saf:#FFB627; --chili:#FF4D2E;
-  --bg:#FAF7F0; --card:#FFFFFF; --soft:#F1EDE2; --line:#E6E0D2; --text:#0A100D; --muted:#676C64;
-  --btn:#0A100D; --btn-fg:#3DF08B; --ok:#0F9D58;
+  --ink:#0B0E1A; --neon:#4ADE80; --saf:#FBBF24; --chili:#F87171;
+  --bg:#0F1220; --card:#181C2E; --soft:#20253A; --line:#2C3250; --text:#EEF0FA; --muted:#9AA0BC;
+  --btn:#FF5C7A; --btn-fg:#FFFFFF; --ok:#4ADE80;
+  --hd-sub:#9AA0BC;
   --font:'IBM Plex Sans Arabic',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif; --num:'Sora','IBM Plex Sans Arabic',system-ui,sans-serif;
+  color-scheme:dark;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0A100D; --card:#131B16; --soft:#1A241E; --line:#26322B; --text:#F1EFE8; --muted:#9AA39C; --btn:#3DF08B; --btn-fg:#0A100D; --ok:#3DF08B;
-}}
-:root[data-theme="dark"]{--bg:#0A100D; --card:#131B16; --soft:#1A241E; --line:#26322B; --text:#F1EFE8; --muted:#9AA39C; --btn:#3DF08B; --btn-fg:#0A100D; --ok:#3DF08B}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:150px;line-height:1.6}
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
 .wrap{max-width:760px;margin:0 auto;padding:0 16px}
-.hd{position:sticky;top:0;z-index:30;background:var(--ink);color:#FAF7F0;padding:10px 0}
+.hd{position:sticky;top:0;z-index:30;background:var(--ink);color:#FFFFFF;padding:10px 0;border-bottom:1px solid var(--line)}
 .hd .wrap{display:flex;align-items:center;gap:10px}
 .hd .t{flex:1;min-width:0}
 .hd b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hd small{color:#B9C2BB;font-size:12.5px}
-.hb{border:1px solid #2A3830;background:#141C17;color:#FAF7F0;border-radius:12px;padding:7px 11px;font-size:13px}
+.hd small{color:var(--hd-sub);font-size:12.5px}
+.hb{border:1px solid var(--line);background:var(--card);color:#FFFFFF;border-radius:12px;padding:7px 11px;font-size:13px}
 .tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
 .tab{border:1.5px solid var(--line);background:var(--card);border-radius:14px;padding:11px;font-weight:700;font-size:15px;position:relative}
 .tab.on{background:var(--btn);color:var(--btn-fg);border-color:var(--btn)}
@@ -102,7 +101,7 @@ button{cursor:pointer}
 .od-i{color:var(--muted);font-size:13px;margin-top:4px}
 .od button{margin-top:8px;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:7px 12px;font-size:13px;font-weight:600}
 .empty{text-align:center;color:var(--muted);padding:30px 10px}
-.toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-16px);background:var(--ink);color:#FAF7F0;padding:10px 18px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;transition:.2s;z-index:90;pointer-events:none;max-width:calc(100vw - 32px)}
+.toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-16px);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;transition:.2s;z-index:90;pointer-events:none;max-width:calc(100vw - 32px)}
 .toast.on{opacity:1;transform:translateX(-50%)}
 /* الخدمة موقوفة من الإدارة */
 .offw{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
@@ -111,15 +110,18 @@ button{cursor:pointer}
 .offc button{margin-top:14px;border:1px solid var(--line);background:var(--soft);border-radius:12px;padding:10px 20px;font-weight:700}
 /* تثبيت التطبيق */
 .inst{position:fixed;inset:calc(10px + env(safe-area-inset-top)) 10px auto 10px;z-index:150;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:12px;
-  background:#0A100D;color:#FAF7F0;border:1px solid #2A3830;border-radius:20px;padding:12px 12px 12px 10px;box-shadow:0 18px 50px rgba(0,0,0,.35);animation:instIn .3s ease}
+  background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:20px;padding:12px 12px 12px 10px;box-shadow:0 18px 50px rgba(0,0,0,.35);animation:instIn .3s ease}
 @keyframes instIn{from{transform:translateY(-16px);opacity:0}to{transform:none;opacity:1}}
 .inst img{width:46px;height:46px;border-radius:12px;flex:none}
 .inst-t{flex:1;min-width:0;line-height:1.5}
 .inst-t b{display:block;font-size:15.5px}
-.inst-t span{display:block;font-size:12.5px;color:#B9C2BB}
-.inst-t span b{display:inline;font-size:inherit;color:#FAF7F0}
-.inst-go{flex:none;border:none;border-radius:12px;background:#3DF08B;color:#0A100D;font-weight:700;font-size:15px;padding:10px 16px}
-.inst-x{flex:none;border:none;background:none;color:#8E978F;font-size:18px;padding:4px 6px}
+.inst-t span{display:block;font-size:12.5px;color:var(--muted)}
+.inst-t span b{display:inline;font-size:inherit;color:var(--text)}
+.inst-go{flex:none;border:none;border-radius:12px;background:var(--btn);color:var(--btn-fg);font-weight:700;font-size:15px;padding:10px 16px}
+.inst-x{flex:none;border:none;background:none;color:var(--muted);font-size:18px;padding:4px 6px}
+/* شاشة الربط (ستايلها المشترك من staff.js): لوگو الويتر الوردي وإطار الرمز بنفس اللون */
+#gate .gate-logo{background:var(--btn);color:var(--btn-fg)}
+#gate .pair-code{border-color:var(--btn)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 <style id="gateCss"></style>
