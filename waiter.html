@@ -25,6 +25,9 @@
   --font:'IBM Plex Sans Arabic',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif; --num:'Sora','IBM Plex Sans Arabic',system-ui,sans-serif;
   color-scheme:dark;
 }
+/* «إطار دوّار»: الطلب الجاهز يلفّه ضوء أخضر يدور حتى الويتر ينتبهله من بعيد (مستوحى من Spinning Border بمكتبة ThreeUI — MIT) */
+@property --sb{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes sbSpin{to{--sb:360deg}}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:150px;line-height:1.6}
@@ -39,14 +42,14 @@ button{cursor:pointer}
 .hb{border:1px solid var(--line);background:var(--card);color:#FFFFFF;border-radius:12px;padding:7px 11px;font-size:13px}
 .tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
 .tab{border:1.5px solid var(--line);background:var(--card);border-radius:14px;padding:11px;font-weight:700;font-size:15px;position:relative}
-.tab.on{background:var(--btn);color:var(--btn-fg);border-color:var(--btn)}
+.tab.on{color:var(--btn-fg);border-color:transparent;background:linear-gradient(var(--btn),var(--btn)) padding-box,conic-gradient(from var(--sb),transparent 0 70%,#FFFFFF 85%,transparent 100%) border-box;animation:sbSpin 3.2s linear infinite}
 .tab .bd{position:absolute;top:-7px;inset-inline-start:10px;background:var(--saf);color:var(--ink);border-radius:10px;min-width:22px;height:22px;font-size:12px;display:grid;place-items:center;padding:0 6px}
 .lbl{font-weight:700;font-size:14px;margin:14px 0 8px}
 .tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px}
 .tb{aspect-ratio:1;border:1.5px solid var(--line);background:var(--card);border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-family:var(--num);font-weight:800;font-size:28px;position:relative}
 .tb small{font-family:var(--font);font-size:11.5px;font-weight:600;color:var(--muted)}
 .tb.busy{border-color:var(--saf)}
-.tb.ready{border-color:var(--ok);background:color-mix(in srgb,var(--neon) 18%,var(--card))}
+.tb.ready{border:2px solid transparent;background:linear-gradient(color-mix(in srgb,var(--neon) 18%,var(--card)),color-mix(in srgb,var(--neon) 18%,var(--card))) padding-box,conic-gradient(from var(--sb),transparent 0 62%,#4ADE80 78%,#ECFFF3 84%,#4ADE80 90%,transparent 100%) border-box;box-shadow:0 0 22px rgba(74,222,128,.22);animation:sbSpin 2.6s linear infinite}
 .tb.ready small{color:var(--ok)}
 .manual{display:flex;gap:8px;margin-top:12px}
 .inp{display:block;width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);font-size:15px;outline:none}
@@ -92,7 +95,7 @@ button{cursor:pointer}
 .sum{display:flex;justify-content:space-between;font-weight:700;font-size:16px;margin-top:12px}
 .ords{display:grid;gap:10px;margin-top:4px}
 .od{background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:12px 14px}
-.od.ready{border-color:var(--ok);box-shadow:0 0 0 4px color-mix(in srgb,var(--neon) 22%,transparent)}
+.od.ready{border:2px solid transparent;background:linear-gradient(var(--card),var(--card)) padding-box,conic-gradient(from var(--sb),transparent 0 62%,#4ADE80 78%,#ECFFF3 84%,#4ADE80 90%,transparent 100%) border-box;box-shadow:0 0 22px rgba(74,222,128,.22);animation:sbSpin 2.6s linear infinite}
 .od.bad{border-color:var(--chili)}
 .od-h{display:flex;align-items:center;gap:8px;font-weight:700}
 .od-h .tn{font-family:var(--num);font-weight:800;font-size:20px}
