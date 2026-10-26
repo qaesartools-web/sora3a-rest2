@@ -9,8 +9,8 @@
   "scope": "/sora3a-rest2/waiter",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0A100D",
-  "theme_color": "#0A100D",
+  "background_color": "#0B0E1A",
+  "theme_color": "#0B0E1A",
   "categories": ["food", "business"],
   "related_applications": [{ "platform": "webapp", "url": "https://qaesartools-web.github.io/sora3a-rest2/waiter.webmanifest" }],
   "icons": [
