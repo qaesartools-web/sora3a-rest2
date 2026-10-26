@@ -16,7 +16,7 @@
   --ink:#102A43; --neon:#FFB4A8; --saf:#FFB020; --chili:#DC2626;
   --bg:#F5F8FB; --card:#FFFFFF; --soft:#E7EEF6; --line:#D3DEEB; --text:#0D1B2A; --muted:#5E6E80;
   --btn:#FF6B57; --btn-fg:#FFFFFF; --ok:#0E9F6E; --shadow:0 10px 30px rgba(16,42,67,.10);
-  --hd-bg:linear-gradient(150deg,#1B3B5F,#0A1B2E); --hd-sub:#B7C8DB; --hd-glow:rgba(255,107,87,.4);
+  --hd-bg:linear-gradient(180deg,#14263C,#1A1410 92%); --hd-sub:#B7C8DB; --hd-glow:transparent;
   --font:'IBM Plex Sans Arabic',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif; --kufi:'Reem Kufi','IBM Plex Sans Arabic',sans-serif;
   color-scheme:light;
 }
@@ -32,6 +32,9 @@ button{cursor:pointer}
 .hd{background:var(--hd-bg);color:#FFFFFF;padding:22px 0 26px;border-radius:0 0 28px 28px;position:relative;overflow:hidden}
 .hd::after{content:"";position:absolute;inset:auto -60px -90px auto;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,var(--hd-glow),transparent 65%);pointer-events:none}
 .hd h1{font-family:var(--kufi);font-size:28px;line-height:1.3;text-wrap:balance}
+/* «جمر المشاوي»: كانفس ورا الكتابة (شوف السكربت بآخر الصفحة) */
+.hd-fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.hd .wrap{position:relative;z-index:1}
 .hd .sub{color:var(--hd-sub);font-size:14px;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 12px}
 .hd .sub a{color:var(--hd-sub);text-decoration:none}
 .pill{display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:6px 14px;border-radius:999px;background:var(--btn);color:var(--btn-fg);font-weight:700;font-size:14px}
@@ -589,6 +592,65 @@ start();
   $('instX').onclick = function () { var el = $('inst'); if (el) el.hidden = true; try { sessionStorage.setItem('m_inst_x', '1'); } catch (e) {} };
   // المتصفح ما عرض زر التثبيت (آيفون أو متصفح ثاني): نشرح شلون
   if (!standalone && mobile) setTimeout(function () { if (deferred || !$('inst').hidden) return; showInst(ios ? 'ios' : 'menu'); }, ios ? 1200 : 4500);
+})();
+</script>
+<script>
+// «جمر المشاوي» برأس المنيو: لهب ناعم بالأسفل وجمر يطير لفوك (مستوحى من Fire Element بمكتبة ThreeUI — MIT، مكتوب من جديد)
+// Canvas 2D خفيف بدون مكتبات: يوقف لما الرأس مو ظاهر أو الصفحة بالخلفية، ويثبت صورة وحدة إذا التلفون طالب «حركة أقل»
+(function () {
+  var hd = document.querySelector('.hd'), cv = document.createElement('canvas'), c = cv.getContext && cv.getContext('2d');
+  if (!hd || !c || !window.requestAnimationFrame) return;
+  cv.className = 'hd-fx'; cv.setAttribute('aria-hidden', 'true'); hd.insertBefore(cv, hd.firstChild);
+  var reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var W = 0, H = 0, dpr = Math.min(2, window.devicePixelRatio || 1), E = [], F = [], t = 0, last = 0, seen = true, running = false, TAU = Math.PI * 2;
+  // ضوضاء Simplex ثنائية صغيرة (حتى يرجف اللهب بشكل طبيعي)
+  var noise = (function () {
+    var p = new Uint8Array(512), g = [[1, 1], [-1, 1], [1, -1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1]], k = 1337, i, j, q;
+    for (i = 0; i < 256; i++) p[i] = i;
+    for (i = 255; i > 0; i--) { k = (k * 16807) % 2147483647; j = k % (i + 1); q = p[i]; p[i] = p[j]; p[j] = q; }
+    for (i = 0; i < 256; i++) p[i + 256] = p[i];
+    var F2 = 0.5 * (Math.sqrt(3) - 1), G2 = (3 - Math.sqrt(3)) / 6;
+    function cr(gi, x, y) { var a = 0.5 - x * x - y * y; if (a < 0) return 0; a *= a; var v = g[gi & 7]; return a * a * (v[0] * x + v[1] * y); }
+    return function (x, y) {
+      var s = (x + y) * F2, i = Math.floor(x + s), j = Math.floor(y + s), t = (i + j) * G2, x0 = x - (i - t), y0 = y - (j - t);
+      var i1 = x0 > y0 ? 1 : 0, j1 = 1 - i1, ii = i & 255, jj = j & 255;
+      return 70 * (cr(p[ii + p[jj]], x0, y0) + cr(p[ii + i1 + p[jj + j1]], x0 - i1 + G2, y0 - j1 + G2) + cr(p[ii + 1 + p[jj + 1]], x0 - 1 + 2 * G2, y0 - 1 + 2 * G2));
+    };
+  })();
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+  function size() { var r = hd.getBoundingClientRect(); W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); c.setTransform(dpr, 0, 0, dpr, 0, 0); if (!running) draw(16); }
+  function draw(dt) {
+    var i, f, e, rg, fl = 0.75 + 0.25 * noise(t * 0.0015, 3.7), gr = c.createLinearGradient(0, H, 0, H * 0.35);
+    c.clearRect(0, 0, W, H);
+    gr.addColorStop(0, 'rgba(255,110,50,' + 0.42 * fl + ')'); gr.addColorStop(1, 'rgba(255,110,50,0)'); c.fillStyle = gr; c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = 'lighter';
+    for (i = 0; i < 3; i++) F.push({ x: rnd(0, W), y: H + 6, r: rnd(10, 22), v: rnd(0.5, 1.1), l: 1 });
+    for (i = F.length - 1; i >= 0; i--) {
+      f = F[i]; f.y -= f.v * dt / 16; f.x += noise(f.x * 0.01, t * 0.001) * 0.6; f.l -= 0.022 * dt / 16; f.r *= 0.985;
+      if (f.l <= 0) { F.splice(i, 1); continue; }
+      rg = c.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r); rg.addColorStop(0, 'rgba(255,200,90,' + 0.32 * f.l + ')'); rg.addColorStop(0.5, 'rgba(255,90,40,' + 0.18 * f.l + ')'); rg.addColorStop(1, 'rgba(180,30,10,0)');
+      c.fillStyle = rg; c.beginPath(); c.arc(f.x, f.y, f.r, 0, TAU); c.fill();
+    }
+    if (E.length < 90 && Math.random() < 0.7) E.push({ x: rnd(0, W), y: H, vx: rnd(-0.3, 0.3), vy: rnd(-1.7, -0.6), l: rnd(0.6, 1), r: rnd(0.8, 2.2) });
+    for (i = E.length - 1; i >= 0; i--) {
+      e = E[i]; e.x += (e.vx + Math.sin((e.y + i * 7) * 0.04) * 0.35) * dt / 16; e.y += e.vy * dt / 16; e.l -= 0.006 * dt / 16;
+      if (e.l <= 0 || e.y < -4) { E.splice(i, 1); continue; }
+      c.fillStyle = 'rgba(255,' + Math.round(140 + 90 * e.l) + ',' + Math.round(60 * e.l) + ',' + e.l * (0.6 + 0.4 * Math.sin(t * 0.02 + i)) + ')';
+      c.beginPath(); c.arc(e.x, e.y, e.r, 0, TAU); c.fill();
+    }
+    c.globalCompositeOperation = 'source-over';
+  }
+  function loop(now) {
+    if (!seen || document.hidden) { running = false; return; }
+    var dt = Math.min(50, now - (last || now)); last = now; t += dt; draw(dt); requestAnimationFrame(loop);
+  }
+  function wake() { if (!reduced && !running && seen && !document.hidden) { running = true; last = 0; requestAnimationFrame(loop); } }
+  size();
+  if (window.ResizeObserver) new ResizeObserver(size).observe(hd); else addEventListener('resize', size);
+  if (reduced) { for (var n = 0; n < 220; n++) { t += 16; draw(16); } return; }
+  if (window.IntersectionObserver) new IntersectionObserver(function (es) { seen = es[0].isIntersecting; wake(); }).observe(hd);
+  document.addEventListener('visibilitychange', wake);
+  wake();
 })();
 </script>
 </body>
