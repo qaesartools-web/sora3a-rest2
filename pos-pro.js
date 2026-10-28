@@ -41,6 +41,7 @@
   let disc = { type: 'amt', value: 0, reason: '' };
   let prodQuery = '';
   let shift = null;           // الوردية المفتوحة
+  let lastSaved = null;       // آخر طلب انحفظ من finalOrder (رقمه لدين الزبون)
   let closedShifts = [];
   let kdsSound = lsGet('pos_kds_sound', true);
   const kdsSeen = new Set();
@@ -430,6 +431,8 @@ function openDelivModalCore(){
     const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: later ? '🏍️ دلفري قيد التحضير — لما يجهز حوّله للكابتن' : '🏍️ دلفري — ' + (captain ? captain.name : '') };
     toast('✅ تم — ' + names[type] + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : '') + (pay && pay.payment.change ? ' • الباقي ' + money(pay.payment.change) : ''));
     cart = cart.filter((c) => !sold.includes(c)); if (disc === discUsed) disc = { type: 'amt', value: 0, reason: '' }; renderCart();
+    lastSaved = { id: ref.id, ...o };
+    return ref.id;
   };
 
   // سفري قيد التحضير: نفس الحفظ لكن بدون دفع (يُدفع عند التسليم)
@@ -520,7 +523,8 @@ function orderActionsCore(o){
   function openPay(ctx) {
     const type = ctx.kind === 'new' ? ctx.type : (ctx.order.orderType || 'takeaway');
     const t = ctx.kind === 'new' ? totals(type) : { sub: ctx.order.value, disc: 0, service: 0, tax: 0, total: ctx.order.value || 0 };
-    payCtx = { ...ctx, typeName: type, due: t.total, method: 'cash', received: '', card: '', table: '' };
+    const op = ctx.order && ctx.order.phone ? ctx.order : null;
+    payCtx = { ...ctx, typeName: type, due: t.total, method: 'cash', received: '', card: '', table: '', crName: op ? op.customer || '' : '', crPhone: op ? op.phone : '' };
     $('payTitle').textContent = ctx.kind === 'new' ? (type === 'salon' ? '🪑 دفع — صالة' : '🛍️ دفع — سفري فوري') : '💵 تحصيل الطلب #' + kNum(ctx.order);
     $('payDue').textContent = money(t.total);
     const br = [];
@@ -532,6 +536,7 @@ function orderActionsCore(o){
       ? `<select class="dinp" id="payTableSel"><option value="">🪑 بدون طاولة (رقم تلقائي)</option>${Array.from({ length: settings.tables }, (_, i) => `<option value="${i + 1}">طاولة ${toA(i + 1)}</option>`).join('')}</select>` : '';
     const methods = [['cash', '💵', 'نقداً'], ['card', '💳', 'بطاقة'], ['mixed', '🔀', 'مختلط']];
     if (ctx.kind === 'new' && type === 'salon') methods.push(['later', '⏳', 'لاحقاً']);
+    methods.push(['credit', '🧾', 'دين']);
     $('payMethods').style.gridTemplateColumns = `repeat(${methods.length},1fr)`;
     $('payMethods').innerHTML = methods.map(([k, i, l]) => `<button type="button" data-m="${k}" class="${k === 'cash' ? 'on' : ''}"><span class="i">${i}</span>${l}</button>`).join('');
     renderPayBody();
@@ -554,6 +559,22 @@ function orderActionsCore(o){
     const c = payCtx, el = $('payBody');
     if (c.method === 'card') { el.innerHTML = `<div class="pay-change ok"><span>💳 يُخصم من البطاقة</span><b>${money(c.due)}</b></div>`; return; }
     if (c.method === 'later') { el.innerHTML = `<div class="pay-change"><span>⏳ يُحصَّل لاحقاً من تبويب الطلبات</span><b>${money(c.due)}</b></div>`; return; }
+    if (c.method === 'credit') {
+      if (window.ledInit) ledInit();
+      el.innerHTML = `<div class="dfield"><div class="dlbl">👤 اسم الزبون *</div><input class="dinp" id="payCrName" list="payCrList" maxlength="80" autocomplete="off" value="${esc(c.crName)}"></div>
+        <div class="dfield"><div class="dlbl">📞 رقم الهاتف</div><input class="dinp" id="payCrPhone" inputmode="tel" maxlength="20" value="${esc(c.crPhone)}"></div>
+        <datalist id="payCrList"></datalist><div class="pay-change" id="payCrBal"></div>`;
+      $('payCrName').addEventListener('input', (e) => {
+        c.crName = e.target.value;
+        // اسم زبون عليه دين سابق: نكمّل رقمه حتى ينضاف على نفس الحساب
+        const a = crAccounts().filter((x) => x.name === c.crName.trim()).sort((x, y) => y.last - x.last)[0];
+        if (a && a.phone && !c.crPhone) { c.crPhone = a.phone; $('payCrPhone').value = a.phone; }
+        payCredBal();
+      });
+      $('payCrPhone').addEventListener('input', (e) => { c.crPhone = e.target.value; payCredBal(); });
+      window.payCredRefresh();
+      return;
+    }
     const cardPart = c.method === 'mixed' ? `<div class="dfield"><div class="dlbl">💳 مبلغ البطاقة</div><input class="dinp" id="payCard" inputmode="numeric" value="${esc(c.card)}"></div>` : '';
     el.innerHTML = `${cardPart}<div class="dfield"><div class="dlbl">💵 المبلغ المستلم نقداً</div><input class="dinp big-inp" id="payRecv" inputmode="numeric" placeholder="${fmt(cashDue())}" value="${esc(c.received)}"></div>
       <div class="pay-quick">${quickAmounts(cashDue()).map((v) => `<button type="button" data-v="${v}">${fmt(v)}</button>`).join('')}</div>
@@ -563,6 +584,19 @@ function orderActionsCore(o){
     const pc = $('payCard'); if (pc) pc.addEventListener('input', (e) => { c.card = e.target.value; updChange(); el.querySelector('.pay-quick').innerHTML = quickAmounts(cashDue()).map((v) => `<button type="button" data-v="${v}">${fmt(v)}</button>`).join(''); });
     updChange();
   }
+  const crAccounts = () => (window.custAccounts ? custAccounts() : []);
+  function payCredBal() {
+    const c = payCtx, el = $('payCrBal'); if (!c || !el) return;
+    const a = c.crName.trim() ? crAccounts().find((x) => x.key === custKey(c.crName, c.crPhone)) : null;
+    el.innerHTML = `<span>🧾 دين على الزبون${a && a.bal ? ' • رصيده السابق ' + money(a.bal) : ''}</span><b>${money(c.due)}</b>`;
+  }
+  // تنعاد لما يوصل دفتر الزبائن (ledger) — قائمة المدينين للاختيار السريع
+  window.payCredRefresh = () => {
+    const c = payCtx, dl = $('payCrList'); if (!c || c.method !== 'credit' || !dl) return;
+    dl.innerHTML = crAccounts().sort((a, b) => b.last - a.last).slice(0, 300)
+      .map((a) => `<option value="${esc(a.name)}">${esc((a.phone ? a.phone + ' • ' : '') + 'رصيده ' + fmt(Math.round(a.bal)))}</option>`).join('');
+    payCredBal();
+  };
   function cashDue() { const c = payCtx; return Math.max(0, c.due - (c.method === 'mixed' ? Math.min(num(c.card), c.due) : 0)); }
   function updChange() {
     const el = $('payChange'); if (!el) return;
@@ -574,6 +608,11 @@ function orderActionsCore(o){
     const c = payCtx;
     if (c.method === 'card') return { method: 'card', cash: 0, card: c.due, received: c.due, change: 0 };
     if (c.method === 'later') return { method: 'later', cash: 0, card: 0, received: 0, change: 0 };
+    if (c.method === 'credit') {
+      const name = String(c.crName || '').trim().replace(/\s+/g, ' ').slice(0, 80), phone = String(c.crPhone || '').trim().slice(0, 20);
+      if (!name) return null;
+      return { method: 'credit', cash: 0, card: 0, received: 0, change: 0, cust: { key: custKey(name, phone), name, phone } };
+    }
     const card = c.method === 'mixed' ? Math.min(num(c.card), c.due) : 0;
     const due = c.due - card, recv = c.received === '' ? due : num(c.received);
     if (recv < due) return null;
@@ -583,11 +622,15 @@ function orderActionsCore(o){
   async function confirmPay() {
     const c = payCtx; if (!c) return;
     const payment = buildPayment();
-    if (!payment) { toast('⚠️ المبلغ المستلم أقل من المطلوب'); return; }
+    if (!payment) { toast(c.method === 'credit' ? '⚠️ اكتب اسم الزبون (ورقمه أحسن) حتى ينسجل الدين على حسابه' : '⚠️ المبلغ المستلم أقل من المطلوب'); return; }
     payment.atMs = Date.now(); payment.shiftId = shift ? shift.id : null;
     const table = $('payTableSel') ? $('payTableSel').value : '';
     payClose();
-    if (c.kind === 'new') { await finalOrder(c.typeName, null, null, { payment, table }); return; }
+    if (c.kind === 'new') {
+      const id = await finalOrder(c.typeName, null, null, { payment, table });
+      if (id && payment.method === 'credit' && window.creditCharge) creditCharge(id, payment, lastSaved && lastSaved.id === id ? lastSaved.value : c.due, 'طلب #' + kNum(lastSaved && lastSaved.id === id ? lastSaved : { id }));
+      return;
+    }
     const o = c.order;
     try {
       const fields = { payment };
@@ -595,6 +638,7 @@ function orderActionsCore(o){
       if (c.handover) { Object.assign(fields, { status: 'delivered', deliveredAt: Date.now(), servedAtMs: Date.now(), kitchen: 'ready', ...(o.pager ? { pagerDone: true } : {}) }); text = 'سُلّم للزبون — ' + text; }
       if (c.convert) { Object.assign(fields, c.convert); text = 'الزبون استلم الطلب بنفسه (تحوّل من دلفري إلى سفري) — ' + text; }
       await orderUpdate(o.id, fields, text, c.handover ? 'delivered' : o.status);
+      if (payment.method === 'credit' && window.creditCharge) creditCharge(o.id, payment, o.value || 0, 'طلب #' + kNum(o));
       if (c.convert) syncTracking(o.id, { status: 'delivered', value: o.value, fee: 0, captainId: '', captainName: '' });
       printHTML(receiptHTML({ ...o, ...fields }, null, { payment }, false));
       toast(c.handover ? '🤝 تم التسليم والتحصيل' : '💵 تم التحصيل' + (payment.change ? ' • الباقي ' + money(payment.change) : ''));
@@ -602,7 +646,7 @@ function orderActionsCore(o){
   }
 
   // ══════════ الفاتورة ══════════
-  const PAY_AR = { cash: 'نقداً', card: 'بطاقة', mixed: 'مختلط', later: 'آجل — لم يُدفع', cod: 'عند الاستلام (الكابتن)' };
+  const PAY_AR = { cash: 'نقداً', card: 'بطاقة', mixed: 'مختلط', later: 'آجل — لم يُدفع', cod: 'عند الاستلام (الكابتن)', credit: 'دين — على حساب الزبون' };
   function receiptHTML(o, captain, pay, withKitchen) {
     const items = orderItemsFull(o).map((i, k) => ({ ...i, note: (o.items && o.items[k] && o.items[k].note) || i.note }));
     const title = settings.receiptTitle || restData.name || 'سرعة';
@@ -646,6 +690,7 @@ function orderActionsCore(o){
       ${type === 'delivery' && o.fee === 0 ? `<div class="row" style="font-weight:900"><span>🎁 التوصيل مجاني</span><span>0</span></div><div class="row" style="font-weight:900;font-size:13px"><span>المطلوب من الزبون</span><span>${fmt(o.value || 0)} د.ع</span></div>` : ''}
       ${p.method ? `<div class="div"></div><div class="row"><span>طريقة الدفع</span><span>${esc(PAY_AR[p.method] || p.method)}</span></div>` : ''}
       ${p.card && p.method === 'mixed' ? `<div class="row"><span>بطاقة</span><span>${fmt(p.card)}</span></div>` : ''}
+      ${p.method === 'credit' && p.cust ? `<div class="row" style="font-weight:900"><span>على حساب</span><span>${esc(p.cust.name)}${p.cust.phone ? ' • ' + esc(p.cust.phone) : ''}</span></div>` : ''}
       ${p.received && (p.method === 'cash' || p.method === 'mixed') ? `<div class="row"><span>المستلم نقداً</span><span>${fmt(p.received)}</span></div><div class="row"><span>الباقي</span><span>${fmt(p.change || 0)}</span></div>` : ''}
       <div class="div"></div><div class="foot">${esc(settings.receiptFooter || 'شكراً لزيارتكم ❤️')}</div>`;
     const kt = withKitchen ? `<div class="pb kt"><div class="logo">🍳 تذكرة مطبخ</div><div class="div"></div>${head}${pg}
@@ -714,7 +759,7 @@ function orderActionsCore(o){
     const live = mine.filter((o) => o.status !== 'cancelled'), canc = mine.filter((o) => o.status === 'cancelled');
     const paidHere = all.filter((o) => o.payment && o.payment.shiftId === sh.id);
     const r = { orders: live.length, sales: 0, sub: 0, disc: 0, service: 0, tax: 0, byType: { salon: { n: 0, v: 0 }, takeaway: { n: 0, v: 0 }, delivery: { n: 0, v: 0 } },
-      cash: 0, card: 0, later: 0, cod: 0, refunds: 0, cancelled: canc.length, cancelledV: canc.reduce((s, o) => s + (o.value || 0), 0) };
+      cash: 0, card: 0, later: 0, cod: 0, credit: 0, refunds: 0, cancelled: canc.length, cancelledV: canc.reduce((s, o) => s + (o.value || 0), 0) };
     live.forEach((o) => {
       r.sales += o.value || 0; r.sub += o.subtotal != null ? o.subtotal : (o.value || 0); r.disc += o.discount || 0; r.service += o.service || 0; r.tax += o.tax || 0;
       const t = getOrderType(o); r.byType[t].n++; r.byType[t].v += o.value || 0;
@@ -724,14 +769,26 @@ function orderActionsCore(o){
     paidHere.forEach((o) => {
       if (o.status === 'cancelled') { r.refunds += o.payment.cash || 0; return; }
       r.cash += o.payment.cash || 0; r.card += o.payment.card || 0;
+      if (o.payment.method === 'credit') r.credit += o.value || 0;
     });
     const mv = sh.cashMoves || [];
     r.cashIn = mv.filter((m) => m.type === 'in').reduce((s, m) => s + m.amount, 0);
     r.cashOut = mv.filter((m) => m.type === 'out').reduce((s, m) => s + m.amount, 0);
     r.capIn = mv.filter((m) => m.type === 'cap').reduce((s, m) => s + m.amount, 0);      // تسديد الكباتن
+    // الإيداع والسحب حسب النوع (للتقرير): مصرف، المالك، موردين، تحصيل ديون…
+    r.mvCat = {};
+    mv.filter((m) => m.type !== 'cap').forEach((m) => { const k = m.type + ':' + (m.cat || 'other'); r.mvCat[k] = (r.mvCat[k] || 0) + m.amount; });
     r.expected = (sh.openingCash || 0) + r.cash - r.refunds + r.cashIn + r.capIn - r.cashOut;
     return r;
   }
+  const MOVE_CAT = { 'in:other': '(+) إيداعات', 'in:owner': '(+) من المالك', 'in:customer': '(+) تحصيل ديون زبائن',
+    'out:other': '(−) مسحوبات', 'out:bank': '(−) إيداع بالمصرف', 'out:owner': '(−) سحب المالك', 'out:supplier': '(−) تسديد موردين', 'out:purchase': '(−) مشتريات مواد' };
+  const MOVE_ICON = { bank: '🏦 ', owner: '👤 ', supplier: '🏭 ', customer: '🧾 ', purchase: '📦 ' };
+  // تقرير قديم (قبل التصنيف) ما بيه mvCat ← سطر واحد للإيداعات وواحد للمسحوبات
+  const moveLines = (r) => {
+    const m = r.mvCat || { 'in:other': r.cashIn || 0, 'out:other': r.cashOut || 0 };
+    return Object.keys(MOVE_CAT).filter((k) => m[k]).map((k) => [MOVE_CAT[k], m[k], k.startsWith('out')]);
+  };
   function renderShift() {
     const el = $('shiftBody');
     // نحافظ على ما يكتبه الكاشير إذا أُعيد الرسم أثناء الكتابة
@@ -764,11 +821,12 @@ function orderActionsCore(o){
       ${ln('💵 رصيد افتتاحي', money(shift.openingCash))}
       ${ln('(+) مبيعات نقدية', money(r.cash), 'pos')}
       ${r.refunds ? ln('(−) مرتجع نقدي (طلبات ملغية)', '- ' + money(r.refunds), 'neg') : ''}
-      ${r.cashIn ? ln('(+) إيداعات', money(r.cashIn), 'pos') : ''}
+      ${moveLines(r).filter((x) => !x[2]).map((x) => ln(x[0], money(x[1]), 'pos')).join('')}
       ${r.capIn ? ln('(+) تسديد الكباتن', money(r.capIn), 'pos') : ''}
-      ${r.cashOut ? ln('(−) مسحوبات', '- ' + money(r.cashOut), 'neg') : ''}
+      ${moveLines(r).filter((x) => x[2]).map((x) => ln(x[0], '- ' + money(x[1]), 'neg')).join('')}
       ${ln('= المتوقع بالدرج', money(r.expected))}
       ${r.later ? ln('⏳ غير محصّل (آجل)', money(r.later), 'neg') : ''}
+      ${r.credit ? ln('🧾 دين على زبائن', money(r.credit), 'neg') : ''}
       ${r.cod ? ln('🏍️ عند الكباتن (ما مسدد)', money(r.cod)) : ''}
       ${r.disc ? ln('٪ الخصومات', money(r.disc)) : ''}
       <div class="sh-btns">
@@ -818,13 +876,28 @@ function orderActionsCore(o){
       toast('🔓 تم فتح الوردية'); renderShift();
     } catch (e) { toast('❌ تعذّر فتح الوردية'); }
   };
+  // الصندوق اليومي: كل إيداع وسحب بنوعه (إيداع بالمصرف، سحب المالك…) حتى تطلع بالحسابات صح
+  const MOVE_OPTS = { in: [{ v: 'other', t: '💵 فكّة / إيداع عادي' }, { v: 'owner', t: '👤 من المالك' }],
+    out: [{ v: 'other', t: '➖ سحب عادي' }, { v: 'bank', t: '🏦 إيداع بالمصرف' }, { v: 'owner', t: '👤 سحب المالك' }] };
+  function drawerMove(mv) {
+    if (!shift) return false;
+    shift.cashMoves = [...(shift.cashMoves || []), mv];
+    fb().updateDoc(sub('shifts', shift.id), { cashMoves: shift.cashMoves }).catch(() => toast('❌ تعذّر الحفظ'));
+    if ($('shiftScreen').classList.contains('on')) renderShift();
+    return true;
+  }
+  window.posDrawerMove = (mv) => drawerMove({ type: mv.type, cat: mv.cat || 'other', amount: Number(mv.amount) || 0, note: String(mv.note || '').slice(0, 80), ts: mv.ts || Date.now(), ...(mv.ref ? { ref: mv.ref } : {}) });
+  window.posShiftOpen = () => !!shift;
+  window.posShiftId = () => (shift ? shift.id : '');
+  window.posPaperW = () => (settings.paper === 58 ? 210 : 300);
   window.shiftMove = (type) => {
-    acDialog(type === 'in' ? '➕ إيداع نقدي بالدرج' : '➖ سحب نقدي من الدرج', type === 'in' ? 'مثلاً: فكّة إضافية' : 'مثلاً: شراء مواد، دفع لمورد', [
+    acDialog(type === 'in' ? '➕ إيداع نقدي بالدرج' : '➖ سحب نقدي من الدرج', type === 'in' ? 'مثلاً: فكّة إضافية' : 'للمشتريات وتسديد الموردين استخدم «المخزون ← وارد» أو «الموردين» حتى تنحسب تلقائياً', [
+      { id: 'c', label: 'النوع', type: 'select', options: MOVE_OPTS[type], value: 'other' },
       { id: 'a', label: 'المبلغ', type: 'number' }, { id: 'n', label: 'السبب' }], (v) => {
       const amount = num(v.a); if (!(amount > 0)) { toast('⚠️ أدخل المبلغ'); return false; }
-      const mv = { type, amount, note: v.n.trim().slice(0, 80), ts: Date.now() };
-      shift.cashMoves = [...(shift.cashMoves || []), mv];
-      fb().updateDoc(sub('shifts', shift.id), { cashMoves: shift.cashMoves }).catch(() => toast('❌ تعذّر الحفظ'));
+      if (!shift) { toast('⚠️ الوردية مسكّرة'); return false; }
+      const lbl = (MOVE_OPTS[type].find((x) => x.v === v.c) || {}).t || '';
+      drawerMove({ type, cat: v.c || 'other', amount, note: (v.n.trim() || (v.c !== 'other' ? lbl.replace(/^\S+\s/, '') : '')).slice(0, 80), ts: Date.now() });
       renderShift(); toast('✅ تم التسجيل');
     });
   };
@@ -852,14 +925,14 @@ function orderActionsCore(o){
     const os = (list || orders).filter((o) => (o.createdAtMs || 0) >= from && (o.createdAtMs || 0) < to);
     const live = os.filter((o) => o.status !== 'cancelled'), canc = os.filter((o) => o.status === 'cancelled');
     const r = { n: live.length, sales: 0, disc: 0, fees: 0, byType: { salon: { n: 0, v: 0 }, takeaway: { n: 0, v: 0 }, delivery: { n: 0, v: 0 } },
-      cash: 0, card: 0, later: 0, cod: 0, cancN: canc.length, cancV: canc.reduce((s, o) => s + (o.value || 0), 0), items: 0 };
+      cash: 0, card: 0, later: 0, cod: 0, credit: 0, cancN: canc.length, cancV: canc.reduce((s, o) => s + (o.value || 0), 0), items: 0 };
     live.forEach((o) => {
       const t = getOrderType(o), v = o.value || 0;
       r.sales += v; r.disc += o.discount || 0; r.byType[t].n++; r.byType[t].v += v;
       (o.items || []).forEach((i) => { r.items += i.qty || 1; });
       if (t === 'delivery' && !capPaidHere(o)) { r.fees += o.fee || 0; if (o.capSettled === true) r.cash += v; else r.cod += v; return; }
       const p = o.payment || {};
-      if (p.method === 'later') r.later += v; else { r.cash += p.cash != null ? p.cash : (p.method === 'card' ? 0 : v); r.card += p.card || 0; }
+      if (p.method === 'later') r.later += v; else if (p.method === 'credit') r.credit += v; else { r.cash += p.cash != null ? p.cash : (p.method === 'card' ? 0 : v); r.card += p.card || 0; }
     });
     r.exp = (typeof allExp === 'function' ? allExp() : []).filter((e) => (e.ts || 0) >= from && (e.ts || 0) < to).reduce((s, e) => s + (Number(e.amount) || 0), 0);
     return r;
@@ -872,7 +945,7 @@ function orderActionsCore(o){
       ${row('عدد الطلبات', r.n)}${row('عدد الأصناف المباعة', r.items)}<div class="div"></div>
       ${row('🪑 صالة (' + r.byType.salon.n + ')', fmt(r.byType.salon.v))}${row('🥡 سفري (' + r.byType.takeaway.n + ')', fmt(r.byType.takeaway.v))}${row('🏍️ دلفري (' + r.byType.delivery.n + ')', fmt(r.byType.delivery.v))}
       ${r.fees ? row('أجور التوصيل (للكباتن)', fmt(r.fees)) : ''}<div class="div"></div>
-      ${row('💵 نقداً', fmt(r.cash))}${row('💳 بطاقة', fmt(r.card))}${r.later ? row('⏳ آجل غير محصّل', fmt(r.later)) : ''}${r.cod ? row('🏍️ عند الكباتن (ما مسدد)', fmt(r.cod)) : ''}
+      ${row('💵 نقداً', fmt(r.cash))}${row('💳 بطاقة', fmt(r.card))}${r.later ? row('⏳ آجل غير محصّل', fmt(r.later)) : ''}${r.credit ? row('🧾 دين على زبائن', fmt(r.credit)) : ''}${r.cod ? row('🏍️ عند الكباتن (ما مسدد)', fmt(r.cod)) : ''}
       ${r.disc ? row('٪ الخصومات', '-' + fmt(r.disc)) : ''}${r.cancN ? row('❌ ملغي (' + r.cancN + ')', fmt(r.cancV)) : ''}<div class="div"></div>
       ${row('مجموع المبيعات', fmt(r.sales) + ' د.ع', true)}${r.exp ? row('💸 المصروفات', '-' + fmt(r.exp)) : ''}
       <div class="div"></div><div style="text-align:center;font-size:10px">طُبع ${esc(new Date().toLocaleString('ar-IQ-u-nu-latn'))}${window.posUser && window.posUser.name ? ' • ' + esc(window.posUser.name) : ''}</div></body></html>`;
@@ -901,12 +974,12 @@ function orderActionsCore(o){
       ${row('عدد الطلبات', r.orders)}${row('المجموع قبل الخصم', fmt(r.sub))}${r.disc ? row('الخصومات', '-' + fmt(r.disc)) : ''}${r.service ? row('الخدمة', fmt(r.service)) : ''}${r.tax ? row('الضريبة', fmt(r.tax)) : ''}
       ${row('صافي المبيعات', fmt(r.sales), true)}<div class="div"></div>
       ${row('🪑 صالة (' + r.byType.salon.n + ')', fmt(r.byType.salon.v))}${row('🥡 سفري (' + r.byType.takeaway.n + ')', fmt(r.byType.takeaway.v))}${row('🏍️ دلفري (' + r.byType.delivery.n + ')', fmt(r.byType.delivery.v))}
-      <div class="div"></div>${row('💵 نقداً', fmt(r.cash))}${row('💳 بطاقة', fmt(r.card))}${r.later ? row('⏳ آجل غير محصّل', fmt(r.later)) : ''}${r.cod ? row('🏍️ عند الكباتن (ما مسدد)', fmt(r.cod)) : ''}
+      <div class="div"></div>${row('💵 نقداً', fmt(r.cash))}${row('💳 بطاقة', fmt(r.card))}${r.later ? row('⏳ آجل غير محصّل', fmt(r.later)) : ''}${r.credit ? row('🧾 دين على زبائن', fmt(r.credit)) : ''}${r.cod ? row('🏍️ عند الكباتن (ما مسدد)', fmt(r.cod)) : ''}
       ${r.cancelled ? row('❌ ملغي (' + r.cancelled + ')', fmt(r.cancelledV)) : ''}<div class="div"></div>
-      ${row('رصيد افتتاحي', fmt(sh.openingCash || 0))}${row('(+) مبيعات نقدية', fmt(r.cash))}${r.refunds ? row('(−) مرتجع نقدي', '-' + fmt(r.refunds)) : ''}${r.cashIn ? row('(+) إيداعات', fmt(r.cashIn)) : ''}${r.capIn ? row('(+) تسديد الكباتن', fmt(r.capIn)) : ''}${r.cashOut ? row('(−) مسحوبات', '-' + fmt(r.cashOut)) : ''}
+      ${row('رصيد افتتاحي', fmt(sh.openingCash || 0))}${row('(+) مبيعات نقدية', fmt(r.cash))}${r.refunds ? row('(−) مرتجع نقدي', '-' + fmt(r.refunds)) : ''}${moveLines(r).filter((x) => !x[2]).map((x) => row(x[0], fmt(x[1]))).join('')}${r.capIn ? row('(+) تسديد الكباتن', fmt(r.capIn)) : ''}${moveLines(r).filter((x) => x[2]).map((x) => row(x[0], '-' + fmt(x[1]))).join('')}
       ${row('= المتوقع بالدرج', fmt(r.expected), true)}
       ${sh.countedCash != null ? row('النقد الفعلي', fmt(sh.countedCash), true) + row(sh.diff >= 0 ? 'زيادة' : 'عجز', fmt(Math.abs(sh.diff)), true) : ''}
-      ${(sh.cashMoves || []).length ? '<div class="div"></div>' + sh.cashMoves.map((m) => row((m.type === 'cap' ? '🛵 ' : m.type === 'in' ? '➕ ' : '➖ ') + esc(m.note || ''), fmt(m.amount))).join('') : ''}
+      ${(sh.cashMoves || []).length ? '<div class="div"></div>' + sh.cashMoves.map((m) => row((m.type === 'cap' ? '🛵 ' : m.type === 'in' ? '➕ ' : '➖ ') + (MOVE_ICON[m.cat] || '') + esc(m.note || ''), fmt(m.amount))).join('') : ''}
       ${sh.note ? '<div class="div"></div><div style="font-size:11px">📝 ' + esc(sh.note) + '</div>' : ''}
       </body></html>`);
   }
@@ -1244,6 +1317,7 @@ const ordCancelCore = id=>{
     orderUpdate(id,{status:'cancelled',cancelReason:v.why,cancelNote:(v.note||'').trim(),cancelledBy:'المطعم',cancelledAt:Date.now(),cancelledFrom:o.status,cancelStock:o.inv?v.stock:'none',...(o.capSettled===false?{capSettled:null}:{}),
       cancelNotice:{by:'المطعم',time:nowT(),timestamp:Date.now(),seen:true}},'أُلغي الطلب — '+v.why,'cancelled').then(()=>{
         if(getOrderType(o)==='delivery')syncTracking(id,{status:'cancelled',value:o.value,fee:o.fee});
+        if(o.payment&&o.payment.method==='credit'&&window.creditVoid)creditVoid(o,v.why);
         if(o.inv){if(v.stock==='return')consumeItems(items,'sale_return',id,'إلغاء طلب');else wasteItems(items,id,'إلغاء بعد التحضير');saveAcc();saveMenu();renderMenu();}
         toast('❌ تم إلغاء الطلب');
       }).catch(e=>toast('❌ '+e.message));
