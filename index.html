@@ -400,7 +400,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 </style>
 <link rel="stylesheet" href="pos-pro.css?v=24">
 <script src="device.js?v=2"></script>
-<script src="ask.js?v=1"></script>
+<script src="ask.js?v=2"></script>
 </head>
 <body>
 
@@ -1609,13 +1609,15 @@ window.renderCatsList=()=>{
     </div>`).join('');
 };
 
-window.renameCat=async(ci)=>{
-  const newName=await askText('اسم الفرع الجديد:',menu[ci].cat);
-  if(!newName)return;
-  const newEmoji=await askText('إيموجي الفرع:',menu[ci].emoji);
-  menu[ci].cat=newName;
-  menu[ci].emoji=newEmoji||menu[ci].emoji;
-  saveMenu();renderCatsList();renderMenu();toast('✅ تم تعديل الفرع');
+// نافذة داخل الصفحة (برنامج الويندوز ما يدعم prompt المتصفح — كان الزر ما يسوي شي)
+window.renameCat=ci=>{
+  const c=menu[ci];if(!c)return;
+  acDialog('✏️ تعديل الفرع','',[{id:'name',label:'اسم الفرع',value:c.cat},{id:'emoji',label:'إيموجي الفرع',value:c.emoji||''}],v=>{
+    const name=v.name.trim().slice(0,40);if(!name){toast('⚠️ أدخل اسم الفرع');return false;}
+    if(menu.some((x,i)=>i!==ci&&x.cat===name)){toast('⚠️ أكو فرع بنفس الاسم');return false;}
+    c.cat=name;c.emoji=v.emoji.trim().slice(0,8)||c.emoji;
+    saveMenu();renderCatsList();renderMenu();toast('✅ تم تعديل الفرع');
+  },'💾 حفظ');
 };
 
 window.delCat=async(ci)=>{

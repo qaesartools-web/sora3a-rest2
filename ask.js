@@ -6,7 +6,8 @@
 //   askInfo('خطأ: ...');
 (function () {
   'use strict';
-  const IN_APP = /SoraCashierApp|SoraScreenApp/.test(navigator.userAgent);
+  // برنامج الويندوز (Electron) ما يدعم prompt أصلاً — نفس نافذة الصفحة
+  const IN_APP = /SoraCashierApp|SoraScreenApp|Electron/.test(navigator.userAgent);
   const CSS = '.ask-ov{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;direction:rtl}'
     + '.ask-box{background:#fff;color:#1a1a1a;border-radius:16px;padding:20px 18px 16px;width:100%;max-width:360px;box-shadow:0 10px 40px rgba(0,0,0,.35);font-family:inherit}'
     + '.ask-msg{font-size:16px;font-weight:700;line-height:1.6;white-space:pre-line;margin-bottom:14px}'
