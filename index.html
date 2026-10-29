@@ -474,7 +474,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="dnb" data-tab="capPay" onclick="goTab('capPay')">💵 تسديد طلبات الكابتن <span class="nav-pill" id="capPayPillD"></span></button>
     <button class="dnb" data-tab="kitchen" onclick="goTab('kitchen')">👨‍🍳 المطبخ <span class="nav-pill" id="kdsPillD"></span></button>
     <button class="dnb" data-tab="shift" onclick="goTab('shift')">🧮 الوردية</button>
-    <button class="dnb" data-tab="menu" onclick="goTab('menu')">🍔 المنيو والإعدادات</button>
+    <button class="dnb" data-tab="menu" onclick="goTab('menu')">⚙️ الإعدادات</button>
     <button class="dnb" data-tab="acc" onclick="goTab('acc')">📦 المخزون والحسابات</button>
   </div>
   <div class="content">
@@ -596,13 +596,14 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <!-- MENU -->
     <div class="screen" id="menuScreen">
       <div class="mtabs">
-        <button class="mtab on" id="mt1" onclick="showMTab('add')">➕ إضافة</button>
-        <button class="mtab" id="mt2" onclick="showMTab('list')">📋 الأصناف</button>
-        <button class="mtab" id="mt3" onclick="showMTab('cats')">🗂️ الفروع</button>
-        <button class="mtab" id="mt4" onclick="showMTab('settings')">⚙️ الإعدادات</button>
+        <button class="mtab" id="mt1" style="display:none" onclick="showMTab('add')">➕ إضافة</button>
+        <button class="mtab" id="mt2" style="display:none" onclick="showMTab('list')">📋 الأصناف</button>
+        <button class="mtab" id="mt3" style="display:none" onclick="showMTab('cats')">🗂️ الفروع</button>
+        <button class="mtab on" id="mt4" onclick="showMTab('settings')">⚙️ الإعدادات</button>
       </div>
+      <div class="ac-sub" style="margin:4px 2px 10px">🍔 تعديل المنيو (الأصناف والأسعار والفروع والصور) صار من تطبيق الإدارة ← «المنيو»، ويوصل هنا وحده</div>
       <div id="mSetSec" style="display:none;"></div>
-      <div id="mAddSec">
+      <div id="mAddSec" style="display:none;">
         <div class="flbl">اسم الصنف *</div>
         <input class="finp" id="nName" placeholder="مثال: برغر خاص">
         <div class="flbl">الكاتيغوري *</div>
@@ -651,7 +652,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nb" id="nbCap" data-tab="capPay" onclick="goTab('capPay')"><div class="ni">💵<span class="nav-pill" id="capPayPillM"></span></div><div>تسديد الكابتن</div></button>
     <button class="nb" id="nb6" data-tab="kitchen" onclick="goTab('kitchen')"><div class="ni">👨‍🍳<span class="nav-pill" id="kdsPillM"></span></div><div>المطبخ</div></button>
     <button class="nb" id="nb7" data-tab="shift" onclick="goTab('shift')"><div class="ni">🧮</div><div>الوردية</div></button>
-    <button class="nb" id="nb4" data-tab="menu" onclick="goTab('menu')"><div class="ni">🍔</div><div>المنيو</div></button>
+    <button class="nb" id="nb4" data-tab="menu" onclick="goTab('menu')"><div class="ni">⚙️</div><div>الإعدادات</div></button>
     <button class="nb" id="nb5" data-tab="acc" onclick="goTab('acc')"><div class="ni">📦</div><div>المخزون</div></button>
   </nav>
 </div>
@@ -1791,7 +1792,7 @@ function consumeItems(items,type,oid,note){
     const rec=acc.recipes[ci.name+'|'+ci.variant];
     if(rec&&rec.length)rec.forEach(r=>{const m=matById(r.mid);if(m)mvAdd(m,type,sign*(Number(r.q)||0)*ci.qty,null,note,oid);});
     const it=findItem(ci.name);
-    if(it&&typeof it.stock==='number')it.stock=Math.max(0,it.stock+sign*ci.qty);
+    if(it&&typeof it.stock==='number'){const nv=Math.max(0,it.stock+sign*ci.qty);if(window.posStockDelta)posStockDelta(it.name,nv-it.stock);it.stock=nv;}
   });
 }
 // وجبة اتحضّرت ثم انلغت: نحوّلها من «مبيعات» إلى «تالف»
@@ -2478,7 +2479,7 @@ window.bkImport=input=>{
       const d=JSON.parse(ev.target.result);
       if(!d||!Array.isArray(d.menu))throw new Error('ملف غير صالح');
       if(!(await askOk('استرجاع النسخة راح يستبدل المنيو والمخزون والحسابات الحالية. متأكد؟')))return;
-      menu=d.menu;acc=normAcc(d.acc);saveMenu();saveAcc();activeCat=0;renderMenu();initMenuManage();renderAcc();toast('✅ تم استرجاع النسخة');
+      menu=d.menu;acc=normAcc(d.acc);saveMenu({full:true});saveAcc();activeCat=0;renderMenu();renderAcc();toast('✅ تم استرجاع النسخة');
     }catch(e){toast('❌ '+e.message);}
   };
   r.readAsText(f);input.value='';
@@ -2723,7 +2724,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=53"></script>
+<script src="pos-pro.js?v=54"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
