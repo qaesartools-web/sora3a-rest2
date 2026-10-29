@@ -60,6 +60,10 @@
 
   // ══════════ المنيو السحابي ══════════
   let hasLocalMenu = false, menuCloudTs = 0, menuPushT = null, menuCloudExists = null;
+  // المنيو يتعدل من لوحة الإدارة بس: الكاشير يرفع تغيّر «المخزون الجاهز» من البيع والإلغاء فقط،
+  //  فوق آخر نسخة بالسحابة (transaction) — حتى ما يمسح تعديل سوّاه المالك بنفس اللحظة
+  let stockDelta = {};
+  window.posStockDelta = (name, d) => { if (name && d) stockDelta[name] = (stockDelta[name] || 0) + d; };
   const MENU_KEY = () => 'pos_menu_' + (rid() || 'def');
   const imgKey = (id) => 'pos_img_' + id;
   const imgSig = (d) => d ? d.length + ':' + d.slice(-32) : '';
@@ -75,10 +79,36 @@ function saveMenuCore(){try{localStorage.setItem(menuKey(),JSON.stringify(menu))
   window.saveMenu = function (opts) {
     saveMenuCore();
     hasLocalMenu = true;
-    if (!(opts && opts.local)) { clearTimeout(menuPushT); menuPushT = setTimeout(pushMenu, 1200); }
+    if (!(opts && opts.local)) { clearTimeout(menuPushT); menuPushT = setTimeout(() => pushMenu(opts), 1200); }
   };
 
-  async function pushMenu() {
+  async function pushMenu(opts) {
+    if (!rid()) return;
+    // مطعم قديم ما عنده منيو بالسحابة (أول جهاز) أو استرجاع نسخة احتياطية: يرتفع المنيو كامل
+    if (menuCloudExists === false || (opts && opts.full)) return pushMenuFull();
+    const ds = stockDelta; if (!Object.keys(ds).length) return;
+    stockDelta = {};
+    const f = fb(), ref = sub('menu', 'main');
+    try {
+      await f.runTransaction(f.db, async (tx) => {
+        const s = await tx.get(ref); if (!s.exists()) return;
+        const d = s.data(); let ch = false;
+        const cats = (d.cats || []).map((c) => ({ ...c, items: (c.items || []).map((p) => {
+          if (!(p.name in ds) || typeof p.stock !== 'number') return p;
+          ch = true; return { ...p, stock: Math.max(0, p.stock + ds[p.name]) };
+        }) }));
+        if (!ch) return;
+        menuCloudTs = Date.now();
+        tx.set(ref, { ...d, cats, updatedAtMs: menuCloudTs, device: deviceId });
+      });
+    } catch (e) {
+      // بدون نت أو خطأ: التغيير يرجع للقائمة وينرفع بعدين
+      Object.entries(ds).forEach(([k, v]) => { stockDelta[k] = (stockDelta[k] || 0) + v; });
+      clearTimeout(menuPushT); menuPushT = setTimeout(() => pushMenu(), 30000);
+      console.warn('menu stock push', e && e.code);
+    }
+  }
+  async function pushMenuFull() {
     if (!rid()) return;
     const f = fb();
     try {
@@ -122,11 +152,13 @@ function saveMenuCore(){try{localStorage.setItem(menuKey(),JSON.stringify(menu))
       }
       if (data && safeImg(data)) { p.img = data; p._sig = imgSig(data); }
     })));
+    // نقص مخزون بالكاشير لسه ما انرفع: يبقى محسوب على النسخة الجديدة
+    next.forEach((c) => c.items.forEach((p) => { if (typeof p.stock === 'number' && stockDelta[p.name]) p.stock = Math.max(0, p.stock + stockDelta[p.name]); }));
     menu = next;
     if (activeCat >= menu.length) activeCat = 0;
     saveMenu({ local: true });
     renderMenu();
-    if ($('menuScreen').classList.contains('on')) { initMenuManage(); if ($('mListSec').style.display !== 'none') renderMList(); }
+    if ($('menuScreen').classList.contains('on') && $('mt4').classList.contains('on') && can('settings')) renderSettings();
     // منيو جاي من جهاز ثاني أو من برج سرعة (رفع إكسل) ← نحدّث منيو الباركود للزبائن
     pubSoon();
   }
@@ -183,8 +215,8 @@ function renderMenuCore(){
     if (!prodQuery) {
       renderMenuCore();
       if (!totalItems) {
-        $('prods').innerHTML = `<div class="prod-empty"><div class="i">🍔</div><b>لا توجد أصناف بعد</b><br><small>أضف أصنافك من تبويب «المنيو»</small><br>
-          <button onclick="goTab('menu')">➕ إضافة أصناف</button> <button onclick="importSampleMenu()">📋 استيراد منيو تجريبي</button></div>`;
+        $('prods').innerHTML = `<div class="prod-empty"><div class="i">🍔</div><b>لا توجد أصناف بعد</b><br><small>المنيو يتضاف ويتعدل من تطبيق الإدارة ← «🍔 المنيو»، ويوصل هنا وحده</small>
+          ${isOwnerPOS() ? '<br><button onclick="openAdminPanel(\'menu\')">🍔 فتح تطبيق الإدارة</button>' : ''}</div>`;
       }
       return;
     }
@@ -201,10 +233,9 @@ function renderMenuCore(){
     }).join('') : `<div class="prod-empty"><div class="i">🔍</div>لا توجد نتائج لـ «${esc(prodQuery)}»</div>`;
   };
   window.clearProdSearch = () => { prodQuery = ''; $('prodSearch').value = ''; renderMenu(); };
-  window.importSampleMenu = async () => {
-    if (!(await askOk('استيراد منيو تجريبي؟ يمكنك تعديله أو حذفه لاحقاً.'))) return;
-    menu = JSON.parse(JSON.stringify(defaultMenu)); activeCat = 0; saveMenu(); renderMenu(); toast('✅ تم استيراد المنيو التجريبي');
-  };
+  // تعديل المنيو (الأصناف والأسعار والفروع والصور والمخزون الجاهز) صار من تطبيق الإدارة بس
+  const menuMoved = () => toast('🍔 تعديل المنيو صار من تطبيق الإدارة ← «المنيو»');
+  ['importSampleMenu', 'saveNItem', 'editItem', 'delItem', 'updImg', 'setItemStock', 'addNewCat', 'renameCat', 'delCat'].forEach((k) => { window[k] = menuMoved; });
 
   // ══════════ إضافة للسلة: ملاحظات + إضافة سريعة ══════════
   // الأساس (كان بـ index.html) — نفس الكود
@@ -1119,8 +1150,8 @@ const showMTabCore = tab=>{
   if(tab==='cats')renderCatsList();
 };
   window.showMTab = (tab) => {
-    if (tab === 'settings' ? !can('settings') : !can('menu')) { deny(); return; }
-    if (tab !== 'settings') { $('mSetSec').style.display = 'none'; $('mt4').classList.remove('on'); showMTabCore(tab); return; }
+    if (tab !== 'settings') { menuMoved(); tab = 'settings'; }
+    if (!can('settings')) { deny(); return; }
     ['mAddSec', 'mListSec', 'mCatsSec'].forEach((id) => { $(id).style.display = 'none'; });
     ['mt1', 'mt2', 'mt3'].forEach((id) => $(id).classList.remove('on'));
     $('mt4').classList.add('on');
@@ -1257,14 +1288,14 @@ const showMTabCore = tab=>{
   const TAB_PERM = { reports: 'reports', acc: 'inventory' };
   const isCashierRole = () => !!(window.posUser && window.posUser.role === 'cashier');
   // التقارير والأرباح والمبيعات الشهرية: للمالك فقط (الكاشير يطبع تقرير اليوم من الوردية)
-  const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'kitchen' ? !featOn('kitchen') : t === 'capPay' ? feat('captain') && myPerm('oDeliv') : t === 'menu' ? (can('menu') || can('settings')) : (!TAB_PERM[t] || can(TAB_PERM[t]));
+  const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'kitchen' ? !featOn('kitchen') : t === 'capPay' ? feat('captain') && myPerm('oDeliv') : t === 'menu' ? can('settings') : (!TAB_PERM[t] || can(TAB_PERM[t]));
   // التحديث التلقائي ينتظر لحد ما الكاشير يكون فاضي: سلة فارغة، لا نافذة مفتوحة، لا مكالمة
   window.auIdle = () => !restData || (!cart.length && !document.querySelector('[id$="Ov"].on, .duty-lock.on, .call-card'));
   window.auSave = () => ({ tab: TABS.find((t) => { const e = $(t + 'Screen'); return e && e.classList.contains('on'); }) || 'cashier' });
   // التقارير والأرباح صارت بلوحة الإدارة بس (بدون تكرار) — الكاشير يبقى بيه تقرير اليوم والوردية
   const ADMIN_URL = /^https?:$/.test(location.protocol) ? new URL('../sora3a-admin/', location.href.split(/[?#]/)[0]).href : 'https://qaesartools-web.github.io/sora3a-admin/';
-  window.openAdminPanel = () => {
-    toast('📊 التقارير والأرباح بلوحة الإدارة — ادخل بنفس حسابك');
+  window.openAdminPanel = (what) => {
+    toast(what === 'menu' ? '🍔 المنيو يتعدل من لوحة الإدارة — ادخل بنفس حسابك' : '📊 التقارير والأرباح بلوحة الإدارة — ادخل بنفس حسابك');
     window.open(ADMIN_URL, '_blank', 'noopener');
   };
   window.goTab = (tab) => {
@@ -1276,11 +1307,7 @@ const showMTabCore = tab=>{
     document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     if (tab === 'reports') renderRep();
     if (tab === 'orders') renderOrders();
-    if (tab === 'menu') {
-      initMenuManage();
-      // الكاشير بدون صلاحية المنيو يدخل مباشرة للإعدادات (إن سُمح له)
-      if (!can('menu')) showMTab('settings'); else if ($('mt4').classList.contains('on')) { if (can('settings')) renderSettings(); else showMTab('add'); }
-    }
+    if (tab === 'menu') showMTab('settings');
     if (tab === 'acc') renderAcc();
     if (tab === 'kitchen') renderKds();
     if (tab === 'shift') { renderShift(); loadClosedShifts().then(() => { if ($('shiftScreen').classList.contains('on')) renderShift(); }); }
@@ -1329,7 +1356,7 @@ const ordCancelCore = id=>{
   function applyPerms() {
     const u = window.posUser || {};
     document.querySelectorAll('[data-tab]').forEach((b) => { b.style.display = tabAllowed(b.dataset.tab) ? '' : 'none'; });
-    $('mt1').style.display = $('mt2').style.display = $('mt3').style.display = can('menu') ? '' : 'none';
+    $('mt1').style.display = $('mt2').style.display = $('mt3').style.display = 'none';
     $('mt4').style.display = can('settings') ? '' : 'none';
     const os = $('ordSum'); if (os) os.style.display = isCashierRole() ? 'none' : '';
     syncTypeBtns(); renderPagers(); if (window.callsPermSync) callsPermSync();
