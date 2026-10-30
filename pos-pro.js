@@ -1641,35 +1641,16 @@ const ordCancelCore = id=>{
     window.printHTML = printHTML = (html) => { deskPrint(html, dpCfg().main, '🖨️ طباعة', 1); };
     if (DESK.onUpdate) DESK.onUpdate((v) => deskUpd(v));
   }
-  // نسخة جديدة لبرنامج الكاشير نفسه (الطباعة، شبكة المطعم…): شريط يبقى يرجع لحد ما تتثبت، وبعدها يختفي وحده
-  //  «ثبّت هسه»: يتسكّر ويرجع بثواني. «لاحقاً»: يرجع بعد 30 دقيقة. وإذا محد لمس الكاشير 10 دقايق والسلة فارغة: يتثبت وحده
-  let deskUpdV = '', deskUpdT = 0, deskAct = Date.now();
+  // نسخة جديدة لبرنامج الكاشير نفسه (الطباعة، شبكة المطعم…): تتثبت وحدها بدون أي رسالة —
+  //  لما محد يلمس الكاشير 5 دقايق والسلة فارغة (البرنامج يتسكّر ويرجع بثواني). إذا النسخة نفسها مثبّتة ما يصير شي
+  let deskUpdV = '', deskAct = Date.now();
   ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => document.addEventListener(ev, () => { deskAct = Date.now(); }, true));
   const deskIdle = () => { try { return !window.auIdle || window.auIdle(); } catch (e) { return true; } };
-  function deskInstall() {
-    if (!deskIdle()) { toast('⚠️ خلّص الطلب اللي بالسلة أو سكّر النافذة المفتوحة أول، وبعدين ثبّت'); return; }
-    toast('🔄 يتثبت التحديث — البرنامج يرجع ينفتح وحده بثواني');
-    Promise.resolve(DESK.installUpdate()).catch(() => {});
-  }
-  function deskUpd(v) {
-    deskUpdV = String(v || '');
-    clearTimeout(deskUpdT);
-    let b = $('deskUpd');
-    if (!b) {
-      b = document.createElement('div'); b.id = 'deskUpd'; b.setAttribute('role', 'status');
-      b.style.cssText = 'position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:9001;background:#1e3a8a;color:#fff;border-radius:999px;padding:6px 8px 6px 14px;box-shadow:0 6px 18px rgba(0,0,0,.3);font:700 13px Tajawal,sans-serif;display:flex;gap:8px;align-items:center;white-space:nowrap';
-      document.body.appendChild(b);
-    }
-    const can = !!DESK.installUpdate;
-    b.innerHTML = `⬆️ نسخة جديدة لبرنامج الكاشير ${esc(deskUpdV)}${can ? '' : ' — تتثبت لما تسكّر البرنامج وتفتحه'}
-      ${can ? '<button type="button" data-du="go" style="border:0;border-radius:999px;padding:6px 12px;background:#fff;color:#1e3a8a;font:800 13px Tajawal,sans-serif;cursor:pointer">🔄 ثبّت هسه</button>' : ''}
-      <button type="button" data-du="later" style="border:0;border-radius:999px;padding:6px 10px;background:rgba(255,255,255,.18);color:#fff;font:700 12px Tajawal,sans-serif;cursor:pointer">لاحقاً</button>`;
-    b.querySelector('[data-du="later"]').onclick = () => { b.remove(); clearTimeout(deskUpdT); deskUpdT = setTimeout(() => deskUpd(deskUpdV), 30 * 60000); };
-    const go = b.querySelector('[data-du="go"]'); if (go) go.onclick = deskInstall;
-  }
+  const verN = (v) => String(v || '').split('.').map((x) => parseInt(x, 10) || 0).reduce((a, b) => a * 10000 + b, 0);
+  function deskUpd(v) { if (DESK && verN(v) > verN(DESK.version)) deskUpdV = String(v); }
   setInterval(() => {
-    if (deskUpdV && DESK && DESK.installUpdate && deskIdle() && Date.now() - deskAct > 10 * 60000) { deskAct = Date.now(); Promise.resolve(DESK.installUpdate()).catch(() => {}); }
-  }, 60000);
+    if (deskUpdV && DESK && DESK.installUpdate && deskIdle() && Date.now() - deskAct > (window.deskIdleMs || 5 * 60000)) { deskAct = Date.now(); Promise.resolve(DESK.installUpdate()).catch(() => {}); }
+  }, window.deskTickMs || 60000);
   const dpOpt = (list, cur, emptyLabel) => '<option value="">' + emptyLabel + '</option>' + [...new Set([...list.map((p) => p.name), cur].filter(Boolean))]
     .map((n) => { const p = list.find((x) => x.name === n); const st = !p ? ' — ❓ مو موجودة' : p.ok ? '' : ' — ⚠️ ' + p.statusText;
       return `<option value="${esc(n)}" ${n === cur ? 'selected' : ''}>${esc(n)}${p && p.isDefault ? ' (الافتراضية)' : ''}${st}</option>`; }).join('');
