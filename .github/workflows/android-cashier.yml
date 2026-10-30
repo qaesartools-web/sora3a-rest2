@@ -4,6 +4,7 @@
 #   الشاشة:     releases/download/screen-android/sora3a-screen.apk  (تلفزيون / تيفي بوكس)
 #   المطبخ:     releases/download/kitchen-android/sora3a-kitchen.apk (شاشة المطبخ/الأقسام — بنت أو بدون نت ويا الكاشير)
 #   المجهز:     releases/download/prep-android/sora3a-prep.apk (شاشة المجهز — بنت أو بدون نت ويا الكاشير)
+#   الويتر:     releases/download/waiter-android/sora3a-waiter.apk (تلفون الويتر — بنت أو بدون نت ويا الكاشير)
 # (ما يصيرون «latest» حتى ما يأثرون على تحديث برنامج الحاسبة)
 name: Android cashier app
 
@@ -49,22 +50,24 @@ jobs:
       - name: Unit tests + build
         working-directory: android
         env: { VERSION_CODE: '${{ github.run_number }}' }
-        run: gradle --no-daemon testCashierDebugUnitTest assembleCashierRelease assembleLineRelease assembleScreenRelease assembleKitchenRelease assemblePrepRelease
+        run: gradle --no-daemon testCashierDebugUnitTest assembleCashierRelease assembleLineRelease assembleScreenRelease assembleKitchenRelease assemblePrepRelease assembleWaiterRelease
       - run: |
           cp android/app/build/outputs/apk/cashier/release/app-cashier-release.apk sora3a-cashier.apk
           cp android/app/build/outputs/apk/line/release/app-line-release.apk sora3a-line.apk
           cp android/app/build/outputs/apk/screen/release/app-screen-release.apk sora3a-screen.apk
           cp android/app/build/outputs/apk/kitchen/release/app-kitchen-release.apk sora3a-kitchen.apk
           cp android/app/build/outputs/apk/prep/release/app-prep-release.apk sora3a-prep.apk
+          cp android/app/build/outputs/apk/waiter/release/app-waiter-release.apk sora3a-waiter.apk
           # التطبيق يقرا هذا الملف حتى يعرف أكو نسخة أحدث، ويحدّث نفسه بس إذا بصمة التوقيع نفسها
           printf '{"version":%s,"name":"1.%s","cert":"%s"}\n' "${{ github.run_number }}" "${{ github.run_number }}" "$SIGN_CERT" > version.json
       # المطبخ والمجهز تطبيقين منفصلين: كل واحد باسمه (وأيقونته) ومعرّفه
       - name: Check kitchen and preparer apps
         run: |
           A=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2
-          for f in sora3a-kitchen.apk sora3a-prep.apk; do "$A" dump badging "$f" | grep -E "^package:|^application-label:|^launchable-activity:"; done
+          for f in sora3a-kitchen.apk sora3a-prep.apk sora3a-waiter.apk; do "$A" dump badging "$f" | grep -E "^package:|^application-label:|^launchable-activity:"; done
           "$A" dump badging sora3a-kitchen.apk | grep -q "package: name='iq.sora3a.kitchen'"
           "$A" dump badging sora3a-prep.apk | grep -q "package: name='iq.sora3a.prep'"
+          "$A" dump badging sora3a-waiter.apk | grep -q "package: name='iq.sora3a.waiter'"
       - uses: actions/upload-artifact@v4
         with: { name: sora3a-android-apks, path: 'sora3a-*.apk' }
       - name: Publish (fixed tag, not latest)
@@ -121,4 +124,15 @@ jobs:
           body: نسخة ${{ github.run_number }} — نزّل sora3a-prep.apk وثبّته على تابلت المجهز واربطه بالرمز من لوحة الإدارة. يشتغل بنت أو بدون نت ما دام على نفس الواي فاي ويا الكاشير.
           files: |
             sora3a-prep.apk
+            version.json
+      - name: Publish waiter app (fixed tag, not latest)
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: waiter-android
+          name: تطبيق الويتر للأندرويد
+          make_latest: false
+          body: نسخة ${{ github.run_number }} — نزّل sora3a-waiter.apk وثبّته على تلفون الويتر واربطه بالرمز من لوحة الإدارة. يطلب بنت أو بدون نت ما دام على نفس الواي فاي ويا الكاشير.
+          files: |
+            sora3a-waiter.apk
             version.json

@@ -43,7 +43,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-// أربع تطبيقات من نفس الكود (BuildConfig.LINE / BuildConfig.SCREEN / BuildConfig.KITCHEN):
+// تطبيقات من نفس الكود (BuildConfig.LINE / SCREEN / KITCHEN / PREP / WAITER):
 //  • الكاشير: نفس الكاشير من الإنترنت (أي تحديث يوصل فوراً) + طباعة مباشرة على الطابعة المدمجة والشبكة والبلوتوث
 //  • خط المطعم: صفحة وحدة لربط رقم المطعم، والتلفون يبعث رقم المتصل للكاشير
 //  • الشاشة: «طلبك جاهز» على التلفزيون/التيفي بوكس — ملء الشاشة، ما تطفي، وتفتح وحدها مع تشغيل الجهاز
@@ -75,7 +75,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        if (!BuildConfig.LINE) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // شاشة الكاشير والتلفزيون ما تطفي
+        if (!BuildConfig.LINE && !BuildConfig.WAITER) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // شاشة الكاشير والتلفزيون ما تطفي (تلفون الويتر يطفي عادي)
         immersive();
         FrameLayout root = new FrameLayout(this);
         web = new WebView(this);
@@ -89,12 +89,12 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false); // رنة المكالمات والطلبات
         s.setSupportMultipleWindows(false);
         // تطبيق المطبخ وتطبيق المجهز: SoraKds/sec أو SoraKds/prep — الصفحة تقفل على شاشته
-        s.setUserAgentString(s.getUserAgentString() + (BuildConfig.SCREEN ? " SoraScreenApp/" : BuildConfig.KITCHEN ? " SoraKitchenApp/" : " SoraCashierApp/") + BuildConfig.VERSION_NAME
+        s.setUserAgentString(s.getUserAgentString() + (BuildConfig.SCREEN ? " SoraScreenApp/" : BuildConfig.KITCHEN ? " SoraKitchenApp/" : BuildConfig.WAITER ? " SoraWaiterApp/" : " SoraCashierApp/") + BuildConfig.VERSION_NAME
             + (BuildConfig.KITCHEN ? (BuildConfig.PREP ? " SoraKds/prep" : " SoraKds/sec") : ""));
 
         // الشاشة وشاشة المطبخ ما تحتاج جسر الطباعة والخط — تعرض بس
         final boolean early = !BuildConfig.SCREEN && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
-        if (!BuildConfig.SCREEN && !BuildConfig.KITCHEN) {
+        if (!BuildConfig.SCREEN && !BuildConfig.KITCHEN && !BuildConfig.WAITER) {
             Simulator sim = new Simulator(this);
             AndroidBackend backend = new AndroidBackend(this);
             HtmlRenderer renderer = new HtmlRenderer(this, root);
@@ -158,7 +158,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap icon) {
                 pageUrl = url == null ? "" : url;
-                if (!BuildConfig.SCREEN && !BuildConfig.KITCHEN && !early && pageOriginOk()) v.evaluateJavascript(Bridge.SHIM, null);
+                if (!BuildConfig.SCREEN && !BuildConfig.KITCHEN && !BuildConfig.WAITER && !early && pageOriginOk()) v.evaluateJavascript(Bridge.SHIM, null);
                 if (!early && pageOriginOk()) v.evaluateJavascript(LanBridge.SHIM, null);
             }
             @Override public void onPageFinished(WebView v, String url) {
@@ -669,7 +669,7 @@ public class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (web.canGoBack()) { web.goBack(); return; }
         if (BuildConfig.LINE) { finish(); return; } // الخط يشتغل بالخلفية حتى والتطبيق مسكّر
-        AlertDialog.Builder b = new AlertDialog.Builder(this).setMessage(BuildConfig.SCREEN ? "تريد تسكّر الشاشة؟" : "تريد تسكّر الكاشير؟")
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setMessage(BuildConfig.SCREEN ? "تريد تسكّر الشاشة؟" : BuildConfig.WAITER ? "تريد تسكّر تطبيق الويتر؟" : BuildConfig.PREP ? "تريد تسكّر شاشة المجهز؟" : BuildConfig.KITCHEN ? "تريد تسكّر شاشة المطبخ؟" : "تريد تسكّر الكاشير؟")
             .setPositiveButton("إغلاق", (d, w) -> finish()).setNegativeButton("إلغاء", null);
         // الشاشة واجهة رئيسية: «إغلاق» يرجعها نفسها — فنعطي طريق لإعدادات التلفزيون دائماً
         if (BuildConfig.SCREEN) b.setNeutralButton("إعدادات التلفزيون", (d, w) -> openSettings(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
@@ -677,9 +677,9 @@ public class MainActivity extends Activity {
     }
 
     private static final String OFFLINE = "<html dir=rtl><body style='margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0B1220;color:#EEF2F7;font-family:sans-serif;text-align:center'>"
-        + "<div style='padding:24px'><div style='font-size:52px'>📶</div><h2>" + (BuildConfig.LINE ? "ما كدرنا نفتح الصفحة" : BuildConfig.SCREEN ? "ما كدرنا نفتح الشاشة" : BuildConfig.PREP ? "ما كدرنا نفتح شاشة المجهز" : BuildConfig.KITCHEN ? "ما كدرنا نفتح شاشة المطبخ" : "ما كدرنا نفتح الكاشير") + "</h2>"
+        + "<div style='padding:24px'><div style='font-size:52px'>📶</div><h2>" + (BuildConfig.LINE ? "ما كدرنا نفتح الصفحة" : BuildConfig.SCREEN ? "ما كدرنا نفتح الشاشة" : BuildConfig.WAITER ? "ما كدرنا نفتح تطبيق الويتر" : BuildConfig.PREP ? "ما كدرنا نفتح شاشة المجهز" : BuildConfig.KITCHEN ? "ما كدرنا نفتح شاشة المطبخ" : "ما كدرنا نفتح الكاشير") + "</h2>"
         + "<p style='color:#A9B5C6;line-height:1.8'>" + (BuildConfig.LINE ? "ربط الخط يحتاج إنترنت. شغّل النت ونعيد المحاولة."
-            : BuildConfig.SCREEN || BuildConfig.KITCHEN ? "أول تشغيل يحتاج إنترنت حتى تنحفظ الشاشة بالجهاز. بعدها تشتغل ويا الكاشير على نفس الواي فاي حتى لو انقطع النت — نعيد المحاولة وحدنا."
+            : BuildConfig.SCREEN || BuildConfig.KITCHEN || BuildConfig.WAITER ? "أول تشغيل يحتاج إنترنت حتى تنحفظ الشاشة بالجهاز. بعدها تشتغل ويا الكاشير على نفس الواي فاي حتى لو انقطع النت — نعيد المحاولة وحدنا."
             : "أول تشغيل يحتاج إنترنت حتى ينحفظ الكاشير بالجهاز. بعدها يشتغل حتى لو انقطع النت.") + "</p>"
         + "<button style='font-size:18px;padding:12px 28px;border:0;border-radius:14px;background:#16A34A;color:#fff' onclick=\"location.href='" + START_URL + "'\">🔄 إعادة المحاولة</button>"
         + "</div><script>setTimeout(function(){location.href='" + START_URL + "'},10000)</script></body></html>";

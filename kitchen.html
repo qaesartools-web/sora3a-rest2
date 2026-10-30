@@ -288,7 +288,7 @@ button{cursor:pointer}
 <script src="vendor/qrcode.js"></script>
 <script type="module">
 import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from './staff.js';
-import { lanLink } from './lanlink.js?v=1';
+import { lanLink, score } from './lanlink.js?v=2';
 // الشاشة تنربط بالمطعم برمز (بدون إيميل ولا كلمة سر) — جلستها بتطبيق Firebase خاص بالشاشات
 const db = screenFb().db;
 document.getElementById('gateCss').textContent = GATE_CSS;
@@ -405,11 +405,12 @@ function start() {
   }, (e) => { console.warn('orders', e.code); fsLive = false; syncView(); }));
 }
 
-// الطلبات = نسخة السيرفر + نسخة الكاشير على الواي فاي (بدون نت نسخة الكاشير تغلب — هي الأحدث)
+// الطلبات = نسخة السيرفر + نسخة الكاشير على الواي فاي: لكل طلب النسخة الأكثر تقدّماً
+//  (بدون نت الكاشير عنده الأحدث، ولما يرجع النت السيرفر يتأخر ثواني لحد ما الكاشير يرفع اللي صار — فما يرجع طلب «جاهز» للشاشة)
 function syncView() {
   if (!me) return;
   const L = lan.orders(), m = new Map(fsOrders.map((o) => [o.id, o]));
-  L.forEach((o, id) => { if (!fsLive || !m.has(id)) m.set(id, o); });
+  L.forEach((o, id) => { const x = m.get(id); if (!x || !fsLive || score(o) > score(x)) m.set(id, o); });
   orders = [...m.values()];
   // ماكو نت والكاش فارغ: الأقسام واسم المطعم من الكاشير
   const ls = lan.settings();
@@ -522,11 +523,13 @@ $('grid').addEventListener('click', (e) => {
   const s = e.target.closest('[data-sec]'); if (s) { const [id, sid] = s.dataset.sec.split('|'); secDone(id, sid); }
 });
 
+// الضغطة تروح للكاشير على الواي فاي إذا ماكو نت، أو الطلب لسه ما وصل السيرفر (انسجّل بدون نت والكاشير يرفعه هسه)
+const viaLan = (id) => lan.has(id) && (!fsLive || !fsOrders.some((o) => o.id === id));
 async function done(id) {
   const o = orders.find((x) => x.id === id); if (!o || pendOn('d:' + id)) return;
   pend.set('d:' + id, Date.now() + 20000); render();
   const back = (msg) => { pend.delete('d:' + id); render(); toast(msg); };
-  if (!fsLive && lan.has(id)) { const ok = await lan.act(id, 'ready', { at: Date.now() }); if (ok) toast('✅ #' + kNum(o) + ' جاهز'); else back('❌ تعذّر — تأكد إن الكاشير شغّال'); return; }
+  if (viaLan(id)) { const ok = await lan.act(id, 'ready', { at: Date.now() }); if (ok) toast('✅ #' + kNum(o) + ' جاهز'); else back('❌ تعذّر — تأكد إن الكاشير شغّال'); return; }
   const fields = { kitchen: 'ready', kitchenReadyAt: Date.now() };
   if (o.kSec) fields.kSec = Object.fromEntries(Object.entries(o.kSec).map(([k, v]) => [k, { ...v, readyAt: v.readyAt || Date.now() }]));
   // طلب أونلاين قيد التحضير ← نعلن «جاهز» حتى يوصل للزبون، ويرجع للكاشير للتسليم/الكابتن (نفس القديم)
@@ -540,7 +543,7 @@ async function secDone(id, sid) {
   const pk = 's:' + id + '|' + sid, opt = SEC === sid && !o.kSec[sid].readyAt;   // شاشة القسم: يطلع من الشاشة فوراً
   if (opt) { if (pendOn(pk)) return; pend.set(pk, Date.now() + 20000); render(); }
   const back = () => { if (opt) { pend.delete(pk); render(); } };
-  if (!fsLive && lan.has(id)) {
+  if (viaLan(id)) {
     const on = !o.kSec[sid].readyAt, ok = await lan.act(id, 'sec', { sec: sid, on, at: Date.now() });
     if (!ok) back();
     const last = on && Object.entries(o.kSec).every(([k, v]) => k === sid || v.readyAt);

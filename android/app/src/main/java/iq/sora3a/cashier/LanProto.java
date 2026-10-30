@@ -29,7 +29,7 @@ public final class LanProto {
     public static final int UDP_PORT = 47800, TCP_PORT = 47801, VER = 1;
     static final long PING_MS = 15_000, IDLE_MS = 45_000, AUTH_MS = 10_000, EV_AGE = 10 * 60_000;
     static final int MAX_LINE = 16 * 1024 * 1024;
-    static final List<String> ROLES = java.util.Arrays.asList("kitchen", "screen", "line");
+    static final List<String> ROLES = java.util.Arrays.asList("kitchen", "screen", "line", "waiter");
     private static final SecureRandom RND = new SecureRandom();
 
     // إعدادات المطعم على هذا الجهاز: المطعم + الرمز السري + معرّف الجهاز + اسمه

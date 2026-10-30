@@ -409,6 +409,7 @@ function openDelivModalCore(){
     if (webAttach) {
       o.webId = webAttach.id; o.source = webAttach.source === 'waiter' ? 'waiter' : 'qr';
       if (webAttach.waiter) o.waiter = String(webAttach.waiter).slice(0, 60);
+      if (webAttach.waiterUid) o.waiterUid = String(webAttach.waiterUid).slice(0, 128);
       if (webAttach.note) o.note = String(webAttach.note).slice(0, 500);
     }
     applySections(o);
@@ -1256,6 +1257,13 @@ const showMTabCore = tab=>{
   };
   function listenSettings() {
     settings = { ...DEFAULTS, ...lsGet(setKey(), {}) };
+    // السيرفر واصل هسه؟ (إذا انشلع كيبل النت والواي فاي شغّال، المتصفح يبقى يحسب نفسه «متصل»)
+    window.posFsLive = navigator.onLine !== false;
+    unsubs.push(fb().onSnapshot(sub('settings', 'main'), { includeMetadataChanges: true }, (s) => {
+      const was = window.posFsLive;
+      window.posFsLive = !s.metadata.fromCache;
+      if (window.posFsLive && !was) wFlush();   // رجع النت: طلبات الويتر اللي وصلت على الواي فاي تترفع
+    }, () => { window.posFsLive = false; }));
     unsubs.push(fb().onSnapshot(sub('settings', 'main'), (s) => {
       if (!s.exists()) return;
       const { updatedAtMs, ...d } = s.data();
@@ -1415,6 +1423,7 @@ const ordCancelCore = id=>{
   //  نحجز رقم واحد مقدماً بس: إذا الصفحة انسدت، أقصى شي يتخطى رقم واحد
   //  وإذا النت بطيء (الحجز ياخذ أكثر من ثانية) نحجز 3 مقدماً حتى ما يخلص المحجوز ونرجع للعدّ المحلي اللي يكرر الأرقام
   let TK_BLOCK = 1;
+  const netOk = () => navigator.onLine !== false && window.posFsLive !== false;
   let tkPool = { day: '', nums: [] }, tkBusy = null, tkBusyAt = 0, tkSeen = { day: '', n: 0 };   // آخر رقم شفناه بالعدّاد
   function localTicketMax() {
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
@@ -1427,7 +1436,7 @@ const ordCancelCore = id=>{
   function tkRefill(tries = 0) {
     const f = fb();
     // حجز معلّق أكثر من 8 ثواني (النت انقطع بنصه) ما يوقف الحجوزات الجاية — وإذا وصل بعدين أرقامه تنضاف عادي
-    if ((tkBusy && Date.now() - tkBusyAt < 8000) || !rid() || !f || !f.runTransaction || navigator.onLine === false) return;
+    if ((tkBusy && Date.now() - tkBusyAt < 8000) || !rid() || !f || !f.runTransaction || !netOk()) return;
     const day = bagDay(), t0 = Date.now(), block = TK_BLOCK;
     tkBusyAt = t0;
     const job = tkBusy = f.runTransaction(f.db, async (tx) => {
@@ -1442,7 +1451,7 @@ const ordCancelCore = id=>{
         if (tkBusy !== job) return;
         tkBusy = null;
         // الحجز فشل (كاشيرين حجزوا بنفس اللحظة، أو النت تقطّع): نعيد بعد لحظة بدل ما نرجع للعدّ المحلي اللي يكرر الأرقام
-        if (e instanceof Error && tries < 3 && navigator.onLine !== false && !tkPool.nums.length) {
+        if (e instanceof Error && tries < 3 && netOk() && !tkPool.nums.length) {
           tkBusyAt = Date.now();
           tkBusy = new Promise((r) => setTimeout(r, 200 + Math.random() * 600)).then(() => { tkBusy = null; tkRefill(tries + 1); return tkBusy; });
         }
@@ -1453,7 +1462,7 @@ const ordCancelCore = id=>{
   //  (العدّ المحلي يكرر رقم كاشير ثاني) — بدون إنترنت أو إذا السيرفر تأخر أكثر من 4 ثواني نكمل محلياً
   async function ensureTicket() {
     if (tkPool.day === bagDay() && tkPool.nums.length) return;
-    if (navigator.onLine === false) return;
+    if (!netOk()) return;   // بدون نت (حتى لو الواي فاي شغّال): رقم محلي فوراً بدون انتظار
     tkRefill();
     const until = Date.now() + 4000;
     // ننتظر الحجز (ومحاولاته الثانية إذا فشل) لحد 4 ثواني
@@ -2398,7 +2407,7 @@ const ordCancelCore = id=>{
   const lanSettings = () => ({ sections: settings.sections || [], kSecOn: !!settings.kSecOn, receiptTitle: settings.receiptTitle || '', screen: settings.screen || null });
   const lanRest = () => ({ name: (restData && restData.name) || '', features: (restData && restData.features) || {}, svcOff: (restData && restData.svcOff) || {} });
   const lanName = () => String((window.posUser && window.posUser.name) || 'الكاشير').slice(0, 40);
-  const toScreens = (m) => { const L = lanApi(); if (L && lanOn) { L.send('role:kitchen', m); L.send('role:screen', m); } };
+  const toScreens = (m) => { const L = lanApi(); if (L && lanOn) { L.send('role:kitchen', m); L.send('role:screen', m); } if (m.settings) wSend({ t: 'state', settings: wSettings() }); };
   const lanFull = (to) => { const L = lanApi(); if (L && lanOn) L.send(to, { t: 'state', full: 1, orders: lanList(), settings: lanSettings(), rest: lanRest(), hub: { name: lanName() } }); };
   function lanPush() {
     const list = lanList(), now = new Map(list.map((o) => [o.id, JSON.stringify(o)]));
@@ -2406,7 +2415,7 @@ const ordCancelCore = id=>{
     lanSent = now;
     if (ch.length || del.length) toScreens({ t: 'state', orders: ch, del });
   }
-  window.posLanOrders = () => { if (!lanOn) return; clearTimeout(lanPushT); lanPushT = setTimeout(lanPush, 250); };
+  window.posLanOrders = () => { if (!lanOn) return; clearTimeout(lanPushT); lanPushT = setTimeout(() => { lanPush(); wPush(); }, 250); };
   function lanSettingsPush() { toScreens({ t: 'state', settings: lanSettings() }); }
   // «جاهز» من شاشة المطبخ (بدون نت): نفس اللي يسويه المطبخ بالنت
   async function lanReady(o) {
@@ -2436,6 +2445,117 @@ const ordCancelCore = id=>{
     if (lanSeen.size > 300) lanSeen.delete(lanSeen.values().next().value);
     callIn({ lanId: String(d.id).slice(0, 64), number: String(d.number || '').slice(0, 24), line: String(d.line || '').slice(0, 30) });
   }
+  // ── تلفونات الويتر على الواي فاي: الطلب يوصل للكاشير مباشرة حتى لو النت مقطوع، والويتر يشوف حالة طلباته ──
+  //  الطلب بنفس المعرّف بكل مكان (تلفون الويتر، كل كاشير، السيرفر) — والسيرفر يقبل «طلب جديد» مرة وحدة بس (القواعد)،
+  //  فحتى لو انرسل من أكثر من جهاز ما يتكرر، ولا ترجع نسخة «جديد» تغطّي على طلب انقبل
+  const W_KEYS = ['restaurantId', 'source', 'mode', 'table', 'items', 'note', 'status', 'total', 'createdAtMs', 'waiter', 'waiterUid', 'day'];
+  let wMap = null, wMapRid = '', wSent = new Map(), wMenuSig = '';
+  const wMine = () => { if (!wMap || wMapRid !== rid()) { wMapRid = rid(); wMap = lsGet('pos_wmap_' + wMapRid, {}) || {}; wSent = new Map(); } return wMap; };
+  function wSave() {
+    const m = wMine(), old = Date.now() - 16 * 3600000;
+    Object.keys(m).forEach((k) => { if ((m[k].createdAtMs || 0) < old) delete m[k]; });
+    lsSet('pos_wmap_' + wMapRid, m);
+  }
+  const wDoc = (w) => { const x = {}; W_KEYS.forEach((k) => { if (w[k] !== undefined && w[k] !== null) x[k] = w[k]; }); return x; };
+  // كل طلب ويتر يمر على هذا الكاشير ينحفظ (حتى يرجع يعرضه للويتر — وطلبات الواي فاي ترجع إذا انفتح الكاشير من جديد)
+  function wRemember(w, lan) {
+    const m = wMine();
+    m[w.id] = { ...(m[w.id] || {}), ...wDoc(w), status: 'new', ...(lan ? { lan: 1 } : {}) };
+    wSave(); wPush();
+  }
+  function wMark(id, x) { const m = wMine(); if (m[id]) { Object.assign(m[id], x); wSave(); } wPush(); }
+  const wSettings = () => ({ ...lanSettings(), tables: Number(settings.tables) || 0 });
+  const wMenu = () => menu.map((c) => ({ cat: c.cat, emoji: c.emoji, items: (c.items || []).map((p) => {
+    const x = { name: p.name, variants: (p.variants || []).map((v) => ({ name: v.name, price: Number(v.price) || 0 })) };
+    if (typeof p.stock === 'number') x.stock = p.stock;
+    if (p.imgId) x.imgId = p.imgId;
+    return x;
+  }) })).filter((c) => c.items.length);
+  // حالة طلبات الويتر: «عند الكاشير» ← انقبل (ومرحلته من طلب الكاشير) أو انرفض
+  function wList() {
+    const m = wMine(), out = new Map(), day = Date.now() - 16 * 3600000;
+    Object.entries(m).forEach(([id, x]) => {
+      if (!x.gone) out.set(id, { id, ...x, lan: undefined, acc: undefined, rej: undefined, ...(x.rej ? { status: 'rejected', reason: x.rej } : x.acc ? { status: 'accepted', stage: 'preparing' } : {}) });
+    });
+    orders.forEach((o) => {
+      if (!o.webId || o.source !== 'waiter' || (o.createdAtMs || 0) < day) return;
+      const x = out.get(o.webId) || { id: o.webId, source: 'waiter', mode: 'table', table: o.tableNo || '', waiter: o.waiter || '', waiterUid: o.waiterUid || '', day: o.day,
+        createdAtMs: o.createdAtMs, total: o.total || o.value || 0, items: (o.items || []).map((i) => ({ name: i.name, variant: i.variant, qty: i.qty, note: i.note })) };
+      out.set(o.webId, { ...x, status: 'accepted', stage: webStageOf(o), ticket: String(kNum(o)).slice(0, 10), reason: undefined });
+    });
+    return [...out.values()].map((w) => JSON.parse(JSON.stringify(w)));
+  }
+  const wSend = (m, to) => { const L = lanApi(); if (L && lanOn) L.send(to || 'role:waiter', m); };
+  function wFull(to) {
+    if (!lanApi() || !lanOn) return;
+    const list = wList();
+    wSent = new Map(list.map((w) => [w.id, JSON.stringify(w)]));
+    wSend({ t: 'state', full: 1, orders: list, menu: wMenu(), settings: wSettings(), rest: lanRest(), hub: { name: lanName() } }, to);
+  }
+  function wPush() {
+    if (!lanApi() || !lanOn) return;
+    const list = wList(), now = new Map(list.map((w) => [w.id, JSON.stringify(w)]));
+    const ch = list.filter((w) => wSent.get(w.id) !== now.get(w.id)), del = [...wSent.keys()].filter((id) => !now.has(id));
+    wSent = now;
+    const mn = wMenu(), sig = JSON.stringify(mn), msg = { t: 'state' };
+    if (ch.length || del.length) { msg.orders = ch; msg.del = del; }
+    if (sig !== wMenuSig) { wMenuSig = sig; msg.menu = mn; }
+    if (msg.orders || msg.menu) wSend(msg);
+  }
+  // طلب من تلفون الويتر على الواي فاي
+  function wOrder(ev) {
+    const d = ev.d, L = lanApi(), reply = (ok, err) => { if (L) L.send(ev.id, { t: 'ack', rq: d.rq, ok, err }); };
+    const w = d.w && typeof d.w === 'object' ? d.w : null, id = w && String(w.id || '');
+    if (d.op !== 'order' || !w || !/^[A-Za-z0-9]{15,40}$/.test(id)) return reply(false);
+    if (webs.has(id) || webGone.has(id) || wMine()[id]) return reply(true);   // وصل من قبل (من كاشير ثاني أو إعادة إرسال)
+    const x = wDoc({ ...w, restaurantId: rid(), source: 'waiter', mode: 'table', status: 'new' });
+    x.table = String(x.table || '').slice(0, 10);
+    x.items = Array.isArray(x.items) ? x.items.slice(0, 40).filter((i) => i && typeof i.name === 'string') : [];
+    if (!x.table || !x.items.length || !x.waiterUid || typeof x.createdAtMs !== 'number') return reply(false);
+    x.createdAtMs = Math.round(x.createdAtMs);
+    if (!feat('waiter')) return reply(false, 'off');
+    webLan.add(id);
+    wRemember({ id, ...x }, true);
+    // نسجّله بالسيرفر (ينرفع من يرجع النت) — إذا الويتر أو كاشير ثاني سجّله قبلنا، السيرفر يرفض هذي النسخة وما تتغير
+    wCreate(id, x);
+    const fresh = webIntake({ id, ...x });
+    renderWeb();
+    if (fresh) notifyWeb(fresh);
+    reply(true);
+  }
+  // تسجيل الطلب بالسيرفر — إذا انسجّل قبل (من الويتر أو كاشير ثاني) السيرفر يرفض هذي النسخة بهدوء وما يتغير شي
+  const wCreate = (id, x) => { const f = fb(); return (f.rawSetDoc || f.setDoc)(f.doc(f.db, 'webOrders', id), wDoc({ ...x, status: 'new' })).catch(() => {}); };
+  // كاشير ثاني على نفس الواي فاي قبله أو رفضه
+  function wTaken(id) {
+    if (typeof id !== 'string' || !id) return;
+    webGone.add(id);
+    if (webs.delete(id)) { renderWeb(); if (!webVisible().length) clearInterval(webRingT); }
+    const m = wMine(); if (m[id] && !orders.some((o) => o.webId === id)) wMark(id, { gone: 1 });
+  }
+  // رجع النت: طلبات الواي فاي اللي ما تبين بالسيرفر تترفع، واللي انقبلت أو انرفضت من مكان ثاني تختفي
+  async function wFlush() {
+    const f = fb();
+    for (const id of [...webLan]) {
+      if (!webs.has(id)) { webLan.delete(id); continue; }
+      try {
+        const s = await f.getDoc(f.doc(f.db, 'webOrders', id));
+        if (s.exists() && s.data().status !== 'new') { webLan.delete(id); wTaken(id); continue; }
+        if (!s.exists()) { const x = wMine()[id]; if (x) await wCreate(id, x); }
+        webLan.delete(id);
+      } catch (e) { /* يرجع يحاول المرة الجاية */ }
+    }
+  }
+  // الكاشير انفتح من جديد: طلبات الواي فاي اللي لسه بانتظار القبول ترجع تطلع
+  function wRestore() {
+    const m = wMine();
+    Object.entries(m).forEach(([id, x]) => {
+      if (!x.lan || x.rej || x.gone || x.acc || webs.has(id) || webGone.has(id) || orders.some((o) => o.webId === id)) return;
+      if (Date.now() - (x.createdAtMs || 0) > 3 * 3600000) return;
+      webLan.add(id); webIntake({ id, ...wDoc(x) });
+    });
+    renderWeb();
+    if (netOk()) wFlush();
+  }
   function onLan(ev) {
     if (!ev || !restData) return;
     if (ev.t === 'status') { lanSt = ev; lanOn = !!ev.on; lanUi(); return; }
@@ -2443,6 +2563,8 @@ const ordCancelCore = id=>{
     if (ev.t === 'msg' && ev.d) {
       const d = ev.d;
       if (d.t === 'sync' && (ev.role === 'kitchen' || ev.role === 'screen')) return lanFull(ev.id);
+      if (d.t === 'sync' && ev.role === 'waiter') return wFull(ev.id);
+      if (d.t === 'act' && ev.role === 'waiter') { wOrder(ev); return; }
       if (d.t === 'act') { lanAct(ev); return; }
       if (d.t === 'call' && ev.role === 'line') { lanCall(d); const L = lanApi(); if (L) L.send(ev.id, { t: 'ack', rq: d.id, ok: true }); }
       return;
@@ -2450,6 +2572,7 @@ const ordCancelCore = id=>{
     if (ev.t === 'ev' && ev.d) {
       if (ev.d.t === 'call') lanCall(ev.d);
       else if (ev.d.t === 'taken') callTakenElsewhere(ev.d);
+      else if (ev.d.t === 'wtaken') wTaken(ev.d.id);
     }
   }
   const newLanKey = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -2479,7 +2602,7 @@ const ordCancelCore = id=>{
       lanOn = !!(lanSt && lanSt.on);
       lanSent = new Map();
       // الشاشات المتصلة من قبل (الصفحة انفتحت من جديد): نسخة كاملة
-      if (lanOn) { lanFull('role:kitchen'); lanFull('role:screen'); lanPush(); lanFwCheck(); }
+      if (lanOn) { lanFull('role:kitchen'); lanFull('role:screen'); lanPush(); wFull('role:waiter'); lanFwCheck(); }
       lanUi();
     };
     const cached = lsGet('pos_lan_' + r, '');
@@ -2690,6 +2813,7 @@ const ordCancelCore = id=>{
   // ── استلام الطلبات ──
   const webs = new Map();            // طلبات جديدة بانتظار القبول
   const webBusy = new Set(), webGone = new Set();   // webGone: انقبل أو انرفض من هذا الجهاز
+  const webLan = new Set();   // طلبات ويتر وصلت على الواي فاي (بدون نت) — سجّلناها بالسيرفر إحنا
   let webAttach = null, webRingT = null, webSt = null;
   const WEB_MODE = { table: '🪑 طاولة', pickup: '🛍️ استلام', delivery: '🏍️ توصيل' };
   // طلبات الويتر: دائماً تطلع للكاشير بتنبيه وتنتظر موافقته («قبول وإرسال للمطبخ»). التلقائي بس لطلبات QR الطاولات إذا مفعّل
@@ -2704,20 +2828,29 @@ const ordCancelCore = id=>{
     unsubs.push(f.onSnapshot(f.query(f.collection(f.db, 'webOrders'), f.where('restaurantId', '==', rid()), f.where('status', '==', 'new')), (s) => {
       let fresh = false;
       s.docChanges().forEach((ch) => {
-        if (ch.type === 'removed') { webs.delete(ch.doc.id); return; }
+        if (ch.type === 'removed') { webs.delete(ch.doc.id); webLan.delete(ch.doc.id); return; }
         const w = { id: ch.doc.id, ...ch.doc.data() };
         // نسخة محلية قديمة (الكاش يرجّع الطلب «جديد» لحظياً بعد ما نحدّث مرحلته): مو طلب جديد
-        if (webGone.has(w.id) || ch.doc.metadata.hasPendingWrites || w.acceptedBy || w.stage || w.orderId) { webs.delete(w.id); return; }
-        if (Date.now() - (w.createdAtMs || 0) > 3 * 3600000) return;     // طلب قديم ما انقبل: ما نزعج الكاشير بيه
-        // كل الطلبات تنحفظ، بس اللي من اختصاص هذا الكاشير تطلع وترن (وتتحدث فوراً إذا تغيّرت صلاحياته)
-        const mine = webMine(w);
-        if (mine && !webs.has(w.id) && !webAutoOk(w)) { fresh = fresh || w; if (w.source === 'waiter') toast('🧑‍🍳 طلب من ' + (w.waiter || 'الويتر') + ' — ' + webWhere(w) + ' — اقبله يروح للمطبخ'); }
-        webs.set(w.id, w);
-        if (mine && webAutoOk(w)) setTimeout(() => webAccept(w.id, true), 0);
+        //  (طلب الويتر اللي وصل على الواي فاي نسجّله إحنا، فنسخته المحلية «قيد الرفع» طبيعية)
+        if (ch.doc.metadata.hasPendingWrites && webLan.has(w.id) && !w.acceptedBy) return;
+        if (webGone.has(w.id) || ch.doc.metadata.hasPendingWrites || w.acceptedBy || w.stage || w.orderId) { webs.delete(w.id); webLan.delete(w.id); return; }
+        fresh = webIntake(w) || fresh;
       });
       renderWeb();
       if (fresh) notifyWeb(fresh);
     }, (e) => console.warn('web orders', e.code)));
+  }
+  // طلب جديد للكاشير: يرجّع الطلب إذا لازم يرن (من اختصاص هذا الكاشير وجديد)
+  function webIntake(w) {
+    if (webGone.has(w.id) || Date.now() - (w.createdAtMs || 0) > 3 * 3600000) return null;     // طلب قديم ما انقبل: ما نزعج الكاشير بيه
+    // كل الطلبات تنحفظ، بس اللي من اختصاص هذا الكاشير تطلع وترن (وتتحدث فوراً إذا تغيّرت صلاحياته)
+    const mine = webMine(w);
+    let fresh = null;
+    if (mine && !webs.has(w.id) && !webAutoOk(w)) { fresh = w; if (w.source === 'waiter') toast('🧑‍🍳 طلب من ' + (w.waiter || 'الويتر') + ' — ' + webWhere(w) + ' — اقبله يروح للمطبخ'); }
+    webs.set(w.id, w);
+    if (w.source === 'waiter') wRemember(w);
+    if (mine && webAutoOk(w)) setTimeout(() => webAccept(w.id, true), 0);
+    return fresh;
   }
   // الأسعار والأصناف من منيو الكاشير — الصنف اللي مو موجود ما ينحسب
   function webItems(w) {
@@ -2778,13 +2911,27 @@ const ordCancelCore = id=>{
   setInterval(() => { if (webs.size) renderWeb(); }, 30000);
   // القبول مرة وحدة بس حتى لو أكثر من جهاز ضغط سوا
   async function webClaim(w) {
-    const f = fb(), ref = f.doc(f.db, 'webOrders', w.id);
-    return f.runTransaction(f.db, async (tx) => {
+    const f = fb(), ref = f.doc(f.db, 'webOrders', w.id), L = lanApi();
+    if (L && lanOn) L.broadcast({ t: 'wtaken', id: w.id });   // الكاشيرية الثانية على نفس الواي فاي تشيله فوراً
+    if (!netOk()) {
+      const x = wMine()[w.id];
+      if (x && x.lan) wCreate(w.id, x);   // إذا ما انسجّل قبل (السيرفر يقبله مرة وحدة بس)
+      (f.rawUpdateDoc || f.updateDoc)(ref, { status: 'accepted', acceptedBy: deviceId, acceptedAtMs: Date.now(), stage: 'preparing', stageAtMs: Date.now() }).catch((e) => console.warn('web claim', e.code));
+      return true;   // ينرفع من يرجع النت
+    }
+    const r = await f.runTransaction(f.db, async (tx) => {
       const s = await tx.get(ref);
-      if (!s.exists() || s.data().status !== 'new') return false;
+      if (!s.exists()) return webLan.has(w.id) ? 'lan' : false;
+      if (s.data().status !== 'new') return false;
       tx.update(ref, { status: 'accepted', acceptedBy: deviceId, acceptedAtMs: Date.now(), stage: 'preparing', stageAtMs: Date.now() });
       return true;
     });
+    if (r !== 'lan') return r;
+    // طلب وصل على الواي فاي ولسه ما انرفع: نسجّله وبعدين نقبله (بالترتيب)
+    const x = wMine()[w.id];
+    if (x) wCreate(w.id, x);
+    (f.rawUpdateDoc || f.updateDoc)(ref, { status: 'accepted', acceptedBy: deviceId, acceptedAtMs: Date.now(), stage: 'preparing', stageAtMs: Date.now() }).catch((e) => console.warn('web claim', e.code));
+    return true;
   }
   // نفس مسار الكاشير بالضبط (رقم الطلب، الأقسام، البيجر، المخزون، الكابتن) بسلة مؤقتة
   async function webPlace(w, items) {
@@ -2809,7 +2956,8 @@ const ordCancelCore = id=>{
     webBusy.add(id); renderWeb();
     try {
       const ok = await webClaim(w);
-      webs.delete(id); webGone.add(id);
+      webs.delete(id); webGone.add(id); webLan.delete(id);
+      if (w.source === 'waiter') wMark(id, ok ? { acc: 1 } : { gone: 1 });
       if (!ok) return;                 // انقبل من جهاز ثاني
       await webPlace(w, items);
       if (!webs.size) clearInterval(webRingT);
@@ -2820,7 +2968,11 @@ const ordCancelCore = id=>{
     if (!webs.get(id)) return;
     acDialog('✕ رفض الطلب الأونلاين', 'الزبون يشوف السبب على تلفونه', [{ id: 'reason', label: 'السبب', ph: 'مثال: الصنف خلص / المطبخ مسكّر' }], async (v) => {
       try {
-        await fb().updateDoc(fb().doc(fb().db, 'webOrders', id), { status: 'rejected', reason: String(v.reason || '').trim().slice(0, 200) || 'المطعم ما يگدر يستقبل الطلب هسه' });
+        const reason = String(v.reason || '').trim().slice(0, 200) || 'المطعم ما يگدر يستقبل الطلب هسه', L = lanApi();
+        if (L && lanOn) L.broadcast({ t: 'wtaken', id });
+        const up = fb().updateDoc(fb().doc(fb().db, 'webOrders', id), { status: 'rejected', reason });
+        wMark(id, { rej: reason });
+        if (netOk()) await up; else up.catch(() => {});
         webs.delete(id); webGone.add(id); renderWeb(); if (!webs.size) clearInterval(webRingT);
         toast('تم رفض الطلب');
       } catch (e) { toast('❌ تعذّر الرفض — يمكن انقبل من جهاز ثاني'); }
@@ -2985,7 +3137,7 @@ function enterAppCore(){
     tkRefill();          // نحجز أرقام الطلبات من أول ما يفتح الكاشير
     listenCalls();
     lanStart();
-    webSt = null; listenWeb();
+    webSt = null; listenWeb(); wRestore();
     listenCapPay();
     listenMe();
     listenRest();
