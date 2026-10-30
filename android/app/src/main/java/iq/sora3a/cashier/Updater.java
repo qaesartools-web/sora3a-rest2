@@ -36,8 +36,8 @@ final class Updater {
         Info(int version, String name) { this.version = version; this.name = name; }
     }
 
-    private static String tag() { return BuildConfig.SCREEN ? "screen-android" : BuildConfig.LINE ? "line-android" : "cashier-android"; }
-    static String apkUrl() { return BASE + tag() + "/" + (BuildConfig.SCREEN ? "sora3a-screen.apk" : BuildConfig.LINE ? "sora3a-line.apk" : "sora3a-cashier.apk"); }
+    private static String tag() { return BuildConfig.SCREEN ? "screen-android" : BuildConfig.LINE ? "line-android" : BuildConfig.KITCHEN ? "kitchen-android" : "cashier-android"; }
+    static String apkUrl() { return BASE + tag() + "/" + (BuildConfig.SCREEN ? "sora3a-screen.apk" : BuildConfig.LINE ? "sora3a-line.apk" : BuildConfig.KITCHEN ? "sora3a-kitchen.apk" : "sora3a-cashier.apk"); }
 
     // من خيط بالخلفية. null = ماكو تحديث (أو ماكو إنترنت، أو التوقيع مو نفسه)
     static Info check(Context ctx) {

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- تطبيق شاشة المطبخ/المجهز: نفس صفحة المطبخ، وتشتغل بنت أو بدون نت على نفس الراوتر ويا الكاشير (شبكة المطعم). ما يطلب أي إذن حساس -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application />
+</manifest>

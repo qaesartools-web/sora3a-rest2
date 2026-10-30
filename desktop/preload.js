@@ -21,4 +21,14 @@ if (allowed.includes(location.origin)) {
     setAutoStart: (on) => ipcRenderer.invoke('sora:autostart:set', !!on),
     onUpdate: (cb) => { ipcRenderer.on('sora:update', (_e, v) => { try { cb(String(v)); } catch (e) {} }); },
   });
+  // شبكة المطعم: الحاسبة «مركز» — نفس الواجهة بتطبيق الأندرويد (window.SoraLan)
+  contextBridge.exposeInMainWorld('SoraLan', {
+    role: 'hub',
+    start: (c) => ipcRenderer.invoke('sora:lan:start', c || {}),
+    stop: () => ipcRenderer.invoke('sora:lan:stop'),
+    status: () => ipcRenderer.invoke('sora:lan:status'),
+    send: (to, m) => ipcRenderer.send('sora:lan:send', String(to || '*'), m),
+    broadcast: (m) => ipcRenderer.send('sora:lan:broadcast', m),
+    on: (cb) => { ipcRenderer.on('sora:lan', (_e, v) => { try { cb(v); } catch (e) {} }); },
+  });
 }

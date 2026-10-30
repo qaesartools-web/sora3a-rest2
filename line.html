@@ -63,7 +63,7 @@ input.in{width:100%;font:inherit;font-size:16px;padding:12px;border:1px solid va
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { initializeFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
   apiKey: "AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ",
@@ -110,16 +110,50 @@ onAuthStateChanged(auth, async (u) => {
       if (rd.active === false) throw new Error('حساب المطعم موقوف — تواصل ويا الإدارة');
       if (rd.expiryMs && rd.expiryMs < Date.now()) throw new Error('انتهى اشتراك المطعم — تواصل ويا الإدارة');
       user = u; rest = { id: rs.id, ...rd };
+      lanKey(rest.id);
     } catch (e) { loginErr = '❌ ' + (e.message || 'تعذّر تحميل الحساب'); await signOut(auth).catch(() => {}); }
   }
   authReady = true;
   render();
 });
 
+// ── شبكة المطعم: المكالمة توصل للكاشير عن طريق الواي فاي حتى لو النت مقطوع ──
+//  الرمز السري للمطعم (يسويه صاحب المطعم مرة وحدة) ينحفظ بالتطبيق — بعدها يشتغل بدون تسجيل دخول
+const lanApi = () => window.SoraLan || null;
+let lanSt = null, lanBound = false;
+const lanBind = () => { const L = lanApi(); if (!L || lanBound) return; lanBound = true; L.on((e) => { if (e && (e.t === 'join' || e.t === 'leave' || e.t === 'status')) render(); }); };
+lanBind(); window.addEventListener('soralan', () => { lanBind(); render(); });
+async function lanKey(rid) {
+  const LAN = lanApi();
+  if (!LAN) return;
+  try {
+    const ref = doc(db, 'restaurants', rid, 'settings', 'lan');
+    let k = (await getDoc(ref)).data();
+    k = k && k.key;
+    if (!k) k = await runTransaction(db, async (tx) => {
+      const x = await tx.get(ref);
+      if (x.exists() && x.data().key) return x.data().key;
+      const key = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0')).join('');
+      tx.set(ref, { key, atMs: Date.now() });
+      return key;
+    });
+    if (k) { lanSt = await LAN.start({ rid, key: k, name: 'خط المطعم' }); render(); }
+  } catch (e) { console.warn('lan key', e && e.code); }
+}
+function lanHtml() {
+  const LAN = lanApi();
+  if (!DESK) return '';
+  if (!LAN) return `<div class="card"><div class="warn">🛜 حتى تشتغل المكالمات بدون نت (عن طريق الواي فاي): <a href="${APK}">⬇️ حدّث تطبيق الخط</a></div></div>`;
+  const s = lanSt || {}, n = (s.peers || []).length;
+  if (!s.rid) return `<div class="card"><div class="warn">🛜 حتى تشتغل المكالمات بدون نت: سجّل دخول بحساب صاحب المطعم مرة وحدة (والتلفون على واي فاي المطعم).</div></div>`;
+  return `<div class="card"><div class="${n ? 'ok' : 'muted'}">🛜 بدون نت (الواي فاي): ${n ? '✅ متصل بـ' + n + ' كاشير — المكالمات توصل حتى لو انقطع النت' : 'ما لكينا كاشير على هذا الواي فاي هسه — تأكد إن الكاشير (برنامج الحاسبة أو تطبيق التابلت) شغّال وعلى نفس الواي فاي'}</div></div>`;
+}
+
 async function render() {
   const box = $('app');
   if (!DESK) { box.innerHTML = notAppHtml(); return; }
   try { st = await DESK.getCallLine(); } catch (e) { st = null; }
+  if (lanApi()) { try { lanSt = (await lanApi().status()) || lanSt; } catch (e) {} }
   st = st || { linked: false, perms: {} };
   if (MULTI) { box.innerHTML = multiHtml(); return; }
   if (st.linked) { box.innerHTML = updHtml() + linkedHtml(); return; }
@@ -180,7 +214,7 @@ function linkedHtml() {
       ${oem ? `<div class="hint" style="margin-top:8px">📌 بأجهزة <span dir="ltr">${esc(st.maker)}</span>: من ${appLink} فعّل «التشغيل التلقائي» (Autostart) حتى يبقى الخط شغّال بعد إعادة تشغيل التلفون.</div>` : ''}</div>
     <div class="card">${last}
       <div class="row2"><button type="button" class="btn" id="lnTestBtn" onclick="lnTest()">🧪 مكالمة تجريبية</button><button type="button" class="btn soft" onclick="lnUnlink()">❌ إلغاء الربط</button></div>
-      <div class="foot">تكدر تسكّر التطبيق — الخط يشتغل وحده بالخلفية.</div></div>`;
+      <div class="foot">تكدر تسكّر التطبيق — الخط يشتغل وحده بالخلفية.</div></div>${lanHtml()}`;
 }
 
 // ══════════ أكثر من رقم على نفس التلفون ══════════
@@ -231,6 +265,7 @@ function multiHtml() {
       ${adding ? '' : '<button type="button" class="btn" id="lnAddBtn" onclick="lnAddOpen()">➕ إضافة رقم ثاني</button>'}</div>
     ${adding ? (user ? addHtml(false) : loginHtml('حتى تضيف رقم، سجّل دخول بحساب صاحب المطعم.')) : ''}
     ${permsHtml()}
+    ${lanHtml()}
     <div class="foot">تكدر تسكّر التطبيق — الخطوط تشتغل وحدها بالخلفية.</div>`;
 }
 // مصادر هذا التلفون: كل شريحة بخانتها، وواتساب، وواتساب أعمال
@@ -372,7 +407,8 @@ window.lnPerm = (k) => { DESK.openPerm(k); };
 window.lnTest = async (token) => {
   const b = $('lnTestBtn'); if (b) { b.disabled = true; b.textContent = '⏳ نرسل…'; }
   const r = await (token ? DESK.testCall(token) : DESK.testCall()).catch(() => null);
-  toast(r && r.ok ? '📞 وصلت — لازم تطلع هسه بشاشة الكاشير (الرقم 07700000000)' : '❌ ما وصلت: ' + ((r && r.error) || 'خطأ'));
+  const how = r && r.ok && 'lan' in r ? (r.net && r.lan ? ' (بالنت والواي فاي)' : r.lan ? ' (بالواي فاي — بدون نت)' : ' (بالنت)') : '';
+  toast(r && r.ok ? '📞 وصلت' + how + ' — لازم تطلع هسه بشاشة الكاشير (الرقم 07700000000)' : '❌ ما وصلت: ' + ((r && r.error) || 'خطأ'));
   render();
 };
 window.lnUnlink = async () => {

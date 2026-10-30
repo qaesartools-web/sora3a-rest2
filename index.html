@@ -1174,6 +1174,7 @@ function onOrdersSnap(newOrders){
       });
       orders=newOrders;
       renderOrders();renderHold();
+      if(window.posLanOrders)posLanOrders();   // شبكة المطعم: الشاشات على نفس الواي فاي تتحدث
 }
 function startListeners2(){
   const fb=window._fb;
@@ -2724,7 +2725,7 @@ function showThemeSwitcher() {
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-<script src="pos-pro.js?v=54"></script>
+<script src="pos-pro.js?v=55"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){

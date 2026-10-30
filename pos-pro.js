@@ -1195,6 +1195,7 @@ const showMTabCore = tab=>{
         </div>`}`}
       </div>
       ${screenCardHtml()}
+      ${lanCardHtml()}
       <div class="sh-card"><div class="sh-title">🪑 الطاولات والبيجر</div>
         <div class="set-row"><div><div class="flbl">عدد الطاولات (0 = بدون)</div><input class="finp" id="stTables" type="number" min="0" max="200" value="${s.tables || 0}"></div>
           <div><div class="flbl">📟 عدد أجهزة البيجر (0 = بدون)</div><input class="finp" id="stPagers" type="number" min="0" max="30" value="${s.pagers != null ? s.pagers : 10}"></div></div>
@@ -1254,6 +1255,7 @@ const showMTabCore = tab=>{
       if (JSON.stringify(settings.feePresets) === '[3000,5000,7000]') settings.feePresets = DEFAULTS.feePresets;
       lsSet(setKey(), settings);
       renderCart();
+      lanSettingsPush();
     }, () => {}));
   }
 
@@ -2240,7 +2242,7 @@ const ordCancelCore = id=>{
   const calls = new Map();      // id -> {id, number, line, data, at}
   let callsReady = false, callRingT = null, ringingNow = new Set();
   const CALL_TTL = () => window.__callTtl || 120000;   // البطاقة تختفي بعد دقيقتين
-  const callMissed = (id) => { fb().updateDoc(fb().doc(fb().db, 'incomingCalls', id), { status: 'missed' }).catch(() => {}); };
+  const callMissed = (id) => { if (!id || String(id).startsWith('lan-')) return; fb().updateDoc(fb().doc(fb().db, 'incomingCalls', id), { status: 'missed' }).catch(() => {}); };
   function listenCalls() {
     const f = fb();
     callsReady = false; calls.clear(); renderCalls();
@@ -2260,11 +2262,12 @@ const ordCancelCore = id=>{
           if (!myPerm('oDeliv')) return;   // الاتصالات لكاشير الدلفري بس (كاشير الصالة ما يرن عنده)
           // واتساب يحدّث إشعار المكالمة أكثر من مرة: نفس الرقم ونفس الخط خلال دقيقة = بطاقة واحدة
           const dup = [...calls.values()].find((x) => x.number === c.number && x.line === c.line && c.at - x.at < 60000);
-          if (dup) { dup.at = c.at; return; }
+          if (dup) { dup.at = c.at; if (dup.lanId && !dup.fsId) dup.fsId = c.id; return; }   // وصلت من الواي فاي قبل
+
           calls.set(c.id, c);
           getCustomer(c.number).then((d) => { const x = calls.get(c.id); if (x) { x.data = d; renderCalls(); } });
           notifyCall(c);
-        } else if (ch.type === 'removed') calls.delete(ch.doc.id);     // استلمها كاشير آخر
+        } else if (ch.type === 'removed') { calls.delete(ch.doc.id); calls.forEach((x, k) => { if (x.fsId === ch.doc.id) calls.delete(k); }); }     // استلمها كاشير آخر
       });
       renderCalls();
     }, (e) => console.warn('calls', e.code)));
@@ -2290,7 +2293,7 @@ const ordCancelCore = id=>{
   function renderCalls() {
     const el = $('callsBox'); if (!el) return;
     // تختفي تلقائياً بعد دقيقتين
-    [...calls.values()].forEach((c) => { if (Date.now() - c.at > CALL_TTL()) { calls.delete(c.id); callMissed(c.id); } });
+    [...calls.values()].forEach((c) => { if (Date.now() - c.at > CALL_TTL()) { calls.delete(c.id); callMissed(c.fsId || c.id); } });
     el.innerHTML = [...calls.values()].sort((a, b) => b.at - a.at).slice(0, 4).map((c) => `
       <div class="call-card">
         <div class="call-top"><span class="call-pulse">📞</span> مكالمة واردة <span class="call-line">خط ${esc(c.line || '—')}</span>
@@ -2304,13 +2307,34 @@ const ordCancelCore = id=>{
       </div>`).join('');
   }
   setInterval(() => { if (calls.size) renderCalls(); }, Math.min(15000, CALL_TTL()));
+  // مكالمة من تلفون الخط عن طريق الواي فاي (تشتغل حتى لو النت مقطوع) — نفس بطاقة المكالمة، والمكرر من النت يندمج وياها
+  function callIn(x) {
+    const c = { id: 'lan-' + x.lanId, lanId: x.lanId, number: x.number, line: x.line, at: Date.now(), data: undefined };
+    if (!feat(/(واتس|whats)/i.test(c.line || '') ? 'whatsapp' : 'calls')) return;
+    if (!myPerm('oDeliv')) return;
+    const dup = [...calls.values()].find((y) => y.number === c.number && y.line === c.line && c.at - y.at < 60000);
+    if (dup) { if (!dup.lanId) dup.lanId = c.lanId; return; }
+    calls.set(c.id, c);
+    getCustomer(c.number).then((d) => { const y = calls.get(c.id); if (y) { y.data = d; renderCalls(); } });
+    notifyCall(c);
+    renderCalls();
+  }
+  // كاشير ثاني استلمها (بالواي فاي)
+  function callTakenElsewhere(d) {
+    let n = 0;
+    calls.forEach((c, k) => { if ((d.id && c.lanId === d.id) || (d.number && c.number === d.number && (c.line || '') === (d.line || ''))) { calls.delete(k); n++; } });
+    if (n) { if (!calls.size) clearInterval(callRingT); renderCalls(); }
+  }
   // انطفى الدلفري على هذا الكاشير: تختفي المكالمات الظاهرة ويوكف الرنين
   window.callsPermSync = () => { if (!myPerm('oDeliv') && calls.size) { calls.clear(); clearInterval(callRingT); renderCalls(); } };
   window.callHide = (id) => { calls.delete(id); renderCalls(); };
   window.callTake = async (id, repeat) => {
     const c = calls.get(id); if (!c) return;
     calls.delete(id); clearInterval(callRingT); renderCalls();
-    fb().updateDoc(fb().doc(fb().db, 'incomingCalls', id), { status: 'taken', takenBy: deviceId, takenAtMs: Date.now() }).catch(() => {});
+    const fid = c.fsId || (String(id).startsWith('lan-') ? '' : id);
+    if (fid) fb().updateDoc(fb().doc(fb().db, 'incomingCalls', fid), { status: 'taken', takenBy: deviceId, takenAtMs: Date.now() }).catch(() => {});
+    // الكاشيرية الثانين على نفس الواي فاي تختفي عندهم (حتى بدون نت)
+    const L = lanApi(); if (L && lanOn) L.broadcast({ t: 'taken', id: c.lanId || '', number: c.number, line: c.line || '' });
     const d = c.data === undefined ? await getCustomer(c.number) : c.data;
     curCust = { phone: callPhone(c), label: callPhone(c) ? '' : callLabel(c), data: d };
     goTab('cashier');
@@ -2319,6 +2343,131 @@ const ordCancelCore = id=>{
     if (window.matchMedia('(max-width:600px)').matches && repeat) document.querySelector('.cside').classList.add('open');
     toast(d ? '👤 ' + (d.name || 'الزبون') + ' — اختر الأصناف ثم «ترحيل» والمعلومات معبّأة' : '🆕 زبون جديد — الرقم معبّأ تلقائياً');
   };
+
+  // ══════════ شبكة المطعم (بنت أو بدون نت) ══════════
+  // هذا الجهاز «مركز» على الواي فاي (برنامج الحاسبة وتطبيق الأندرويد): شاشة المطبخ/المجهز وشاشة «طلبك جاهز» وتلفون الخط يتصلون بيه
+  //  للشاشات: نسخة خفيفة من طلبات اليوم (بدون أرقام وعناوين الزبائن) تتحدث أول بأول. ومنها: «جاهز» من المطبخ، والمكالمات من الخط.
+  //  اللي يتغير بدون نت ينحفظ بهذا الجهاز ويترفع للسحابة وحده من يرجع النت
+  const lanApi = () => (window.SoraLan && window.SoraLan.role === 'hub' ? window.SoraLan : null);
+  let lanOn = false, lanBound = false, lanSent = new Map(), lanPushT = 0, lanSt = null, lanGen = 0;
+  const lanSeen = new Set();
+  const LAN_F = ['orderType', 'ticketNo', 'salonNum', 'holdNum', 'pager', 'tableNo', 'createdAt', 'createdAtMs', 'day', 'status', 'kitchen', 'kitchenReadyAt',
+    'readyAt', 'kSec', 'note', 'captainId', 'servedAtMs', 'pagerDone', 'held', 'restaurantId'];
+  const lanOrder = (o) => {
+    const x = { id: o.id };
+    LAN_F.forEach((k) => { if (o[k] !== undefined && o[k] !== null) x[k] = o[k]; });
+    x.items = (o.items || []).map((i) => ({ name: i.name, qty: i.qty, variant: i.variant, note: i.note, sec: i.sec }));
+    return x;
+  };
+  const lanList = () => orders.filter((o) => Date.now() - (o.createdAtMs || 0) < 36 * 3600000).map(lanOrder);
+  const lanSettings = () => ({ sections: settings.sections || [], kSecOn: !!settings.kSecOn, receiptTitle: settings.receiptTitle || '', screen: settings.screen || null });
+  const lanRest = () => ({ name: (restData && restData.name) || '', features: (restData && restData.features) || {}, svcOff: (restData && restData.svcOff) || {} });
+  const lanName = () => String((window.posUser && window.posUser.name) || 'الكاشير').slice(0, 40);
+  const toScreens = (m) => { const L = lanApi(); if (L && lanOn) { L.send('role:kitchen', m); L.send('role:screen', m); } };
+  const lanFull = (to) => { const L = lanApi(); if (L && lanOn) L.send(to, { t: 'state', full: 1, orders: lanList(), settings: lanSettings(), rest: lanRest(), hub: { name: lanName() } }); };
+  function lanPush() {
+    const list = lanList(), now = new Map(list.map((o) => [o.id, JSON.stringify(o)]));
+    const ch = list.filter((o) => lanSent.get(o.id) !== now.get(o.id)), del = [...lanSent.keys()].filter((id) => !now.has(id));
+    lanSent = now;
+    if (ch.length || del.length) toScreens({ t: 'state', orders: ch, del });
+  }
+  window.posLanOrders = () => { if (!lanOn) return; clearTimeout(lanPushT); lanPushT = setTimeout(lanPush, 250); };
+  function lanSettingsPush() { toScreens({ t: 'state', settings: lanSettings() }); }
+  // «جاهز» من شاشة المطبخ (بدون نت): نفس اللي يسويه المطبخ بالنت
+  async function lanReady(o) {
+    const t = Date.now(), fields = { kitchen: 'ready', kitchenReadyAt: o.kitchenReadyAt || t };
+    if (o.kSec) fields.kSec = Object.fromEntries(Object.entries(o.kSec).map(([k, v]) => [k, { ...v, readyAt: v.readyAt || t }]));
+    if (o.status === 'preparing') await orderUpdate(o.id, { ...fields, status: 'ready', readyAt: t }, 'الطلب جاهز للاستلام', 'ready');
+    else await fb().updateDoc(fb().doc(fb().db, 'orders', o.id), fields);
+  }
+  async function lanAct(ev) {
+    const d = ev.d, L = lanApi(), reply = (ok) => { if (L) L.send(ev.id, { t: 'ack', rq: d.rq, ok }); };
+    const o = orders.find((x) => x.id === d.id);
+    if (!o || ev.role !== 'kitchen') return reply(false);
+    try {
+      if (d.op === 'ready') await lanReady(o);
+      else if (d.op === 'sec' && o.kSec && o.kSec[d.sec]) {
+        const ks = { ...o.kSec, [d.sec]: { ...o.kSec[d.sec], readyAt: d.on ? (o.kSec[d.sec].readyAt || Date.now()) : 0 } };
+        if (Object.values(ks).every((v) => v.readyAt)) await lanReady({ ...o, kSec: ks });
+        else await fb().updateDoc(fb().doc(fb().db, 'orders', o.id), { kSec: ks });
+      } else return reply(false);
+      reply(true);
+    } catch (e) { reply(false); }
+  }
+  function lanCall(d) {
+    if (!d || d.t !== 'call' || !d.id || lanSeen.has(d.id)) return;
+    lanSeen.add(d.id);
+    if (lanSeen.size > 300) lanSeen.delete(lanSeen.values().next().value);
+    callIn({ lanId: String(d.id).slice(0, 64), number: String(d.number || '').slice(0, 24), line: String(d.line || '').slice(0, 30) });
+  }
+  function onLan(ev) {
+    if (!ev || !restData) return;
+    if (ev.t === 'status') { lanSt = ev; lanOn = !!ev.on; lanUi(); return; }
+    if (ev.t === 'join' || ev.t === 'leave') { const L = lanApi(); if (L) Promise.resolve(L.status()).then((st) => { if (st) { lanSt = st; lanUi(); } }); return; }
+    if (ev.t === 'msg' && ev.d) {
+      const d = ev.d;
+      if (d.t === 'sync' && (ev.role === 'kitchen' || ev.role === 'screen')) return lanFull(ev.id);
+      if (d.t === 'act') { lanAct(ev); return; }
+      if (d.t === 'call' && ev.role === 'line') { lanCall(d); const L = lanApi(); if (L) L.send(ev.id, { t: 'ack', rq: d.id, ok: true }); }
+      return;
+    }
+    if (ev.t === 'ev' && ev.d) {
+      if (ev.d.t === 'call') lanCall(ev.d);
+      else if (ev.d.t === 'taken') callTakenElsewhere(ev.d);
+    }
+  }
+  const newLanKey = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0')).join('');
+  // الرمز السري للمطعم (settings/lan): كل أجهزة المطعم تتصافح بيه. يسويه صاحب المطعم أو كاشير عنده صلاحية الإعدادات
+  async function lanKeyFromCloud(r) {
+    const s = await fb().getDoc(sub('settings', 'lan'));
+    if (s.exists() && s.data().key) return s.data().key;
+    if (!(isOwnerPOS() || can('settings'))) return '';
+    const ref = sub('settings', 'lan');
+    return fb().runTransaction(fb().db, async (tx) => {
+      const x = await tx.get(ref);
+      if (x.exists() && x.data().key) return x.data().key;
+      const key = newLanKey();
+      tx.set(ref, { key, atMs: Date.now() });
+      return key;
+    });
+  }
+  async function lanStart() {
+    const L = lanApi(); if (!L || !restData) return;
+    if (!lanBound) { lanBound = true; L.on(onLan); }
+    const r = rid(), g = ++lanGen;
+    unsubs.push(() => { if (g !== lanGen) return; lanGen++; lanOn = false; lanSt = null; L.stop(); });   // تسجيل خروج
+    const run = async (key) => {
+      if (!key || g !== lanGen || r !== rid()) return;
+      lsSet('pos_lan_' + r, key);
+      lanSt = await L.start({ rid: r, key, dev: deviceId, name: lanName() });
+      lanOn = !!(lanSt && lanSt.on);
+      lanSent = new Map();
+      // الشاشات المتصلة من قبل (الصفحة انفتحت من جديد): نسخة كاملة
+      if (lanOn) { lanFull('role:kitchen'); lanFull('role:screen'); lanPush(); }
+      lanUi();
+    };
+    const cached = lsGet('pos_lan_' + r, '');
+    if (cached) await run(cached);   // بدون نت: نشتغل فوراً بالرمز المحفوظ
+    try {
+      const key = await lanKeyFromCloud(r);
+      if (key && key !== cached) await run(key);
+      else if (!key && !cached && g === lanGen) { lanSt = { on: false, err: 'نحتاج صاحب المطعم يفتح الكاشير أو لوحة الإدارة مرة وحدة بالنت' }; lanUi(); }
+    } catch (e) { if (!cached && g === lanGen) { lanSt = { on: false, err: 'أول تشغيل يحتاج نت' }; lanUi(); } }
+  }
+  const ROLE_N = { kitchen: '👨‍🍳 شاشة مطبخ', screen: '📺 شاشة طلبك جاهز', line: '📞 خط المطعم' };
+  function lanCardHtml() {
+    if (!lanApi()) return '';
+    return `<div class="sh-card"><div class="sh-title">🛜 شبكة المطعم (بنت أو بدون نت)</div><div id="lanBox">${lanBoxHtml()}</div>
+      <div class="ac-sub" style="line-height:1.8;margin-top:6px">شاشة المطبخ والمجهز وشاشة «طلبك جاهز» وتلفون الخط يتصلون بهذا الجهاز على نفس الواي فاي — إذا انقطع النت تبقى الطلبات و«جاهز» والاتصالات تمشي، ومن يرجع النت كلشي يترفع وحده.</div></div>`;
+  }
+  function lanBoxHtml() {
+    const st = lanSt || {};
+    if (!st.on) return `<div class="ac-sub">⏳ ${esc(st.err || 'جاري التشغيل…')}</div>`;
+    const peers = st.peers || [];
+    return `<div class="ac-sub">✅ شغّالة${(st.ips || []).length ? ' — عنوان هذا الجهاز: <b dir="ltr">' + esc(st.ips[0]) + '</b>' : ''}</div>
+      ${peers.length ? peers.map((x) => `<div class="ac-sub">🟢 ${esc(ROLE_N[x.role] || x.role)}${x.name ? ' — ' + esc(x.name) : ''}</div>`).join('') : '<div class="ac-sub">ماكو أجهزة متصلة هسه</div>'}`;
+  }
+  function lanUi() { const b = $('lanBox'); if (b) b.innerHTML = lanBoxHtml(); }
 
   // السلة على الهاتف: تفتح وتغلق بلمسة على رأسها
   $('cartHead').addEventListener('click', () => { if (window.matchMedia('(max-width:600px)').matches) document.querySelector('.cside').classList.toggle('open'); });
@@ -2758,6 +2907,7 @@ function enterAppCore(){
     listenShifts();
     tkRefill();          // نحجز أرقام الطلبات من أول ما يفتح الكاشير
     listenCalls();
+    lanStart();
     webSt = null; listenWeb();
     listenCapPay();
     listenMe();

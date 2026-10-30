@@ -5,6 +5,7 @@ const { app, BrowserWindow, ipcMain, shell, dialog, Menu, session } = require('e
 const path = require('path');
 const fs = require('fs');
 const { createPrinter, makeRenderer, makeVirtualRenderer } = require('./printer');
+const { createHub } = require('./lan');
 
 const START_URL = process.env.SORA_URL || 'https://qaesartools-web.github.io/sora3a-rest2/';
 const ALLOWED = new Set(['https://qaesartools-web.github.io', 'https://sora3a.com', 'https://pos.sora3a.com', new URL(START_URL).origin]);
@@ -15,7 +16,7 @@ const fromApp = (e) => originOk(e.senderFrame && e.senderFrame.url);
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 if (!app.requestSingleInstanceLock()) app.quit();
 
-let win = null, quitting = false, printer = null, simWin = null;
+let win = null, quitting = false, printer = null, simWin = null, lan = null;
 
 // إعدادات البرنامج على هالحاسبة (وضع تجربة الطابعات)
 const cfgFile = () => path.join(app.getPath('userData'), 'sora3a-desktop.json');
@@ -132,6 +133,14 @@ function setupIpc() {
   ipcMain.handle('sim:pdf', (e, f) => { if (fromSim(e) && typeof f === 'string' && f.startsWith(testDir()) && f.endsWith('.pdf')) shell.openPath(f); return true; });
   ipcMain.handle('sora:autostart:get', (e) => fromApp(e) && getAutoStart());
   ipcMain.handle('sora:autostart:set', (e, on) => (fromApp(e) ? setAutoStart(!!on) : false));
+  // ── شبكة المطعم: الحاسبة «مركز» على الواي فاي (شاشات المطبخ والطلب جاهز وتلفون الخط يتصلون بيها بنت أو بدون نت) ──
+  lan = createHub();
+  ['join', 'leave', 'msg', 'ev', 'status'].forEach((t) => lan.on(t, (v) => { if (win && !win.isDestroyed()) win.webContents.send('sora:lan', { ...v, t }); }));
+  ipcMain.handle('sora:lan:start', (e, c) => (fromApp(e) ? lan.start(c) : null));
+  ipcMain.handle('sora:lan:stop', (e) => { if (fromApp(e)) lan.stop(); return true; });
+  ipcMain.handle('sora:lan:status', (e) => (fromApp(e) ? lan.status() : null));
+  ipcMain.on('sora:lan:send', (e, to, m) => { if (fromApp(e) && m && typeof m === 'object') lan.send(String(to || '*'), m); });
+  ipcMain.on('sora:lan:broadcast', (e, m) => { if (fromApp(e) && m && typeof m === 'object') lan.broadcast(m); });
 }
 
 // تحديث البرنامج نفسه تلقائياً (ينزل بالخلفية ويتثبت عند الإغلاق)
@@ -153,7 +162,7 @@ function setupUpdates() {
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
 app.on('before-quit', () => { quitting = true; });
 app.on('window-all-closed', () => app.quit());
-app.on('will-quit', () => { if (simWin && !simWin.isDestroyed()) simWin.destroy(); });
+app.on('will-quit', () => { if (simWin && !simWin.isDestroyed()) simWin.destroy(); if (lan) lan.stop(); });
 
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, perm, cb, details) => {

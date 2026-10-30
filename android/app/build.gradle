@@ -11,7 +11,8 @@ android {
         versionName '1.' + (System.getenv('VERSION_CODE') ?: '0')
     }
     buildFeatures { buildConfig true }
-    // ثلاث تطبيقات من نفس الكود: الكاشير (بيع + طباعة)، خط المطعم (يبعث رقم المتصل بس)، والشاشة (طلبك جاهز على التلفزيون)
+    // أربع تطبيقات من نفس الكود: الكاشير (بيع + طباعة)، خط المطعم (يبعث رقم المتصل بس)، الشاشة (طلبك جاهز على التلفزيون)،
+    // وشاشة المطبخ/المجهز (تشتغل بنت أو بدون نت على نفس الراوتر ويا الكاشير)
     flavorDimensions 'app'
     productFlavors {
         cashier {
@@ -19,6 +20,7 @@ android {
             applicationId 'iq.sora3a.cashier'
             buildConfigField 'boolean', 'LINE', 'false'
             buildConfigField 'boolean', 'SCREEN', 'false'
+            buildConfigField 'boolean', 'KITCHEN', 'false'
             buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/"'
         }
         line {
@@ -26,6 +28,7 @@ android {
             applicationId 'iq.sora3a.line'
             buildConfigField 'boolean', 'LINE', 'true'
             buildConfigField 'boolean', 'SCREEN', 'false'
+            buildConfigField 'boolean', 'KITCHEN', 'false'
             buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/line.html"'
         }
         screen {
@@ -33,7 +36,16 @@ android {
             applicationId 'iq.sora3a.screen'
             buildConfigField 'boolean', 'LINE', 'false'
             buildConfigField 'boolean', 'SCREEN', 'true'
+            buildConfigField 'boolean', 'KITCHEN', 'false'
             buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/screen.html"'
+        }
+        kitchen {
+            dimension 'app'
+            applicationId 'iq.sora3a.kitchen'
+            buildConfigField 'boolean', 'LINE', 'false'
+            buildConfigField 'boolean', 'SCREEN', 'false'
+            buildConfigField 'boolean', 'KITCHEN', 'true'
+            buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/kitchen.html"'
         }
     }
     signingConfigs {
@@ -58,4 +70,6 @@ dependencies {
     implementation 'androidx.webkit:webkit:1.11.0'
     implementation 'androidx.core:core:1.13.1'
     testImplementation 'junit:junit:4.13.2'
+    // JSON حقيقي للاختبارات (نسخة الأندرويد بالاختبارات فارغة) — شبكة المطعم
+    testImplementation 'org.json:json:20231013'
 }

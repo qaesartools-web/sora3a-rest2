@@ -3,7 +3,7 @@
 // وشاشات المطبخ (المجهز والأقسام): تنربط بالمطعم برمز — بدون إيميل ولا كلمة سر (screenGate تحت).
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, signInWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 export * from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const CFG = {
@@ -21,7 +21,9 @@ const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; 
   import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true })).catch(() => {}); };
 appCheck(app);
 export const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
-export const db = getFirestore(app);
+// كاش محلي دائم: الشاشة تفتح بآخر بياناتها حتى لو انقطع النت (وتكمل ويا الكاشير على نفس الواي فاي — lanlink.js)
+const mkDb = (a) => { try { return initializeFirestore(a, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); } catch (e) { return getFirestore(a); } };
+export const db = mkDb(app);
 export const logout = () => signOut(auth);
 
 export const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -138,7 +140,7 @@ export function screenFb() {
   if (!scrFb) {
     const a = initializeApp(CFG, 'sora3a-screen');
     appCheck(a);
-    scrFb = { app: a, auth: initializeAuth(a, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] }), db: getFirestore(a) };
+    scrFb = { app: a, auth: initializeAuth(a, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] }), db: mkDb(a) };
   }
   return scrFb;
 }

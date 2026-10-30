@@ -133,8 +133,16 @@ public class Bridge {
                 CallLine.Config c = null;
                 for (CallLine.Config x : LineStore.loadAll(act)) if (c == null && (token.isEmpty() || x.token.equals(token))) c = x;
                 if (c == null) return errorJson("التلفون مو مربوط");
+                // التجربة بالطريقين: النت + الواي فاي مباشرة للكاشير (بدون نت)
+                final CallLine.Config fc = c;
+                final boolean[] lan = {false};
+                Thread lt = new Thread(() -> lan[0] = Lan.get(act).reportCall(fc.restaurantId, !fc.sim && fc.wa ? "واتساب " + fc.line : fc.line, CallLine.clean("07700000000")));
+                lt.start();
                 String err = LineStore.send(act, c, "07700000000", !c.sim && c.wa);
-                return err.isEmpty() ? new JSONObject().put("ok", true) : errorJson(err);
+                lt.join(8000);
+                JSONObject r = new JSONObject().put("ok", err.isEmpty() || lan[0]).put("net", err.isEmpty()).put("lan", lan[0]);
+                if (!err.isEmpty()) r.put("error", err);
+                return r;
             }
             case "openPerm": act.openPerm(a.optString(0, "app")); return true;
             default: return errorJson("unknown");
