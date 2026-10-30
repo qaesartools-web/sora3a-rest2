@@ -2242,6 +2242,13 @@ const ordCancelCore = id=>{
   const calls = new Map();      // id -> {id, number, line, data, at}
   let callsReady = false, callRingT = null, ringingNow = new Set();
   const CALL_TTL = () => window.__callTtl || 120000;   // البطاقة تختفي بعد دقيقتين
+  // كل رقم للمطعم يرن عند كاشيريته (صاحب المطعم يختار من لوحة الإدارة ← الكاشير ← «أرقام المطعم اللي ترن عنده»)
+  //  perms.lines = ['1','3'] ← خط ١ و٣ بس (الشريحة والواتساب). بدون تحديد ← كل الأرقام
+  const callLineNo = (l) => String(l || '').replace(/^\s*(واتساب|whatsapp)\s*/i, '').trim();
+  const lineMine = (l) => {
+    const u = window.posUser, ls = u && u.role === 'cashier' && (u.perms || {}).lines;
+    return !Array.isArray(ls) || ls.map(String).includes(callLineNo(l));
+  };
   const callMissed = (id) => { if (!id || String(id).startsWith('lan-')) return; fb().updateDoc(fb().doc(fb().db, 'incomingCalls', id), { status: 'missed' }).catch(() => {}); };
   function listenCalls() {
     const f = fb();
@@ -2260,6 +2267,7 @@ const ordCancelCore = id=>{
           const c = { id: ch.doc.id, ...ch.doc.data(), at: Date.now(), data: undefined };
           if (!feat(/(واتس|whats)/i.test(c.line || '') ? 'whatsapp' : 'calls')) return;
           if (!myPerm('oDeliv')) return;   // الاتصالات لكاشير الدلفري بس (كاشير الصالة ما يرن عنده)
+          if (!lineMine(c.line)) return;    // رقم مخصص لكاشير ثاني
           // واتساب يحدّث إشعار المكالمة أكثر من مرة: نفس الرقم ونفس الخط خلال دقيقة = بطاقة واحدة
           const dup = [...calls.values()].find((x) => x.number === c.number && x.line === c.line && c.at - x.at < 60000);
           if (dup) { dup.at = c.at; if (dup.lanId && !dup.fsId) dup.fsId = c.id; return; }   // وصلت من الواي فاي قبل
@@ -2311,7 +2319,7 @@ const ordCancelCore = id=>{
   function callIn(x) {
     const c = { id: 'lan-' + x.lanId, lanId: x.lanId, number: x.number, line: x.line, at: Date.now(), data: undefined };
     if (!feat(/(واتس|whats)/i.test(c.line || '') ? 'whatsapp' : 'calls')) return;
-    if (!myPerm('oDeliv')) return;
+    if (!myPerm('oDeliv') || !lineMine(c.line)) return;
     const dup = [...calls.values()].find((y) => y.number === c.number && y.line === c.line && c.at - y.at < 60000);
     if (dup) { if (!dup.lanId) dup.lanId = c.lanId; return; }
     calls.set(c.id, c);
@@ -2325,8 +2333,13 @@ const ordCancelCore = id=>{
     calls.forEach((c, k) => { if ((d.id && c.lanId === d.id) || (d.number && c.number === d.number && (c.line || '') === (d.line || ''))) { calls.delete(k); n++; } });
     if (n) { if (!calls.size) clearInterval(callRingT); renderCalls(); }
   }
-  // انطفى الدلفري على هذا الكاشير: تختفي المكالمات الظاهرة ويوكف الرنين
-  window.callsPermSync = () => { if (!myPerm('oDeliv') && calls.size) { calls.clear(); clearInterval(callRingT); renderCalls(); } };
+  // انطفى الدلفري على هذا الكاشير (أو انشال رقمه منه): تختفي المكالمات الظاهرة ويوكف الرنين
+  window.callsPermSync = () => {
+    if (!calls.size) return;
+    calls.forEach((c, k) => { if (!myPerm('oDeliv') || !lineMine(c.line)) calls.delete(k); });
+    if (!calls.size) clearInterval(callRingT);
+    renderCalls();
+  };
   window.callHide = (id) => { calls.delete(id); renderCalls(); };
   window.callTake = async (id, repeat) => {
     const c = calls.get(id); if (!c) return;
