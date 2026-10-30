@@ -399,7 +399,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s,opacity .3s,visibility .3s;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;}
 .toast.on{transform:translateX(-50%) translateY(0);opacity:1;visibility:visible;}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=24">
+<link rel="stylesheet" href="pos-pro.css?v=25">
 <script src="device.js?v=2"></script>
 <script src="ask.js?v=2"></script>
 </head>
@@ -2737,7 +2737,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=61"></script>
+<script src="pos-pro.js?v=62"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
@@ -2755,19 +2755,10 @@ document.addEventListener('click',function(e){
   ['pointerdown','keydown','touchstart'].forEach(function(ev){document.addEventListener(ev,function(){lastAct=Date.now();},true);});
   function idleNow(){var idle=true;try{idle=!window.auIdle||window.auIdle();}catch(e){}return idle&&!dirty();}
   function apply(){try{sessionStorage.setItem(KEY,JSON.stringify(window.auSave?window.auSave():{}));}catch(e){}location.reload();}
-  // الشاشة أمامك: زر صغير «تحديث هسه» بدل ما نقاطعك — وإذا ما لمس أحد الكاشير 10 دقايق (والسلة فارغة) ينطبق وحده
-  function bar(){
-    if(document.getElementById('auBar')||!document.body)return;
-    var b=document.createElement('div');b.id='auBar';b.setAttribute('role','status');
-    b.style.cssText='position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9001;background:#14532d;color:#fff;border-radius:999px;padding:6px 8px 6px 14px;box-shadow:0 6px 18px rgba(0,0,0,.3);font:700 13px Tajawal,sans-serif;display:flex;gap:10px;align-items:center;white-space:nowrap';
-    b.innerHTML='⬆️ نزل تحديث للكاشير <button type="button" style="border:0;border-radius:999px;padding:6px 12px;background:#fff;color:#14532d;font:800 13px Tajawal,sans-serif;cursor:pointer">🔄 تحديث هسه</button>';
-    b.querySelector('button').onclick=function(){if(idleNow())apply();else if(window.toast)toast('⚠️ خلّص الطلب اللي بالسلة أو سكّر النافذة المفتوحة أول، وبعدين حدّث');};
-    document.body.appendChild(b);
-  }
+  // التحديث بدون أي رسالة: ينطبق وحده بالخلفية، أو إذا محد لمس الكاشير 5 دقايق والسلة فارغة (ويرجع لنفس التبويب)
   function tryReload(){
-    if(document.hidden){if(idleNow())apply();return;}
-    bar();
-    if(idleNow()&&Date.now()-lastAct>10*60000)apply();
+    if(!idleNow())return;
+    if(document.hidden||Date.now()-lastAct>(window.auIdleMs||5*60000))apply();
   }
   function check(){
     if(pending){tryReload();return;}
