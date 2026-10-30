@@ -2738,13 +2738,24 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch
     return Array.prototype.some.call(document.querySelectorAll('input,textarea'),function(i){
       return !/checkbox|radio|date|time|hidden|file|range|color/.test(i.type)&&i.offsetParent&&i.value!==i.defaultValue;});
   }
+  // آخر لمسة من الكاشير: الشاشة الدائمة أمامه (برنامج الحاسبة) ما تروح للخلفية أبداً
+  var lastAct=Date.now();
+  ['pointerdown','keydown','touchstart'].forEach(function(ev){document.addEventListener(ev,function(){lastAct=Date.now();},true);});
+  function idleNow(){var idle=true;try{idle=!window.auIdle||window.auIdle();}catch(e){}return idle&&!dirty();}
+  function apply(){try{sessionStorage.setItem(KEY,JSON.stringify(window.auSave?window.auSave():{}));}catch(e){}location.reload();}
+  // الشاشة أمامك: زر صغير «تحديث هسه» بدل ما نقاطعك — وإذا ما لمس أحد الكاشير 10 دقايق (والسلة فارغة) ينطبق وحده
+  function bar(){
+    if(document.getElementById('auBar')||!document.body)return;
+    var b=document.createElement('div');b.id='auBar';b.setAttribute('role','status');
+    b.style.cssText='position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9001;background:#14532d;color:#fff;border-radius:999px;padding:6px 8px 6px 14px;box-shadow:0 6px 18px rgba(0,0,0,.3);font:700 13px Tajawal,sans-serif;display:flex;gap:10px;align-items:center;white-space:nowrap';
+    b.innerHTML='⬆️ نزل تحديث للكاشير <button type="button" style="border:0;border-radius:999px;padding:6px 12px;background:#fff;color:#14532d;font:800 13px Tajawal,sans-serif;cursor:pointer">🔄 تحديث هسه</button>';
+    b.querySelector('button').onclick=function(){if(idleNow())apply();else if(window.toast)toast('⚠️ خلّص الطلب اللي بالسلة أو سكّر النافذة المفتوحة أول، وبعدين حدّث');};
+    document.body.appendChild(b);
+  }
   function tryReload(){
-    // ما نحدّث والشاشة أمامك أبداً: الإصدار الجديد ينطبق لما يكون التطبيق بالخلفية
-    if(!document.hidden)return;
-    var idle=true;try{idle=!window.auIdle||window.auIdle();}catch(e){}
-    if(!idle||dirty())return;
-    try{sessionStorage.setItem(KEY,JSON.stringify(window.auSave?window.auSave():{}));}catch(e){}
-    location.reload();
+    if(document.hidden){if(idleNow())apply();return;}
+    bar();
+    if(idleNow()&&Date.now()-lastAct>10*60000)apply();
   }
   function check(){
     if(pending){tryReload();return;}
