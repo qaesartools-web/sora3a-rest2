@@ -108,6 +108,14 @@ button{cursor:pointer}
 .rdy-b{flex:none;border:1px solid var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--text);border-radius:12px;padding:8px 12px;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:92px}
 .rdy-b b{font-family:var(--num);font-size:17px}
 .rdy-b em{font-style:normal;color:var(--ok);font-size:12px;font-weight:700}
+.cook{padding:10px 16px;background:#0d1219;border-bottom:1px solid var(--line)}
+.cook .t{font-size:13px;color:var(--muted);margin-bottom:7px}
+.cook .row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.cook-b{flex:none;border:1px dashed var(--line);background:var(--card);border-radius:12px;padding:7px 11px;font-size:12.5px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:96px}
+.cook-b b{font-family:var(--num);font-size:16px}
+.cook-b small{color:var(--muted);white-space:nowrap}
+.flow{font-size:12.5px;color:var(--muted);padding:6px 16px 0}
+.inst-app{display:block;margin-top:4px;font-size:12.5px;color:#3DF08B;font-weight:700;text-decoration:none}
 
 /* ── القائمة ── */
 .menu{position:fixed;top:64px;inset-inline-start:16px;z-index:40;width:290px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:12px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
@@ -157,6 +165,8 @@ button{cursor:pointer}
     <div class="lanb" id="lanB" hidden></div>
     <div class="pill zero" id="pill">0</div>
   </div>
+  <div class="flow" id="flow" hidden></div>
+  <div class="cook" id="cook" hidden></div>
   <div class="rdy" id="rdy" hidden></div>
   <div class="grid" id="grid"></div>
 </div>
@@ -165,6 +175,7 @@ button{cursor:pointer}
   <div class="mt">⚙️ إعدادات المطبخ</div>
   <button type="button" id="mSec" hidden></button>
   <button type="button" id="mMode" hidden></button>
+  <button type="button" id="mInst" hidden>📲 تثبيت الشاشة على هذا الجهاز</button>
   <button type="button" id="mSnd"></button>
   <button type="button" id="fsBtn">⛶ ملء الشاشة</button>
   <button type="button" id="mReload">🔄 تحديث</button>
@@ -189,7 +200,8 @@ button{cursor:pointer}
 <div id="toast"></div>
 <div class="inst" id="inst" hidden role="dialog" aria-label="تثبيت الشاشة">
   <img src="kitchen-192.png" alt="">
-  <div class="inst-t"><b id="instTtl">ثبّت شاشة المطبخ</b><span id="instSub">تفتح بضغطة من الشاشة الرئيسية، مثل أي تطبيق</span></div>
+  <div class="inst-t"><b id="instTtl">ثبّت شاشة المطبخ</b><span id="instSub">تفتح بضغطة من الشاشة الرئيسية، مثل أي تطبيق</span>
+    <a class="inst-app" id="instApp" hidden href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/kitchen-android/sora3a-kitchen.apk">⬇️ أو نزّل تطبيق «سرعة - المطبخ» — يشتغل حتى لو انقطع النت</a></div>
   <button type="button" class="inst-go" id="instGo">تثبيت</button>
   <button type="button" class="inst-x" id="instX" aria-label="إغلاق">✕</button>
 </div>
@@ -204,8 +216,9 @@ button{cursor:pointer}
   var deferred = null;
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('kitchen-sw.js', { scope: './kitchen' }).catch(function () {});
   function closed() { try { return sessionStorage.getItem('k_inst_x') === '1'; } catch (e) { return false; } }
-  function show(mode) {
-    if (standalone || closed()) return;
+  function show(mode, force) {
+    if (standalone || (closed() && !force)) return;
+    $('instApp').hidden = ios;
     $('instTtl').textContent = 'ثبّت ' + (document.querySelector('meta[name="apple-mobile-web-app-title"]').content || 'شاشة المطبخ');
     $('inst').hidden = false;
     $('instGo').hidden = mode !== 'prompt';
@@ -214,6 +227,9 @@ button{cursor:pointer}
     else $('instSub').textContent = 'تفتح بضغطة من الشاشة الرئيسية، مثل أي تطبيق';
   }
   window.kdsInstShow = show;
+  // من ⚙️: يرجّع طلب التثبيت (حتى لو انسكّر قبل)
+  window.kdsInstAgain = function () { show(deferred ? 'prompt' : ios ? 'ios' : 'menu', true); };
+  window.kdsCanInst = function () { return !standalone; };
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; show('prompt'); });
   window.addEventListener('appinstalled', function () {
     $('inst').hidden = true; deferred = null;
@@ -253,7 +269,13 @@ let outArmed = false, me = null, orders = [], sections = [], unsubs = [], sound 
 const seen = new Set();
 // شبكة المطعم: بتطبيق «سرعة - المطبخ» الطلبات توصل من الكاشير على نفس الواي فاي حتى لو النت مقطوع
 //  fsLive: Firestore متصل بالسيرفر هسه (لو لا، نعتمد نسخة الكاشير)
-let fsOrders = [], fsLive = false, setFromFs = false;
+let fsOrders = [], fsLive = false, setFromFs = false, restD = null;
+// التسلسل: الكاشير ← شاشة المطبخ (كل قسم يطبخ أصنافه) ← شاشة المجهز (يجمّع ويغلّف ويتمم) ← الصالة والسفري «جاهز»، والدلفري يرجع لكاشيره
+//  شاشة المطبخ مطفية (أو الطلب ما بيه أقسام) ← الطلب يروح للمجهز مباشرة. شاشة المجهز مطفية ← خلص المطبخ = جاهز
+const featOn = (k) => { const d = restD || (me && me.rest) || lan.rest() || {}, f = d.features || {}, o = d.svcOff || {}; return f[k] === true && o[k] !== true; };
+const kitchenOn = () => featOn('kitchenSec') && secOnSet;
+const prepOn = () => featOn('kitchen');
+const cooking = (o) => kitchenOn() && !!o.kSec && Object.values(o.kSec).some((v) => !v.readyAt);
 const lan = lanLink({ role: 'kitchen', onChange: () => syncView() });
 try { sound = localStorage.getItem('kds_sound') !== '0'; } catch (e) {}
 
@@ -323,7 +345,8 @@ function start() {
   const R = (...p) => doc(db, 'restaurants', me.rid, ...p);
   svc(svcState(me.rest));
   // الكاش فارغ وماكو نت: ما نمسح الخدمات والأقسام (ننتظر السيرفر أو الكاشير)
-  unsubs.push(onSnapshot(R(), (s) => { if (!s.exists() && s.metadata.fromCache) return; svc(svcState(s.exists() ? s.data() : {})); }, () => {}));
+  restD = me.rest;
+  unsubs.push(onSnapshot(R(), (s) => { if (!s.exists() && s.metadata.fromCache) return; restD = s.exists() ? s.data() : {}; svc(svcState(restD)); }, () => {}));
   getDoc(R('lan', 'key')).then((s) => {
     const k = s.exists() && s.data().key;
     if (k && me) lan.start({ rid: me.rid, key: k, name: SECMODE ? 'شاشة المطبخ' + (SEC ? ' — ' + secById(SEC).name : '') : 'شاشة المجهز' });
@@ -379,8 +402,11 @@ function lanUi() {
 
 // بقسم: الطلب يبين إذا بيه أصناف لهذا القسم وبعده ما خلص (نفس شاشة المطبخ بالكاشير)
 const inSec = (o) => !SEC || (o.kSec ? !!(o.kSec[SEC] && !o.kSec[SEC].readyAt) : (o.items || []).some((i) => i.sec === SEC));
-const newList = () => orders.filter((o) => o.kitchen === 'new' && o.status !== 'cancelled' && Date.now() - (o.createdAtMs || 0) < 86400000 && inSec(o))
-  .sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
+// المطبخ (قسم): أصناف قسمه اللي ما خلصت. المجهز: الطلبات اللي خلصها المطبخ (أو كلها إذا شاشة المطبخ مطفية)
+const inKitchen = (o) => o.kitchen === 'new' && o.status !== 'cancelled' && Date.now() - (o.createdAtMs || 0) < 86400000;
+const newList = () => orders.filter((o) => inKitchen(o) && inSec(o) && (SEC || !cooking(o)))
+  .sort((a, b) => (a.kitchenSecDoneAt || a.createdAtMs || 0) - (b.kitchenSecDoneAt || b.createdAtMs || 0));
+const cookList = () => SEC ? [] : orders.filter((o) => inKitchen(o) && cooking(o)).sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
 const readyWaiting = () => orders.filter((o) => (o.kitchen === 'ready' || o.status === 'ready') && !['delivered', 'cancelled', 'done'].includes(o.status) && !o.captainId && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < 20 * 60000)
   .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
 
@@ -388,7 +414,18 @@ function render() {
   if ($('app').hidden) return;
   const list = newList();
   const p = $('pill'); p.textContent = toA(list.length); p.classList.toggle('zero', !list.length);
-  $('sub').textContent = list.length ? toA(list.length) + ' طلب قيد التحضير' : 'ماكو طلبات هسه';
+  const assemble = !SEC && kitchenOn();   // المجهز يستلم من المطبخ
+  $('sub').textContent = list.length ? toA(list.length) + (assemble ? ' طلب جاهز للتجهيز' : ' طلب قيد التحضير') : 'ماكو طلبات هسه';
+  // شرح التسلسل بسطر واحد حتى محد يتيه بين الشاشتين
+  const fl = $('flow');
+  fl.textContent = SEC ? (prepOn() ? '🔥 اطبخ أصناف قسمك واضغط «جاهز» — لما تخلص كل الأقسام الطلب يروح لشاشة المجهز' : '🔥 اطبخ أصناف قسمك واضغط «جاهز» — لما تخلص كل الأقسام الطلب يصير جاهز')
+    : assemble ? '📦 يوصلك الطلب بعد ما يخلص المطبخ — جمّعه وغلّفه واضغط «تم التجهيز»' : '📦 كل الطلبات توصلك مباشرة (شاشة المطبخ مطفية) — جهّزها واضغط «تم التجهيز»';
+  fl.hidden = false;
+  // المجهز: الطلبات اللي بعدها بالمطبخ (للعلم بس)
+  const ck = cookList(), cb = $('cook');
+  cb.hidden = !ck.length;
+  if (ck.length) cb.innerHTML = `<div class="t">🔥 بعدها بالمطبخ (${toA(ck.length)}) — توصلك هنا أول ما تخلص</div><div class="row">${ck.map((o) => { const v = Object.values(o.kSec || {}), d = v.filter((x) => x.readyAt).length;
+    return `<div class="cook-b"><b>#${esc(kNum(o))}</b><small>${toA(d)}/${toA(v.length)} أقسام</small><small>${Object.entries(o.kSec).map(([sid, x]) => (x.readyAt ? '✅' : '⏳') + (secById(sid).emoji || '')).join(' ')}</small></div>`; }).join('')}</div>`;
 
   // شريط «جاهز ينتظر» للمجهز بس — شاشة القسم تشوف أصنافها وبس
   const rdy = SEC ? [] : readyWaiting(), rb = $('rdy');
@@ -401,16 +438,17 @@ function render() {
     const m = Math.floor((Date.now() - (o.createdAtMs || Date.now())) / 60000), t = getType(o);
     const cls = m >= 20 ? 'late' : m >= 10 ? 'warn' : '';
     const label = t === 'salon' ? '🪑 ' + (o.tableNo ? 'طاولة ' + esc(o.tableNo) : 'صالة') : t === 'takeaway' ? '🥡 سفري' : '🏍️ دلفري';
-    const secChips = !SEC && o.kSec ? `<div class="secs">${Object.entries(o.kSec).map(([sid, v]) => { const sc = secById(sid); return `<button type="button" class="sec ${v.readyAt ? 'done' : ''}" data-sec="${esc(o.id)}|${esc(sid)}">${v.readyAt ? '✅' : '⏳'} ${esc(sc.emoji || '')} ${esc(sc.name)}</button>`; }).join('')}</div>` : '';
+    // المجهز: الأقسام للعلم (المطبخ هو اللي يعلّمها) — وإذا شاشة المطبخ مطفية المجهز يعلّمها بنفسه
+    const secChips = !SEC && o.kSec ? `<div class="secs">${Object.entries(o.kSec).map(([sid, v]) => { const sc = secById(sid); return `<button type="button" class="sec ${v.readyAt ? 'done' : ''}"${assemble ? ' disabled' : ` data-sec="${esc(o.id)}|${esc(sid)}"`}>${v.readyAt ? '✅' : '⏳'} ${esc(sc.emoji || '')} ${esc(sc.name)}</button>`; }).join('')}</div>` : '';
     const items = (o.items || []).filter((i) => !SEC || i.sec === SEC).map((i) => `<div class="it"><span class="q">${toA(i.qty || 1)}×</span><span class="nm">${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' <small class="sec">(' + esc(i.variant) + ')</small>' : ''}${!SEC && i.sec && sections.length ? ' <small class="sec">' + esc((secById(i.sec).emoji) || '') + '</small>' : ''}${i.note ? `<span class="note">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('');
     // بقسم: «جاهز» يعلّم هذا القسم بس، ولما تخلص كل الأقسام الطلب يصير جاهز وحده
     const btn = SEC && o.kSec ? `<button class="done-b" data-sec="${esc(o.id)}|${esc(SEC)}">✅ ${esc(secById(SEC).name)} جاهز</button>`
-      : `<button class="done-b" data-done="${esc(o.id)}">✅ جاهز — خلّص الطلب</button>`;
+      : `<button class="done-b" data-done="${esc(o.id)}">${t === 'delivery' ? '✅ تم التجهيز — يرجع لكاشير الدلفري' : '✅ تم التجهيز — جاهز للزبون'}</button>`;
     return `<div class="card ${cls}"><div class="ch"><div><div class="cnum">#${esc(kNum(o))}</div><div class="clbl">${label}${o.pager ? ' • 📟 ' + esc(o.pager) : ''} • ${esc(t12(o.createdAt))}</div></div><div class="ctime"><span class="m">${toA(m)}</span> د</div></div>
       <div class="items">${items || '<div class="it">—</div>'}</div>
       ${o.note ? `<div class="onote">📝 ${esc(o.note)}</div>` : ''}${secChips}
       ${btn}</div>`;
-  }).join('') : `<div class="empty"><div class="i">👨‍🍳</div><b>ماكو طلبات قيد التحضير${SEC ? ' لـ' + esc(secLabel()) : ''}</b><div>الطلبات الجديدة تطلع هنا تلقائياً</div></div>`);
+  }).join('') : `<div class="empty"><div class="i">👨‍🍳</div><b>${assemble ? 'ماكو طلبات جاهزة للتجهيز' : 'ماكو طلبات قيد التحضير' + (SEC ? ' لـ' + esc(secLabel()) : '')}</b><div>${assemble ? 'أول ما يخلص المطبخ طلب يطلع هنا وحده' : 'الطلبات الجديدة تطلع هنا تلقائياً'}</div></div>`);
 }
 
 // ضغط «جاهز» أو شريحة قسم
@@ -433,12 +471,17 @@ async function secDone(id, sid) {
   const o = orders.find((x) => x.id === id); if (!o || !o.kSec || !o.kSec[sid]) return;
   if (!fsLive && lan.has(id)) {
     const on = !o.kSec[sid].readyAt, ok = await lan.act(id, 'sec', { sec: sid, on, at: Date.now() });
-    toast(ok ? (on ? '✅ ' : '↩️ ') + secById(sid).name : '❌ تعذّر — تأكد إن الكاشير شغّال');
+    const last = on && Object.entries(o.kSec).every(([k, v]) => k === sid || v.readyAt);
+    toast(!ok ? '❌ تعذّر — تأكد إن الكاشير شغّال' : last && prepOn() ? '✅ خلص المطبخ — #' + kNum(o) + ' راح للمجهز' : (on ? '✅ ' : '↩️ ') + secById(sid).name);
     return;
   }
   const ks = { ...o.kSec, [sid]: { ...o.kSec[sid], readyAt: o.kSec[sid].readyAt ? 0 : Date.now() } };
-  if (Object.values(ks).every((v) => v.readyAt)) { o.kSec = ks; return done(id); }
-  try { await updateDoc(doc(db, 'orders', id), { kSec: ks }); toast((ks[sid].readyAt ? '✅ ' : '↩️ ') + secById(sid).name); }
+  const all = Object.values(ks).every((v) => v.readyAt);
+  if (all && !prepOn()) { o.kSec = ks; return done(id); }   // ماكو مجهز ← خلص المطبخ = جاهز
+  try {
+    await updateDoc(doc(db, 'orders', id), all ? { kSec: ks, kitchenSecDoneAt: Date.now() } : { kSec: ks });
+    toast(all ? '✅ خلص المطبخ — #' + kNum(o) + ' راح للمجهز' : (ks[sid].readyAt ? '✅ ' : '↩️ ') + secById(sid).name);
+  }
   catch (err) { toast('❌ تعذّر التحديث'); }
 }
 
@@ -460,7 +503,8 @@ $('mMode').onclick = () => {
   try { localStorage.setItem('kds_mode', SECMODE ? 'all' : 'sec'); } catch (e) {}
   location.href = SECMODE ? 'kitchen.html' : 'kitchen.html?sec=' + encodeURIComponent(SEC || (function () { try { return localStorage.getItem('kds_sec') || ''; } catch (e) { return ''; } })());
 };
-function openMenu() { sndUi(); secUi(); modeUi(); outArmed = false; $('mOut').textContent = '🔌 فصل هذه الشاشة'; menu.hidden = false; $(SECMODE ? 'mSec' : 'mSnd').focus(); }
+$('mInst').onclick = () => { closeMenu(); window.kdsInstAgain && window.kdsInstAgain(); };
+function openMenu() { sndUi(); secUi(); modeUi(); $('mInst').hidden = !(window.kdsCanInst && window.kdsCanInst()); outArmed = false; $('mOut').textContent = '🔌 فصل هذه الشاشة'; menu.hidden = false; $(SECMODE ? 'mSec' : 'mSnd').focus(); }
 function closeMenu() { menu.hidden = true; }
 $('mSec').onclick = () => { closeMenu(); showPick(!!SEC); };
 $('pickG').onclick = (e) => { const b = e.target.closest('[data-pick]'); if (b) setSec(b.dataset.pick); };
