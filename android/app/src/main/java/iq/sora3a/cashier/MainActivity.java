@@ -101,6 +101,7 @@ public class MainActivity extends Activity {
         }
         // شبكة المطعم (بنت أو بدون نت) — كل التطبيقات. تتصل وحدها بآخر إعدادات حتى قبل ما تفتح الصفحة
         web.addJavascriptInterface(new LanBridge(this), "SoraLanNative");
+        if (BuildConfig.KITCHEN) web.addJavascriptInterface(new KitchenIcon(this), "SoraKitchenNative");   // أيقونة المطبخ / المجهز
         if (early) WebViewCompat.addDocumentStartJavaScript(web, LanBridge.SHIM, Collections.singleton(Bridge.ORIGIN));
         Lan.get(this).attach(web, this);
         Lan.get(this).autoStart();

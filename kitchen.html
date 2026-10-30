@@ -26,16 +26,23 @@
 window.kdsManifest = function (secMode, secId, secName) {
   var base = new URL('./', location.href.split(/[?#]/)[0]).href;
   var name = !secMode ? 'شاشة المجهز' : secId ? 'المطبخ — ' + (secName || secId) : 'شاشة المطبخ';
+  // كل شاشة بلونها: المطبخ فيروزي، المجهز بنفسجي — حتى ما يتلخبط الموظف بيناتهن
+  var ic = base + (secMode ? 'kitchen' : 'prep');
   var start = base + 'kitchen.html' + (secMode ? '?sec=' + encodeURIComponent(secId || '') : '');
   var m = { id: start, name: name + ' — سرعة', short_name: name, lang: 'ar', dir: 'rtl',
     start_url: start, scope: base + 'kitchen', display: 'standalone', orientation: 'any',
     background_color: '#0c1116', theme_color: '#0c1116',
-    icons: [{ src: base + 'kitchen-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: base + 'kitchen-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: base + 'kitchen-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }] };
+    icons: [{ src: ic + '-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: ic + '-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: ic + '-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }] };
   var l = document.querySelector('link[rel="manifest"]');
   if (!l) { l = document.createElement('link'); l.rel = 'manifest'; document.head.appendChild(l); }
   l.href = URL.createObjectURL(new Blob([JSON.stringify(m)], { type: 'application/manifest+json' }));
   var t = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (t) t.content = name;
+  var fi = document.querySelector('link[rel="icon"]'); if (fi) fi.href = ic + '-192.png';
+  var ai = document.querySelector('link[rel="apple-touch-icon"]'); if (ai) ai.href = ic + '-apple-180.png';
+  var ii = document.getElementById('instImg'); if (ii) ii.src = ic + '-192.png';
+  // تطبيق «سرعة - المطبخ» بالأندرويد: أيقونته واسمه يتبدلون حسب الشاشة (المطبخ / المجهز)
+  try { if (window.SoraKitchenNative) window.SoraKitchenNative.mode(secMode ? 'kitchen' : 'prep'); } catch (e) {}
   document.title = 'سرعة — ' + name;
   return m;
 };
@@ -201,7 +208,7 @@ button{cursor:pointer}
 
 <div id="toast"></div>
 <div class="inst" id="inst" hidden role="dialog" aria-label="تثبيت الشاشة">
-  <img src="kitchen-192.png" alt="">
+  <img id="instImg" src="kitchen-192.png" alt="">
   <div class="inst-t"><b id="instTtl">ثبّت شاشة المطبخ</b><span id="instSub">تفتح بضغطة من الشاشة الرئيسية، مثل أي تطبيق</span>
     <a class="inst-app" id="instApp" hidden href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/kitchen-android/sora3a-kitchen.apk">⬇️ أو نزّل تطبيق «سرعة - المطبخ» — يشتغل حتى لو انقطع النت</a></div>
   <button type="button" class="inst-go" id="instGo">تثبيت</button>

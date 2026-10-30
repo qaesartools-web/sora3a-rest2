@@ -1,7 +1,7 @@
 // سرعة — شاشة المطبخ/المجهز: Service Worker صغير خاص بيها (التثبيت + فتح سريع + تفتح بدون نت)
 // نطاقه /sora3a-rest2/kitchen فقط، فما يتدخل بالكاشير. بيانات Firebase نفسها تمشي بالشبكة (وبدون نت من الكاشير على نفس الواي فاي).
-const CACHE = 'kitchen-v6';
-const SHELL = ['kitchen.html', 'staff.js', 'lanlink.js?v=1', 'vendor/qrcode.js', 'kitchen-192.png', 'kitchen-512.png', 'kitchen-apple-180.png'];
+const CACHE = 'kitchen-v7';
+const SHELL = ['kitchen.html', 'staff.js', 'lanlink.js?v=1', 'vendor/qrcode.js', 'kitchen-192.png', 'kitchen-512.png', 'kitchen-apple-180.png', 'prep-192.png', 'prep-512.png', 'prep-apple-180.png'];
 // مكتبات Firebase (إصدار ثابت): تنحفظ حتى الشاشة تفتح حتى لو انقطع النت
 const CDN = ['app', 'auth', 'firestore'].map((m) => `https://www.gstatic.com/firebasejs/10.7.1/firebase-${m}.js`);
 self.addEventListener('install', (e) => {

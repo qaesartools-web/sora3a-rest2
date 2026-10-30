@@ -56,6 +56,15 @@ jobs:
           cp android/app/build/outputs/apk/kitchen/release/app-kitchen-release.apk sora3a-kitchen.apk
           # التطبيق يقرا هذا الملف حتى يعرف أكو نسخة أحدث، ويحدّث نفسه بس إذا بصمة التوقيع نفسها
           printf '{"version":%s,"name":"1.%s","cert":"%s"}\n' "${{ github.run_number }}" "${{ github.run_number }}" "$SIGN_CERT" > version.json
+      # تطبيق المطبخ: أيقونتين (المطبخ فيروزي / المجهز بنفسجي) ووحدة بس شغّالة — والكاشير أيقونة وحدة مثل قبل
+      - name: Check launcher icons
+        run: |
+          A=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2
+          n() { "$A" dump xmltree --file AndroidManifest.xml "$1" | grep -c '"android.intent.category.LAUNCHER"' || true; }
+          "$A" dump xmltree --file AndroidManifest.xml sora3a-kitchen.apk | grep -E 'E: activity|activity-alias|A: .*(name|enabled|targetActivity|label|icon)\(' | head -40
+          test "$(n sora3a-kitchen.apk)" = 2
+          test "$(n sora3a-cashier.apk)" = 1
+          test "$(n sora3a-line.apk)" = 1
       - uses: actions/upload-artifact@v4
         with: { name: sora3a-android-apks, path: 'sora3a-*.apk' }
       - name: Publish (fixed tag, not latest)
