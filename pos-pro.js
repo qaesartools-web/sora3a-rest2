@@ -1476,8 +1476,10 @@ const ordCancelCore = id=>{
     const o = orders.find((x) => x.id === id); if (!o || !o.kSec || !o.kSec[sid]) return;
     const ks = { ...o.kSec, [sid]: { ...o.kSec[sid], readyAt: o.kSec[sid].readyAt ? 0 : Date.now() } };
     try {
-      if (Object.values(ks).every((v) => v.readyAt)) { o.kSec = ks; await kdsDone(id); return; }
-      await fb().updateDoc(fb().doc(fb().db, 'orders', id), { kSec: ks });
+      const all = Object.values(ks).every((v) => v.readyAt);
+      if (all && !featOn('kitchen')) { o.kSec = ks; await kdsDone(id); return; }   // ماكو شاشة مجهز ← خلص المطبخ = جاهز
+      await fb().updateDoc(fb().doc(fb().db, 'orders', id), all ? { kSec: ks, kitchenSecDoneAt: Date.now() } : { kSec: ks });
+      if (all) { toast('✅ خلص المطبخ — راح لشاشة المجهز'); return; }
       const sc = secById(sid); toast((ks[sid].readyAt ? '✅ ' : '↩️ ') + (sc ? sc.name : '') + (ks[sid].readyAt ? ' جاهز' : ' رجع قيد التحضير'));
     } catch (e) { toast('❌ تعذّر التحديث'); }
   };
@@ -2365,7 +2367,7 @@ const ordCancelCore = id=>{
   let lanOn = false, lanBound = false, lanSent = new Map(), lanPushT = 0, lanSt = null, lanGen = 0;
   const lanSeen = new Set();
   const LAN_F = ['orderType', 'ticketNo', 'salonNum', 'holdNum', 'pager', 'tableNo', 'createdAt', 'createdAtMs', 'day', 'status', 'kitchen', 'kitchenReadyAt',
-    'readyAt', 'kSec', 'note', 'captainId', 'servedAtMs', 'pagerDone', 'held', 'restaurantId'];
+    'readyAt', 'kSec', 'kitchenSecDoneAt', 'note', 'captainId', 'servedAtMs', 'pagerDone', 'held', 'restaurantId'];
   const lanOrder = (o) => {
     const x = { id: o.id };
     LAN_F.forEach((k) => { if (o[k] !== undefined && o[k] !== null) x[k] = o[k]; });
@@ -2401,8 +2403,9 @@ const ordCancelCore = id=>{
       if (d.op === 'ready') await lanReady(o);
       else if (d.op === 'sec' && o.kSec && o.kSec[d.sec]) {
         const ks = { ...o.kSec, [d.sec]: { ...o.kSec[d.sec], readyAt: d.on ? (o.kSec[d.sec].readyAt || Date.now()) : 0 } };
-        if (Object.values(ks).every((v) => v.readyAt)) await lanReady({ ...o, kSec: ks });
-        else await fb().updateDoc(fb().doc(fb().db, 'orders', o.id), { kSec: ks });
+        const all = Object.values(ks).every((v) => v.readyAt);
+        if (all && !featOn('kitchen')) await lanReady({ ...o, kSec: ks });   // ماكو مجهز ← جاهز
+        else await fb().updateDoc(fb().doc(fb().db, 'orders', o.id), all ? { kSec: ks, kitchenSecDoneAt: Date.now() } : { kSec: ks });
       } else return reply(false);
       reply(true);
     } catch (e) { reply(false); }
@@ -2791,13 +2794,16 @@ const ordCancelCore = id=>{
   // طلب التوصيل الأونلاين يروح للمطبخ أول؛ أول ما يجهز يطلع هنا ← الكاشير يختار أي كابتن متوفر
   const capWaitSeen = new Set();
   const CAP_NOANS = () => window.__capNoAns || 5 * 60000;
+  // دلفري خلص تجهيزه يرجع لكاشيره (الجهاز اللي سجّله)؛ إذا ما اختار كابتن خلال ٣ دقايق يطلع لكل كاشيرية الدلفري
+  const CAP_BACK = () => window.__capBack || 3 * 60000;
   const capNoAns = () => orders.filter((o) => getOrderType(o) === 'delivery' && o.status === 'pending' && o.captainId
     && !(o.rejectedBy || []).includes(o.captainId) && Date.now() - (o.assignedAtMs || o.createdAtMs || Date.now()) > CAP_NOANS());
   setInterval(() => { if (restData) renderCapWait(); }, 30000);
   function renderCapWait() {
     const el = $('capWaitBox'); if (!el || !restData) return;
     if (!myPerm('oDeliv')) { setHtml(el, ''); return; }
-    const list = orders.filter((o) => o.awaitCap && getOrderType(o) === 'delivery' && o.status !== 'cancelled' && !o.captainId && (o.kitchen === 'ready' || o.status === 'ready'))
+    const mine = (o) => !isCashierRole() || !o.device || o.device === deviceId || Date.now() - (o.kitchenReadyAt || o.readyAt || 0) > CAP_BACK();
+    const list = orders.filter((o) => o.awaitCap && getOrderType(o) === 'delivery' && o.status !== 'cancelled' && !o.captainId && (o.kitchen === 'ready' || o.status === 'ready') && mine(o))
       .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
     let fresh = false;
     list.forEach((o) => { if (!capWaitSeen.has(o.id)) { capWaitSeen.add(o.id); fresh = true; } });
