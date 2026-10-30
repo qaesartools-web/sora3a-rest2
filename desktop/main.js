@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const { createPrinter, makeRenderer, makeVirtualRenderer } = require('./printer');
 const { createHub } = require('./lan');
+const { createFirewall } = require('./firewall');
 
 const START_URL = process.env.SORA_URL || 'https://qaesartools-web.github.io/sora3a-rest2/';
 const ALLOWED = new Set(['https://qaesartools-web.github.io', 'https://sora3a.com', 'https://pos.sora3a.com', new URL(START_URL).origin]);
@@ -16,7 +17,7 @@ const fromApp = (e) => originOk(e.senderFrame && e.senderFrame.url);
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 if (!app.requestSingleInstanceLock()) app.quit();
 
-let win = null, quitting = false, printer = null, simWin = null, lan = null;
+let win = null, quitting = false, printer = null, simWin = null, lan = null, fw = null;
 
 // إعدادات البرنامج على هالحاسبة (وضع تجربة الطابعات)
 const cfgFile = () => path.join(app.getPath('userData'), 'sora3a-desktop.json');
@@ -141,6 +142,10 @@ function setupIpc() {
   ipcMain.handle('sora:lan:status', (e) => (fromApp(e) ? lan.status() : null));
   ipcMain.on('sora:lan:send', (e, to, m) => { if (fromApp(e) && m && typeof m === 'object') lan.send(String(to || '*'), m); });
   ipcMain.on('sora:lan:broadcast', (e, m) => { if (fromApp(e) && m && typeof m === 'object') lan.broadcast(m); });
+  // جدار حماية ويندوز: يمنع الشاشات؟ + «اسمح» بضغطة (ويندوز يطلب موافقة)
+  fw = createFirewall();
+  ipcMain.handle('sora:lan:fw', (e) => (fromApp(e) ? fw.check() : null));
+  ipcMain.handle('sora:lan:fwfix', (e) => (fromApp(e) ? fw.fix() : null));
 }
 
 // تحديث البرنامج نفسه تلقائياً (ينزل بالخلفية ويتثبت عند الإغلاق)

@@ -2365,6 +2365,7 @@ const ordCancelCore = id=>{
   //  اللي يتغير بدون نت ينحفظ بهذا الجهاز ويترفع للسحابة وحده من يرجع النت
   const lanApi = () => (window.SoraLan && window.SoraLan.role === 'hub' ? window.SoraLan : null);
   let lanOn = false, lanBound = false, lanSent = new Map(), lanPushT = 0, lanSt = null, lanGen = 0;
+  let lanFw = null, lanFwT = 0, lanFwHide = false;   // جدار حماية ويندوز (برنامج الكاشير)
   const lanSeen = new Set();
   const LAN_F = ['orderType', 'ticketNo', 'salonNum', 'holdNum', 'pager', 'tableNo', 'createdAt', 'createdAtMs', 'day', 'status', 'kitchen', 'kitchenReadyAt',
     'readyAt', 'kSec', 'kitchenSecDoneAt', 'note', 'captainId', 'servedAtMs', 'pagerDone', 'held', 'restaurantId'];
@@ -2451,7 +2452,7 @@ const ordCancelCore = id=>{
     const L = lanApi(); if (!L || !restData) return;
     if (!lanBound) { lanBound = true; L.on(onLan); }
     const r = rid(), g = ++lanGen;
-    unsubs.push(() => { if (g !== lanGen) return; lanGen++; lanOn = false; lanSt = null; L.stop(); });   // تسجيل خروج
+    unsubs.push(() => { if (g !== lanGen) return; lanGen++; lanOn = false; lanSt = null; clearTimeout(lanFwT); lanFw = null; lanFwBar(); L.stop(); });   // تسجيل خروج
     const run = async (key) => {
       if (!key || g !== lanGen || r !== rid()) return;
       lsSet('pos_lan_' + r, key);
@@ -2459,7 +2460,7 @@ const ordCancelCore = id=>{
       lanOn = !!(lanSt && lanSt.on);
       lanSent = new Map();
       // الشاشات المتصلة من قبل (الصفحة انفتحت من جديد): نسخة كاملة
-      if (lanOn) { lanFull('role:kitchen'); lanFull('role:screen'); lanPush(); }
+      if (lanOn) { lanFull('role:kitchen'); lanFull('role:screen'); lanPush(); lanFwCheck(); }
       lanUi();
     };
     const cached = lsGet('pos_lan_' + r, '');
@@ -2472,7 +2473,12 @@ const ordCancelCore = id=>{
   }
   const ROLE_N = { kitchen: '👨‍🍳 شاشة مطبخ', screen: '📺 شاشة طلبك جاهز', line: '📞 خط المطعم' };
   function lanCardHtml() {
-    if (!lanApi()) return '';
+    if (!lanApi()) {
+      // الكاشير بالمتصفح: الشاشات ما تكدر تتصل بيه — بدون نت يحتاج برنامج الكاشير
+      const a = appOffer();
+      return `<div class="sh-card"><div class="sh-title">🛜 شبكة المطعم (بنت أو بدون نت)</div>
+        <div class="ac-sub" style="line-height:1.8">⚠️ هذا الكاشير مفتوح بالمتصفح، فإذا انقطع النت الطلبات ما توصل لشاشة المطبخ والمجهز و«طلبك جاهز». حتى يشتغل بدون نت شغّل ${a ? `<a href="${a.url}" target="_blank" rel="noopener">${esc(a.label)}</a>` : 'برنامج الكاشير'} بدل المتصفح.</div></div>`;
+    }
     return `<div class="sh-card"><div class="sh-title">🛜 شبكة المطعم (بنت أو بدون نت)</div><div id="lanBox">${lanBoxHtml()}</div>
       <div class="ac-sub" style="line-height:1.8;margin-top:6px">شاشة المطبخ والمجهز وشاشة «طلبك جاهز» وتلفون الخط يتصلون بهذا الجهاز على نفس الواي فاي — إذا انقطع النت تبقى الطلبات و«جاهز» والاتصالات تمشي، ومن يرجع النت كلشي يترفع وحده.</div></div>`;
   }
@@ -2480,10 +2486,43 @@ const ordCancelCore = id=>{
     const st = lanSt || {};
     if (!st.on) return `<div class="ac-sub">⏳ ${esc(st.err || 'جاري التشغيل…')}</div>`;
     const peers = st.peers || [];
-    return `<div class="ac-sub">✅ شغّالة${(st.ips || []).length ? ' — عنوان هذا الجهاز: <b dir="ltr">' + esc(st.ips[0]) + '</b>' : ''}</div>
-      ${peers.length ? peers.map((x) => `<div class="ac-sub">🟢 ${esc(ROLE_N[x.role] || x.role)}${x.name ? ' — ' + esc(x.name) : ''}</div>`).join('') : '<div class="ac-sub">ماكو أجهزة متصلة هسه</div>'}`;
+    const fw = lanFw && lanFw.ok === false
+      ? `<div class="ac-sub" style="color:#ef4444;line-height:1.8;margin-top:6px">⛔ جدار حماية ويندوز يمنع الشاشات توصل لهذا الجهاز</div>
+        <button type="button" class="btn-soft" style="width:100%;margin-top:6px" onclick="lanFwFix()">🛡️ اسمح للشاشات توصل (ضغطة وحدة)</button>`
+      : lanFw && lanFw.ok && !lanFw.na ? '<div class="ac-sub">🛡️ جدار الحماية: مسموح</div>' : '';
+    return `<div class="ac-sub">✅ شغّالة${(st.ips || []).length ? ' — عنوان هذا الجهاز: <b dir="ltr">' + esc(st.ips[0]) + '</b>' : ''}</div>${fw}
+      ${peers.length ? peers.map((x) => `<div class="ac-sub">🟢 ${esc(ROLE_N[x.role] || x.role)}${x.name ? ' — ' + esc(x.name) : ''}</div>`).join('')
+        : `<div class="ac-sub">ماكو أجهزة متصلة هسه</div><div class="ac-sub" style="line-height:1.8">إذا شاشة ما تتصل: لازم تكون تطبيق «سرعة - المطبخ» أو تطبيق الشاشة (مو المتصفح)، وعلى نفس الواي فاي، وانفتحت مرة وحدة بالنت.</div>`}`;
   }
-  function lanUi() { const b = $('lanBox'); if (b) b.innerHTML = lanBoxHtml(); }
+  function lanUi() { const b = $('lanBox'); if (b) b.innerHTML = lanBoxHtml(); lanFwBar(); }
+  // جدار حماية ويندوز (برنامج الكاشير): يفحص إذا يمنع الشاشات، وشريط تنبيه حتى لو الكاشير ما فتح الإعدادات
+  function lanFwCheck() {
+    const L = lanApi(); if (!L || !L.fw) return;
+    clearTimeout(lanFwT); lanFwT = setTimeout(lanFwCheck, 10 * 60000);
+    Promise.resolve(L.fw()).then((r) => { lanFw = r || null; lanUi(); }, () => {});
+  }
+  function lanFwBar() {
+    let b = $('lanFwBar');
+    if (!(lanOn && lanFw && lanFw.ok === false) || lanFwHide) { if (b) b.remove(); return; }
+    if (b) return;
+    b = document.createElement('div');
+    b.id = 'lanFwBar';
+    b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9000;max-width:360px;background:#7f1d1d;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:14px;line-height:1.7';
+    b.innerHTML = `<div>⛔ جدار حماية ويندوز يمنع شاشة المطبخ والمجهز و«طلبك جاهز» توصل لهذا الجهاز — إذا انقطع النت ما توصلها الطلبات</div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="btn-soft" style="flex:1" onclick="lanFwFix()">🛡️ اسمح بضغطة</button><button type="button" class="btn-soft" onclick="lanFwLater()">لاحقاً</button></div>`;
+    document.body.appendChild(b);
+  }
+  window.lanFwLater = () => { lanFwHide = true; lanFwBar(); };
+  window.lanFwFix = async () => {
+    const L = lanApi(); if (!L || !L.fwFix) return;
+    toast('🛡️ ويندوز راح يسألك «تسمح لهذا التطبيق يسوي تغييرات؟» — اضغط «نعم»');
+    const r = await Promise.resolve(L.fwFix()).catch(() => null);
+    if (r) lanFw = r;
+    lanUi();
+    toast(r && r.ok ? '✅ تم — الشاشات تكدر توصل لهذا الجهاز حتى بدون نت'
+      : r && r.refused ? '❌ انضغط «لا» — عيدها واضغط «نعم»'
+      : '⚠️ ما تأكدنا — إذا عندك برنامج حماية ثاني (مكافح فيروسات) اسمح لبرنامج سرعة بيه');
+  };
 
   // السلة على الهاتف: تفتح وتغلق بلمسة على رأسها
   $('cartHead').addEventListener('click', () => { if (window.matchMedia('(max-width:600px)').matches) document.querySelector('.cside').classList.toggle('open'); });

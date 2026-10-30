@@ -1,6 +1,6 @@
 // سرعة — شاشة «طلبك جاهز»: Service Worker صغير خاص بيها (تفتح بدون نت وتكمل ويا الكاشير على نفس الواي فاي)
 // نطاقه /sora3a-rest2/screen فقط، فما يتدخل بالكاشير
-const CACHE = 'screen-v1';
+const CACHE = 'screen-v2';
 const SHELL = ['screen.html', 'staff.js', 'lanlink.js?v=1', 'device.js?v=1', 'vendor/qrcode.js', 'logo.svg'];
 // مكتبات Firebase (إصدار ثابت): تنحفظ حتى الشاشة تفتح حتى لو انقطع النت
 const CDN = ['app', 'auth', 'firestore'].map((m) => `https://www.gstatic.com/firebasejs/10.7.1/firebase-${m}.js`);

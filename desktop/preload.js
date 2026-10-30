@@ -29,6 +29,8 @@ if (allowed.includes(location.origin)) {
     status: () => ipcRenderer.invoke('sora:lan:status'),
     send: (to, m) => ipcRenderer.send('sora:lan:send', String(to || '*'), m),
     broadcast: (m) => ipcRenderer.send('sora:lan:broadcast', m),
+    fw: () => ipcRenderer.invoke('sora:lan:fw'),
+    fwFix: () => ipcRenderer.invoke('sora:lan:fwfix'),
     on: (cb) => { ipcRenderer.on('sora:lan', (_e, v) => { try { cb(v); } catch (e) {} }); },
   });
 }

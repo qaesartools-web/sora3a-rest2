@@ -69,6 +69,7 @@ button{cursor:pointer}
 .pill.zero{background:var(--card2);color:var(--muted)}
 .lanb{flex:none;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700;background:rgba(61,240,139,.14);color:var(--ok);border:1px solid rgba(61,240,139,.35);white-space:nowrap}
 .lanb.warn{background:rgba(255,176,32,.14);color:#FFB020;border-color:rgba(255,176,32,.4)}
+.lanh{margin:8px 12px 0;padding:10px 12px;border-radius:12px;background:rgba(255,176,32,.12);color:#FFB020;border:1px solid rgba(255,176,32,.35);font-size:14px;line-height:1.8}
 .mb{flex:none;width:46px;height:46px;border-radius:14px;border:1px solid var(--line);background:var(--card2);font-size:20px;display:flex;align-items:center;justify-content:center}
 
 /* ── الشبكة ── */
@@ -165,6 +166,7 @@ button{cursor:pointer}
     <div class="lanb" id="lanB" hidden></div>
     <div class="pill zero" id="pill">0</div>
   </div>
+  <div class="lanh" id="lanH" hidden></div>
   <div class="flow" id="flow" hidden></div>
   <div class="cook" id="cook" hidden></div>
   <div class="rdy" id="rdy" hidden></div>
@@ -253,7 +255,7 @@ button{cursor:pointer}
 
 <script src="vendor/qrcode.js"></script>
 <script type="module">
-import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, getDoc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from './staff.js';
+import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from './staff.js';
 import { lanLink } from './lanlink.js?v=1';
 // الشاشة تنربط بالمطعم برمز (بدون إيميل ولا كلمة سر) — جلستها بتطبيق Firebase خاص بالشاشات
 const db = screenFb().db;
@@ -347,10 +349,12 @@ function start() {
   // الكاش فارغ وماكو نت: ما نمسح الخدمات والأقسام (ننتظر السيرفر أو الكاشير)
   restD = me.rest;
   unsubs.push(onSnapshot(R(), (s) => { if (!s.exists() && s.metadata.fromCache) return; restD = s.exists() ? s.data() : {}; svc(svcState(restD)); }, () => {}));
-  getDoc(R('lan', 'key')).then((s) => {
+  // الرمز السري لشبكة المطعم: نتابعه (إذا انسوّى بعد ما انفتحت الشاشة يوصل وحده) — ينحفظ بالتطبيق للشغل بدون نت
+  let lanKey = '';
+  unsubs.push(onSnapshot(R('lan', 'key'), (s) => {
     const k = s.exists() && s.data().key;
-    if (k && me) lan.start({ rid: me.rid, key: k, name: SECMODE ? 'شاشة المطبخ' + (SEC ? ' — ' + secById(SEC).name : '') : 'شاشة المجهز' });
-  }).catch(() => {});
+    if (k && me && k !== lanKey) { lanKey = k; lan.start({ rid: me.rid, key: k, name: SECMODE ? 'شاشة المطبخ' + (SEC ? ' — ' + secById(SEC).name : '') : 'شاشة المجهز' }); }
+  }, () => {}));
   unsubs.push(onSnapshot(R('settings', 'main'), (s) => {
     if (!s.exists() && s.metadata.fromCache) return;
     setFromFs = true;
@@ -390,14 +394,22 @@ function syncView() {
   render();
   if (fresh && sound && !$('app').hidden) beep();
 }
-// شارة صغيرة بالأعلى بس لما النت مقطوع
+// شارة صغيرة بالأعلى بس لما النت مقطوع — وإذا ما لگينا الكاشير نوضّح ليش
+let lanReady = false, lanSince = 0;
+lan.ready.then(() => { lanReady = true; lanUi(); });
 function lanUi() {
-  const b = $('lanB');
-  if (fsLive) { b.hidden = true; return; }
+  const b = $('lanB'), h = $('lanH');
+  if (fsLive) { b.hidden = true; h.hidden = true; lanSince = 0; return; }
+  if (!lanSince) { lanSince = Date.now(); setTimeout(lanUi, 16000); }
   b.hidden = false;
   const on = lan.on();
   b.classList.toggle('warn', !on);
   b.textContent = on ? '🛜 بدون نت — متصل بالكاشير' : lan.app() ? '📶 ماكو نت — ندوّر على الكاشير…' : '📶 ماكو نت';
+  const app = lan.app();
+  h.hidden = on || !lanReady || (app && Date.now() - lanSince < 15000);
+  h.textContent = app
+    ? 'ما لگينا الكاشير. تأكد: ١) برنامج الكاشير مفتوح بالحاسبة (مو المتصفح) ٢) هذا الجهاز على نفس الواي فاي ٣) بالكاشير ← الإعدادات ← «شبكة المطعم» ماكو تنبيه أحمر لجدار الحماية'
+    : 'هذه الشاشة مفتوحة بالمتصفح، وبدون نت ما توصلها الطلبات. حتى تشتغل بدون نت: تطبيق «سرعة - المطبخ» من لوحة الإدارة ← الشاشات';
 }
 
 // بقسم: الطلب يبين إذا بيه أصناف لهذا القسم وبعده ما خلص (نفس شاشة المطبخ بالكاشير)
