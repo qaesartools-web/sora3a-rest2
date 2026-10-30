@@ -11,8 +11,8 @@ android {
         versionName '1.' + (System.getenv('VERSION_CODE') ?: '0')
     }
     buildFeatures { buildConfig true }
-    // أربع تطبيقات من نفس الكود: الكاشير (بيع + طباعة)، خط المطعم (يبعث رقم المتصل بس)، الشاشة (طلبك جاهز على التلفزيون)،
-    // وشاشة المطبخ/المجهز (تشتغل بنت أو بدون نت على نفس الراوتر ويا الكاشير)
+    // خمس تطبيقات من نفس الكود: الكاشير (بيع + طباعة)، خط المطعم (يبعث رقم المتصل بس)، الشاشة (طلبك جاهز على التلفزيون)،
+    // وشاشة المطبخ وشاشة المجهز (كل وحدة تطبيق — تشتغل بنت أو بدون نت على نفس الراوتر ويا الكاشير)
     flavorDimensions 'app'
     productFlavors {
         cashier {
@@ -21,6 +21,7 @@ android {
             buildConfigField 'boolean', 'LINE', 'false'
             buildConfigField 'boolean', 'SCREEN', 'false'
             buildConfigField 'boolean', 'KITCHEN', 'false'
+            buildConfigField 'boolean', 'PREP', 'false'
             buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/"'
         }
         line {
@@ -29,6 +30,7 @@ android {
             buildConfigField 'boolean', 'LINE', 'true'
             buildConfigField 'boolean', 'SCREEN', 'false'
             buildConfigField 'boolean', 'KITCHEN', 'false'
+            buildConfigField 'boolean', 'PREP', 'false'
             buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/line.html"'
         }
         screen {
@@ -37,14 +39,26 @@ android {
             buildConfigField 'boolean', 'LINE', 'false'
             buildConfigField 'boolean', 'SCREEN', 'true'
             buildConfigField 'boolean', 'KITCHEN', 'false'
+            buildConfigField 'boolean', 'PREP', 'false'
             buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/screen.html"'
         }
+        // شاشة المطبخ (الأقسام) — تطبيق لحاله، والمجهز تطبيق ثاني: كل واحد يتثبت وحده بلونه واسمه (نفس الصفحة، والصفحة تقفل على شاشته)
         kitchen {
             dimension 'app'
             applicationId 'iq.sora3a.kitchen'
             buildConfigField 'boolean', 'LINE', 'false'
             buildConfigField 'boolean', 'SCREEN', 'false'
             buildConfigField 'boolean', 'KITCHEN', 'true'
+            buildConfigField 'boolean', 'PREP', 'false'
+            buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/kitchen.html"'
+        }
+        prep {
+            dimension 'app'
+            applicationId 'iq.sora3a.prep'
+            buildConfigField 'boolean', 'LINE', 'false'
+            buildConfigField 'boolean', 'SCREEN', 'false'
+            buildConfigField 'boolean', 'KITCHEN', 'true'
+            buildConfigField 'boolean', 'PREP', 'true'
             buildConfigField 'String', 'START_URL', '"https://qaesartools-web.github.io/sora3a-rest2/kitchen.html"'
         }
     }

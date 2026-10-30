@@ -254,7 +254,7 @@ const openVarCore = (ci,ii)=>{
     if (settings.quickAdd && p.variants.length === 1) { addLine(p, p.variants[0], 1, ''); return; }
     openVarCore(ci, ii);
     $('varNote').value = '';
-    $('varQuick').innerHTML = (settings.quickNotes || []).map((n) => `<button type="button" data-n="${esc(n)}">${esc(n)}</button>`).join('');
+    $('varQuick').innerHTML = notesArr(settings.quickNotes).map((n) => `<button type="button" data-n="${esc(n)}">${esc(n)}</button>`).join('');
   };
   $('varQuick').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-n]'); if (!b) return;
@@ -304,7 +304,7 @@ const openVarCore = (ci,ii)=>{
   };
   window.cNote = (i) => {
     const c = cart[i]; if (!c) return;
-    acDialog('📝 ملاحظة: ' + c.name, (settings.quickNotes || []).join(' • '), [{ id: 'n', label: 'الملاحظة', value: c.note || '' }], (v) => {
+    acDialog('📝 ملاحظة: ' + c.name, notesArr(settings.quickNotes).join(' • '), [{ id: 'n', label: 'الملاحظة', value: c.note || '' }], (v) => {
       const note = v.n.trim().slice(0, 80);
       const dup = cart.find((x, j) => j !== i && x.name === c.name && x.variant === c.variant && (x.note || '') === note);
       if (dup) { dup.qty += c.qty; cart.splice(i, 1); } else c.note = note;
@@ -1156,8 +1156,18 @@ const showMTabCore = tab=>{
     ['mt1', 'mt2', 'mt3'].forEach((id) => $(id).classList.remove('on'));
     $('mt4').classList.add('on');
     $('mSetSec').style.display = 'block';
-    renderSettings();
+    try { renderSettings(); }
+    catch (e) {
+      console.warn('settings', e);
+      $('mSetSec').innerHTML = `<div class="sh-card"><div class="sh-title">⚠️ الإعدادات ما انفتحت</div><div class="ac-sub" style="line-height:1.8">صوّر هذي الرسالة ودزها للدعم: <b dir="ltr">${esc(String((e && e.message) || e)).slice(0, 200)}</b></div>
+        <button type="button" class="btn-soft" style="width:100%;margin-top:8px" onclick="showMTab('settings')">🔄 إعادة المحاولة</button></div>`;
+    }
   };
+  // أقسام المطبخ دائماً قائمة (حتى لو انحفظت بيها خانة فارغة أو بشكل ثاني) — نفس الترتيب حتى يبقى الحفظ صحيح
+  const secArr = (v) => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : DEFAULTS.sections).map((x) => (x && typeof x === 'object' ? x : {}));
+  const notesArr = (v) => (Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[,،]/) : []).map((x) => String(x).trim()).filter(Boolean);
+  // جزء من الإعدادات إذا خرب ما يخفي الباقي — يطلع سطر يوضح شنو الغلط
+  const part = (f) => { try { return f(); } catch (e) { console.warn('settings', e); return `<div class="sh-card"><div class="ac-sub" style="color:#ef4444;line-height:1.8">⚠️ جزء من الإعدادات ما انعرض: ${esc(String((e && e.message) || e)).slice(0, 160)}</div></div>`; } };
   function renderSettings() {
     const s = settings;
     const notifState = !('Notification' in window) ? 'غير مدعوم بهذا المتصفح' : Notification.permission === 'granted' ? '✅ مفعّلة' : Notification.permission === 'denied' ? '🔕 محظورة من المتصفح' : 'غير مفعّلة';
@@ -1175,44 +1185,43 @@ const showMTabCore = tab=>{
       <div class="sh-card"><div class="sh-title">👨‍🍳 أقسام المطبخ والطابعات</div>
         <label class="set-check"><input type="checkbox" id="stSecOn" ${s.kSecOn ? 'checked' : ''}> تقسيم الطلب على أقسام المطبخ — كل قسم يطبع أصنافه فقط، ورقم الطلب يوحّدها</label>
         <div class="flbl">الأقسام (اترك الاسم فارغاً لإلغاء القسم)</div>
-        ${(s.sections || DEFAULTS.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join('')}
+        ${part(() => secArr(s.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join(''))}
         <div class="flbl" style="margin-top:10px">كل فئة بالمنيو تابعة لأي قسم؟</div>
-        ${menu.filter((c) => c && c.cat).map((c, i) => `<div class="set-row"><div class="sec-cat">${esc(c.emoji || '')} ${esc(c.cat)}</div><div><select class="fsel" id="stCat${i}" data-cat="${esc(c.cat)}"><option value="">— بدون قسم (لا تُطبع بالمطبخ) —</option>${(s.sections || []).filter((x) => x.name).map((x) => `<option value="${esc(x.id)}" ${(s.catSection || {})[c.cat] === x.id ? 'selected' : ''}>${esc(x.emoji || '')} ${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<div class="ac-sub">أضف فئات للمنيو أولاً</div>'}
+        ${part(() => (Array.isArray(menu) ? menu : []).filter((c) => c && c.cat).map((c, i) => `<div class="set-row"><div class="sec-cat">${esc(c.emoji || '')} ${esc(c.cat)}</div><div><select class="fsel" id="stCat${i}" data-cat="${esc(c.cat)}"><option value="">— بدون قسم (لا تُطبع بالمطبخ) —</option>${secArr(s.sections || []).filter((x) => x.name).map((x) => `<option value="${esc(x.id)}" ${(s.catSection || {})[c.cat] === x.id ? 'selected' : ''}>${esc(x.emoji || '')} ${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<div class="ac-sub">أضف فئات للمنيو أولاً</div>')}
         <div id="secHealth" class="sec-health"></div>
-        ${window.SoraDesktop ? dpSettingsHtml(s) : `${appOffer() ? `<div class="dp-promo"><b>${appOffer().label}</b> — ${appOffer().text} <a href="${appOffer().url}">⬇️ تنزيل</a></div>` : ''}
+        ${part(() => window.SoraDesktop ? dpSettingsHtml(s) : `${appOffer() ? `<div class="dp-promo"><b>${appOffer().label}</b> — ${appOffer().text} <a href="${appOffer().url}">⬇️ تنزيل</a></div>` : ''}
         ${qzCfgGet().on ? '' : `<div class="ac-sub" style="margin-top:10px;line-height:1.8">🖨️ من المتصفح: كل قسم ينطبع بورقة منفصلة على نفس الطابعة. حتى كل قسم يطلع على طابعته، شغّل الكاشير من تطبيق سرعة (ويندوز، ماك، لينكس، أندرويد).</div>`}
         ${!qzCfgGet().on ? '' : `<div class="flbl" style="margin-top:12px">🖨️ الطباعة على هذا الجهاز (QZ Tray — ننصح بتطبيق الكاشير بدله)</div>
         <select class="fsel" id="stQzOn"><option value="0" ${qzCfgGet().on ? '' : 'selected'}>طابعة واحدة — كل قسم تذكرته بورقة منفصلة</option><option value="1" ${qzCfgGet().on ? 'selected' : ''}>طابعة لكل قسم — عبر برنامج QZ Tray</option></select>
         <div id="qzBox" style="display:${qzCfgGet().on ? 'block' : 'none'}">
           <div class="ac-sub" style="margin:8px 0;line-height:1.8">1) نزّل وثبّت <a href="https://qz.io/download/" target="_blank" rel="noopener">QZ Tray</a> على هذه الحاسبة وشغّله. 2) اضغط «جلب الطابعات» واختر طابعة كل قسم. 3) جرّب كل طابعة.</div>
           <button type="button" class="btn-soft" style="width:100%" onclick="qzFind()">🔍 جلب الطابعات من الحاسبة</button>
-          ${(s.sections || []).filter((x) => x.name).map((x) => `<div class="set-row" style="margin-top:8px"><div class="sec-cat">${esc(x.emoji || '')} ${esc(x.name)}</div><div style="display:flex;gap:6px"><select class="fsel" id="qzP_${esc(x.id)}" style="flex:1"><option value="">— نفس الطابعة الافتراضية —</option>${(qzCfgGet().printers || {})[x.id] ? `<option selected>${esc(qzCfgGet().printers[x.id])}</option>` : ''}</select><button type="button" class="btn-soft" style="padding:8px 10px" onclick="qzTest('${esc(x.id)}')">🧪</button></div></div>`).join('')}
+          ${secArr(s.sections || []).filter((x) => x.name).map((x) => `<div class="set-row" style="margin-top:8px"><div class="sec-cat">${esc(x.emoji || '')} ${esc(x.name)}</div><div style="display:flex;gap:6px"><select class="fsel" id="qzP_${esc(x.id)}" style="flex:1"><option value="">— نفس الطابعة الافتراضية —</option>${(qzCfgGet().printers || {})[x.id] ? `<option selected>${esc(qzCfgGet().printers[x.id])}</option>` : ''}</select><button type="button" class="btn-soft" style="padding:8px 10px" onclick="qzTest('${esc(x.id)}')">🧪</button></div></div>`).join('')}
           <details style="margin-top:10px"><summary class="ac-sub" style="cursor:pointer">⚙️ متقدم: شهادة الطباعة الصامتة (حتى لا يسأل البرنامج كل مرة)</summary>
             <div class="ac-sub" style="margin:6px 0;line-height:1.8">من QZ Tray: Advanced ← Site Manager ← + ← Create New، ثم الصق الشهادة والمفتاح هنا. يُحفظان على هذا الجهاز فقط.</div>
             <textarea class="finp" id="qzCert" rows="3" dir="ltr" placeholder="-----BEGIN CERTIFICATE-----">${esc(qzCfgGet().cert || '')}</textarea>
             <textarea class="finp" id="qzKey" rows="3" dir="ltr" placeholder="-----BEGIN PRIVATE KEY-----" style="margin-top:6px">${esc(qzCfgGet().key || '')}</textarea>
           </details>
-        </div>`}`}
+        </div>`}`)}
       </div>
-      ${screenCardHtml()}
-      ${lanCardHtml()}
+      ${part(screenCardHtml)}
+      ${part(lanCardHtml)}
       <div class="sh-card"><div class="sh-title">🪑 الطاولات والبيجر</div>
         <div class="set-row"><div><div class="flbl">عدد الطاولات (0 = بدون)</div><input class="finp" id="stTables" type="number" min="0" max="200" value="${s.tables || 0}"></div>
           <div><div class="flbl">📟 عدد أجهزة البيجر (0 = بدون)</div><input class="finp" id="stPagers" type="number" min="0" max="30" value="${s.pagers != null ? s.pagers : 10}"></div></div>
       </div>
       <div class="sh-card"><div class="sh-title">⚡ السرعة</div>
         <label class="set-check"><input type="checkbox" id="stQuick" ${s.quickAdd ? 'checked' : ''}> إضافة سريعة: الصنف ذو السعر الواحد ينضاف بضغطة واحدة</label>
-        <div class="flbl">ملاحظات سريعة للمطبخ (مفصولة بفاصلة)</div><input class="finp" id="stNotes" value="${esc((s.quickNotes || []).join('، '))}">
+        <div class="flbl">ملاحظات سريعة للمطبخ (مفصولة بفاصلة)</div><input class="finp" id="stNotes" value="${esc(notesArr(s.quickNotes).join('، '))}">
       </div>
-      ${onlineCardHtml()}
+      ${part(onlineCardHtml)}
       <button class="sivbtn" onclick="saveSettings()">✅ حفظ الإعدادات</button>
       <div class="sh-card" style="margin-top:10px"><div class="sh-title">🔔 إشعارات المطعم</div>
         <div class="ac-sub" style="margin-bottom:8px">إشعار عند رفض الكابتن لطلب أو عند تسليمه — حتى لو كان التطبيق مغلقاً. الحالة: <b>${notifState}</b></div>
         <button class="btn-soft" style="width:100%" onclick="enableRestPush()">🔔 تفعيل الإشعارات على هذا الجهاز</button></div>
       <div class="sh-card"><div class="sh-title">⌨️ اختصارات لوحة المفاتيح</div>
         <div class="ac-sub" style="line-height:2"><kbd>/</kbd> بحث عن صنف • <kbd>F9</kbd> ترحيل الطلب • <kbd>1</kbd>-<kbd>4</kbd> نوع الطلب • <kbd>Enter</kbd> تأكيد الدفع • <kbd>Esc</kbd> إغلاق</div></div>`;
-    renderSecHealth();
-    if (window.SoraDesktop) dpAfterRender();
+    try { renderSecHealth(); if (window.SoraDesktop) dpAfterRender(); } catch (e) { console.warn('settings', e); }
   }
   window.saveSettings = async () => {
     const list = (v) => String(v || '').split(/[,،]/).map((x) => x.trim()).filter(Boolean);
@@ -1224,7 +1233,7 @@ const showMTabCore = tab=>{
       defaultFee: settings.defaultFee ?? DEFAULTS.defaultFee, feePresets: settings.feePresets || DEFAULTS.feePresets, taxPct: settings.taxPct || 0, servicePct: settings.servicePct || 0,
       tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
       kSecOn: $('stSecOn').checked,
-      sections: (settings.sections || DEFAULTS.sections).map((x, i) => ({ id: x.id, emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
+      sections: secArr(settings.sections).map((x, i) => ({ id: x.id || 'sec' + (i + 1), emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
       catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
       quickAdd: $('stQuick').checked, quickNotes: list($('stNotes').value).slice(0, 10).map((x) => x.slice(0, 30)),
     };
@@ -1392,7 +1401,7 @@ const ordCancelCore = id=>{
 
   // ══════════ أقسام المطبخ (شاورما، كنتاكي، برغر، بيتزا...) ══════════
   // كل صنف يتبع قسم فئته بالمنيو. الطلب يتقسم: كل قسم يطبع أصنافه فقط، ورقم الطلب يوحّد الكل.
-  const secList = () => (settings.sections || []).filter((x) => x && x.name);
+  const secList = () => secArr(settings.sections || []).filter((x) => x.name);
   function secById(id) { return secList().find((x) => x.id === id); }
   const secOn = () => !!settings.kSecOn && secList().length > 0;
   function secOfItem(name) {
@@ -1682,7 +1691,7 @@ const ordCancelCore = id=>{
     toast(v ? (android ? '✅ الكاشير يفتح وحده مع تشغيل الجهاز' : '✅ البرنامج يشتغل وحده مع تشغيل الحاسبة') : 'تمام — ما يشتغل وحده');
   };
   function dpSettingsHtml(s) {
-    const c = dpCfg(), secs = (s.sections || []).filter((x) => x.name);
+    const c = dpCfg(), secs = secArr(s.sections || []).filter((x) => x.name);
     const cp = (id, v) => `<input class="finp" type="number" min="1" max="5" id="${id}" value="${v || 1}" title="عدد النسخ" style="width:64px;text-align:center">`;
     return `<div class="flbl" style="margin-top:12px">🖨️ الطباعة — مدمجة ببرنامج الكاشير (بدون QZ)</div>
       <div class="ac-sub" style="margin:4px 0 8px;line-height:1.8">${DESK.platform === 'android' ? 'الطابعة المدمجة بالجهاز وطابعات البلوتوث المقترنة تطلع هنا وحدها، وطابعات الشبكة تضيفها بالـ IP تحت.' : DESK.platform === 'darwin' || DESK.platform === 'linux' ? 'كل طابعة معرّفة بالجهاز تطلع هنا.' : 'كل طابعة معرّفة بالويندوز تطلع هنا.'} اختر طابعة الفاتورة وطابعة كل قسم، وجرّبها بـ 🧪. الطباعة مباشرة بدون أي نافذة.</div>
@@ -1715,7 +1724,7 @@ const ordCancelCore = id=>{
     .split(/\s+/).map((w) => w.replace(/^ال/, '')).join('').toLowerCase();
   function secFormState() {
     const on = !!($('stSecOn') || {}).checked;
-    const secs = [...document.querySelectorAll('[id^="stSecN"]')].map((el) => ({ id: (settings.sections || DEFAULTS.sections)[+el.id.slice(6)]?.id, name: el.value.trim() })).filter((x) => x.id && x.name);
+    const secs = [...document.querySelectorAll('[id^="stSecN"]')].map((el) => ({ id: secArr(settings.sections)[+el.id.slice(6)]?.id, name: el.value.trim() })).filter((x) => x.id && x.name);
     const cats = [...document.querySelectorAll('[id^="stCat"]')].map((el) => ({ cat: el.dataset.cat, sid: el.value, el }));
     return { on, secs, cats, unmapped: cats.filter((c) => !c.sid), empty: secs.filter((x) => !cats.some((c) => c.sid === x.id)) };
   }

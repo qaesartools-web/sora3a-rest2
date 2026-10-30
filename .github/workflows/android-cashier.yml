@@ -2,7 +2,8 @@
 #   الكاشير:    releases/download/cashier-android/sora3a-cashier.apk
 #   خط المطعم:  releases/download/line-android/sora3a-line.apk
 #   الشاشة:     releases/download/screen-android/sora3a-screen.apk  (تلفزيون / تيفي بوكس)
-#   المطبخ:     releases/download/kitchen-android/sora3a-kitchen.apk (شاشة المطبخ/المجهز — بنت أو بدون نت ويا الكاشير)
+#   المطبخ:     releases/download/kitchen-android/sora3a-kitchen.apk (شاشة المطبخ/الأقسام — بنت أو بدون نت ويا الكاشير)
+#   المجهز:     releases/download/prep-android/sora3a-prep.apk (شاشة المجهز — بنت أو بدون نت ويا الكاشير)
 # (ما يصيرون «latest» حتى ما يأثرون على تحديث برنامج الحاسبة)
 name: Android cashier app
 
@@ -48,23 +49,22 @@ jobs:
       - name: Unit tests + build
         working-directory: android
         env: { VERSION_CODE: '${{ github.run_number }}' }
-        run: gradle --no-daemon testCashierDebugUnitTest assembleCashierRelease assembleLineRelease assembleScreenRelease assembleKitchenRelease
+        run: gradle --no-daemon testCashierDebugUnitTest assembleCashierRelease assembleLineRelease assembleScreenRelease assembleKitchenRelease assemblePrepRelease
       - run: |
           cp android/app/build/outputs/apk/cashier/release/app-cashier-release.apk sora3a-cashier.apk
           cp android/app/build/outputs/apk/line/release/app-line-release.apk sora3a-line.apk
           cp android/app/build/outputs/apk/screen/release/app-screen-release.apk sora3a-screen.apk
           cp android/app/build/outputs/apk/kitchen/release/app-kitchen-release.apk sora3a-kitchen.apk
+          cp android/app/build/outputs/apk/prep/release/app-prep-release.apk sora3a-prep.apk
           # التطبيق يقرا هذا الملف حتى يعرف أكو نسخة أحدث، ويحدّث نفسه بس إذا بصمة التوقيع نفسها
           printf '{"version":%s,"name":"1.%s","cert":"%s"}\n' "${{ github.run_number }}" "${{ github.run_number }}" "$SIGN_CERT" > version.json
-      # تطبيق المطبخ: أيقونتين (المطبخ فيروزي / المجهز بنفسجي) ووحدة بس شغّالة — والكاشير أيقونة وحدة مثل قبل
-      - name: Check launcher icons
+      # المطبخ والمجهز تطبيقين منفصلين: كل واحد باسمه (وأيقونته) ومعرّفه
+      - name: Check kitchen and preparer apps
         run: |
           A=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2
-          n() { "$A" dump xmltree --file AndroidManifest.xml "$1" | grep -c '"android.intent.category.LAUNCHER"' || true; }
-          "$A" dump xmltree --file AndroidManifest.xml sora3a-kitchen.apk | grep -E 'E: activity|activity-alias|A: .*(name|enabled|targetActivity|label|icon)\(' | head -40
-          test "$(n sora3a-kitchen.apk)" = 2
-          test "$(n sora3a-cashier.apk)" = 1
-          test "$(n sora3a-line.apk)" = 1
+          for f in sora3a-kitchen.apk sora3a-prep.apk; do "$A" dump badging "$f" | grep -E "^package:|^application-label:|^launchable-activity:"; done
+          "$A" dump badging sora3a-kitchen.apk | grep -q "package: name='iq.sora3a.kitchen'"
+          "$A" dump badging sora3a-prep.apk | grep -q "package: name='iq.sora3a.prep'"
       - uses: actions/upload-artifact@v4
         with: { name: sora3a-android-apks, path: 'sora3a-*.apk' }
       - name: Publish (fixed tag, not latest)
@@ -105,9 +105,20 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: kitchen-android
-          name: تطبيق شاشة المطبخ والمجهز للأندرويد
+          name: تطبيق شاشة المطبخ للأندرويد
           make_latest: false
-          body: نسخة ${{ github.run_number }} — نزّل sora3a-kitchen.apk وثبّته على تابلت المطبخ أو المجهز واربطه بالرمز من لوحة الإدارة. يشتغل بنت أو بدون نت ما دام على نفس الواي فاي ويا الكاشير.
+          body: نسخة ${{ github.run_number }} — نزّل sora3a-kitchen.apk وثبّته على تابلت المطبخ (الأقسام) واربطه بالرمز من لوحة الإدارة. يشتغل بنت أو بدون نت ما دام على نفس الواي فاي ويا الكاشير.
           files: |
             sora3a-kitchen.apk
+            version.json
+      - name: Publish preparer app (fixed tag, not latest)
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: prep-android
+          name: تطبيق شاشة المجهز للأندرويد
+          make_latest: false
+          body: نسخة ${{ github.run_number }} — نزّل sora3a-prep.apk وثبّته على تابلت المجهز واربطه بالرمز من لوحة الإدارة. يشتغل بنت أو بدون نت ما دام على نفس الواي فاي ويا الكاشير.
+          files: |
+            sora3a-prep.apk
             version.json
