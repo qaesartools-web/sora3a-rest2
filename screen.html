@@ -74,6 +74,8 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 .n{position:relative;margin:0 0 14px 14px;border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;
   font-family:var(--num);font-weight:800;line-height:1;text-align:center}
 .n .h{opacity:.45;font-size:.6em;margin-left:2px}
+/* كثرت الطلبات: الأرقام تصغر وحدها حتى تبين كلها (ما تختفي جوة الباركود) — بنت أو بدون نت */
+.nums .n{zoom:var(--z,1)}
 .n .pg{display:block;font-family:var(--font);font-weight:700;font-size:1.15vw;font-size:clamp(11px,1.15vw,20px);margin-top:8px;opacity:.85}
 .n[data-t]::after{content:attr(data-t);font-family:var(--font);font-weight:700;font-size:.95vw;font-size:clamp(10px,.95vw,16px);margin-top:6px;padding:3px 10px;border-radius:999px}
 
@@ -252,7 +254,15 @@ function render() {
   $('prep').innerHTML = prep.map((o) => tile(o, '')).join('') || '<div class="empty"><b>👨‍🍳</b>لا توجد طلبات</div>';
   $('rdN').textContent = ready.length;
   $('ppN').textContent = prep.length;
+  fit($('ready')); fit($('prep'));
 }
+// يصغّر الأرقام خطوة خطوة لحد ما تبين كلها بالعمود (بدون ما يتغير شكل الشاشة إذا الطلبات قليلة)
+function fit(el) {
+  if (!el) return;
+  let z = 1; el.style.setProperty('--z', '1');
+  for (let i = 0; i < 14 && el.scrollHeight > el.clientHeight + 2 && z > 0.3; i++) { z = Math.max(0.3, Math.round((z - 0.06) * 100) / 100); el.style.setProperty('--z', String(z)); }
+}
+window.addEventListener('resize', () => { fit($('ready')); fit($('prep')); });
 
 // ── كود المنيو بزاوية الشاشة: الزبون بالصالة يمسحه ويشوف المنيو (أو يطلب) من تلفونه ──
 function loadQR() {
@@ -262,6 +272,7 @@ function loadQR() {
 async function qrUi() {
   const show = !!(rid && pm && pm.on && scr.qr !== false && feats.online !== false);
   $('qrBox').hidden = !show;
+  fit($('prep'));   // الباركود ياخذ مكان ← الأرقام تصغر حتى تبقى كلها فوقه
   if (!show) return;
   const view = !['table', 'pickup', 'delivery'].some((k) => (pm.modes || {})[k]);
   $('qrT').innerHTML = '<span>📱 امسح الكود</span><span>' + (view ? 'وشوف المنيو' : 'واطلب من تلفونك') + '</span>';
@@ -272,6 +283,7 @@ async function qrUi() {
     await loadQR();
     const q = window.qrcode(0, 'M'); q.addData(url); q.make();
     $('qrCode').innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); $('qrCode').dataset.url = qrUrl = url;
+    fit($('prep'));
   } catch (e) { $('qrBox').hidden = true; }
 }
 
