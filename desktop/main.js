@@ -18,6 +18,7 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let win = null, quitting = false, printer = null, simWin = null, lan = null, fw = null;
+let updReady = '', updater = null;   // نسخة برنامج نزلت وتنتظر التثبيت
 
 // إعدادات البرنامج على هالحاسبة (وضع تجربة الطابعات)
 const cfgFile = () => path.join(app.getPath('userData'), 'sora3a-desktop.json');
@@ -87,6 +88,8 @@ function createWindow() {
   Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }]) : null);
   win.once('ready-to-show', () => { win.maximize(); win.show(); });
   const wc = win.webContents;
+  // الصفحة انفتحت من جديد (تحديث الصفحة أو دخول): نذكّرها إذا أكو نسخة برنامج تنتظر — لحد ما تتثبت
+  wc.on('did-finish-load', () => { if (updReady && originOk(wc.getURL())) wc.send('sora:update', updReady); });
   wc.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
   wc.on('will-navigate', (e, url) => { if (!originOk(url)) { e.preventDefault(); openOutside(url); } });
   // أول تشغيل بدون نت (قبل ما ينحفظ الكاشير بالجهاز): صفحة تعيد المحاولة وحدها
@@ -132,6 +135,13 @@ function setupIpc() {
   ipcMain.handle('sim:clear', (e) => { if (fromSim(e)) papers.length = 0; return true; });
   ipcMain.handle('sim:folder', (e) => { if (fromSim(e)) { fs.mkdirSync(testDir(), { recursive: true }); shell.openPath(testDir()); } return true; });
   ipcMain.handle('sim:pdf', (e, f) => { if (fromSim(e) && typeof f === 'string' && f.startsWith(testDir()) && f.endsWith('.pdf')) shell.openPath(f); return true; });
+  // «ثبّت هسه»: يتسكّر ويتثبت ويرجع ينفتح وحده (ثواني)
+  ipcMain.handle('sora:update:install', (e) => {
+    if (!fromApp(e) || !updReady || !updater) return false;
+    quitting = true;
+    setImmediate(() => { try { updater.quitAndInstall(true, true); } catch (err) { quitting = false; } });
+    return true;
+  });
   ipcMain.handle('sora:autostart:get', (e) => fromApp(e) && getAutoStart());
   ipcMain.handle('sora:autostart:set', (e, on) => (fromApp(e) ? setAutoStart(!!on) : false));
   // ── شبكة المطعم: الحاسبة «مركز» على الواي فاي (شاشات المطبخ والطلب جاهز وتلفون الخط يتصلون بيها بنت أو بدون نت) ──
@@ -157,7 +167,8 @@ function setupUpdates() {
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.on('error', () => {});
-    autoUpdater.on('update-downloaded', (info) => { if (win && !win.isDestroyed()) win.webContents.send('sora:update', info.version); });
+    updater = autoUpdater;
+    autoUpdater.on('update-downloaded', (info) => { updReady = String(info.version || ''); if (win && !win.isDestroyed()) win.webContents.send('sora:update', updReady); });
     const check = () => autoUpdater.checkForUpdates().catch(() => {});
     check();
     setInterval(check, 6 * 3600e3);

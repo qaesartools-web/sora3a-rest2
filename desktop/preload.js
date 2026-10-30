@@ -20,6 +20,7 @@ if (allowed.includes(location.origin)) {
     getAutoStart: () => ipcRenderer.invoke('sora:autostart:get'),
     setAutoStart: (on) => ipcRenderer.invoke('sora:autostart:set', !!on),
     onUpdate: (cb) => { ipcRenderer.on('sora:update', (_e, v) => { try { cb(String(v)); } catch (e) {} }); },
+    installUpdate: () => ipcRenderer.invoke('sora:update:install'),
   });
   // شبكة المطعم: الحاسبة «مركز» — نفس الواجهة بتطبيق الأندرويد (window.SoraLan)
   contextBridge.exposeInMainWorld('SoraLan', {
