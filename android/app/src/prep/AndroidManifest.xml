@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- تطبيق شاشة المجهز: يجمّع الطلب بعد المطبخ ويتممه. نفس صفحة المطبخ مقفولة على المجهز، وتشتغل بنت أو بدون نت ويا الكاشير. ما يطلب أي إذن حساس -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application />
+</manifest>

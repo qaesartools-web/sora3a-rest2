@@ -12,11 +12,21 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="kitchen-apple-180.png">
 <script>
-// تطبيق «سرعة - المطبخ» يفتح kitchen.html دائماً: يرجع لآخر شاشة اختارها الجهاز (المجهز أو قسم بالمطبخ)
+// التطبيقات تفتح kitchen.html دائماً:
+//  «سرعة - المطبخ» (SoraKds/sec) مقفول على شاشة المطبخ (الأقسام) — يرجع لقسم الجهاز
+//  «سرعة - المجهز» (SoraKds/prep) مقفول على شاشة المجهز
+//  النسخة القديمة (تطبيق واحد للثنين): يرجع لآخر شاشة اختارها الجهاز
 (function () {
   try {
-    if (/SoraKitchenApp/.test(navigator.userAgent) && !/[?&]sec(=|&|$)/.test(location.search) && localStorage.getItem('kds_mode') === 'sec')
-      location.replace('kitchen.html?sec=' + encodeURIComponent(localStorage.getItem('kds_sec') || ''));
+    var kds = (navigator.userAgent.match(/SoraKds\/(\w+)/) || [])[1] || '', sec = /[?&]sec(=|&|$)/.test(location.search);
+    var toSec = function () { location.replace('kitchen.html?sec=' + encodeURIComponent(localStorage.getItem('kds_sec') || '')); };
+    if (kds === 'prep') { if (sec) location.replace('kitchen.html'); }
+    else if (kds === 'sec') {
+      // الجهاز كان شاشة مجهز بالتطبيق القديم: نقول له المجهز صار إله تطبيق
+      if (localStorage.getItem('kds_mode') === 'all') localStorage.setItem('kds_moved', '1');
+      localStorage.setItem('kds_mode', 'sec');
+      if (!sec) toSec();
+    } else if (/SoraKitchenApp/.test(navigator.userAgent) && !sec && localStorage.getItem('kds_mode') === 'sec') toSec();
   } catch (e) {}
 })();
 // ── تثبيت الشاشة (أندرويد وآيفون) — شاشتين منفصلتين:
@@ -40,9 +50,14 @@ window.kdsManifest = function (secMode, secId, secName) {
   var t = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (t) t.content = name;
   var fi = document.querySelector('link[rel="icon"]'); if (fi) fi.href = ic + '-192.png';
   var ai = document.querySelector('link[rel="apple-touch-icon"]'); if (ai) ai.href = ic + '-apple-180.png';
-  var ii = document.getElementById('instImg'); if (ii) ii.src = ic + '-192.png';
-  // تطبيق «سرعة - المطبخ» بالأندرويد: أيقونته واسمه يتبدلون حسب الشاشة (المطبخ / المجهز)
-  try { if (window.SoraKitchenNative) window.SoraKitchenNative.mode(secMode ? 'kitchen' : 'prep'); } catch (e) {}
+  // صورة بطاقة التثبيت ورابط تطبيق الأندرويد (كل شاشة إلها تطبيقها) — بعد ما تنقرا الصفحة إذا بعدها
+  var body = function () {
+    var ii = document.getElementById('instImg'); if (ii) ii.src = ic + '-192.png';
+    var ia = document.getElementById('instApp'); if (!ia) return;
+    ia.href = 'https://github.com/qaesartools-web/sora3a-rest2/releases/download/' + (secMode ? 'kitchen-android/sora3a-kitchen.apk' : 'prep-android/sora3a-prep.apk');
+    ia.textContent = '⬇️ أو نزّل تطبيق «سرعة - ' + (secMode ? 'المطبخ' : 'المجهز') + '» — يشتغل حتى لو انقطع النت';
+  };
+  if (document.getElementById('instApp')) body(); else document.addEventListener('DOMContentLoaded', body, { once: true });
   document.title = 'سرعة — ' + name;
   return m;
 };
@@ -174,6 +189,9 @@ button{cursor:pointer}
     <div class="pill zero" id="pill">0</div>
   </div>
   <div class="lanh" id="lanH" hidden></div>
+  <div class="lanh" id="moved" hidden>📦 شاشة المجهز صار إلها تطبيق خاص «سرعة - المجهز»، وهذا التطبيق صار لشاشة المطبخ (الأقسام) بس. إذا هذا الجهاز للمجهز:
+    <a href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/prep-android/sora3a-prep.apk" style="color:inherit;font-weight:800">⬇️ نزّل تطبيق المجهز</a> واربطه بالرمز من لوحة الإدارة.
+    <button type="button" id="movedX" style="float:left;background:none;border:0;color:inherit;font-size:18px;cursor:pointer" aria-label="إغلاق">✕</button></div>
   <div class="flow" id="flow" hidden></div>
   <div class="cook" id="cook" hidden></div>
   <div class="rdy" id="rdy" hidden></div>
@@ -195,6 +213,8 @@ button{cursor:pointer}
 <div class="pick" id="pick" hidden>
   <h1>🔪 اختار قسمك</h1>
   <p>تطلعلك طلبات قسمك بس — والجهاز يبقى على قسمه</p>
+  <div class="lanh" id="movedP" hidden style="max-width:640px;margin:0 auto 14px">📦 إذا هذا الجهاز للمجهز: صار إله تطبيق خاص «سرعة - المجهز» —
+    <a href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/prep-android/sora3a-prep.apk" style="color:inherit;font-weight:800">⬇️ نزّله من هنا</a> واربطه بالرمز من لوحة الإدارة.</div>
   <div class="pick-g" id="pickG"></div>
   <button type="button" class="back" id="pickBack" hidden>✕ رجوع</button>
 </div>
@@ -517,7 +537,11 @@ const menu = $('menu');
 function sndUi() { $('mSnd').textContent = sound ? '🔔 الصوت: يعمل' : '🔕 الصوت: مطفأ'; }
 function secUi() { $('mSec').hidden = !SECMODE; $('mSec').textContent = '🔄 تغيير القسم' + (SEC ? ' (' + secLabel() + ')' : ''); }
 const IN_APP = /SoraKitchenApp/.test(navigator.userAgent);
-function modeUi() { $('mMode').hidden = !IN_APP; $('mMode').textContent = SECMODE ? '🔀 تحويل لشاشة المجهز (كل الطلبات)' : '🔀 تحويل لشاشة المطبخ (الأقسام)'; }
+// تطبيق المطبخ وتطبيق المجهز (منفصلين): كل واحد مقفول على شاشته — ماكو تحويل
+const KDS_LOCK = /SoraKds\//.test(navigator.userAgent);
+try { if (KDS_LOCK && SECMODE && localStorage.getItem('kds_moved') === '1') $('moved').hidden = $('movedP').hidden = false; } catch (e) {}
+$('movedX').onclick = () => { $('moved').hidden = $('movedP').hidden = true; try { localStorage.removeItem('kds_moved'); } catch (e) {} };
+function modeUi() { $('mMode').hidden = !IN_APP || KDS_LOCK; $('mMode').textContent = SECMODE ? '🔀 تحويل لشاشة المجهز (كل الطلبات)' : '🔀 تحويل لشاشة المطبخ (الأقسام)'; }
 $('mMode').onclick = () => {
   try { localStorage.setItem('kds_mode', SECMODE ? 'all' : 'sec'); } catch (e) {}
   location.href = SECMODE ? 'kitchen.html' : 'kitchen.html?sec=' + encodeURIComponent(SEC || (function () { try { return localStorage.getItem('kds_sec') || ''; } catch (e) { return ''; } })());

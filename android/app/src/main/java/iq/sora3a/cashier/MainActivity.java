@@ -88,7 +88,9 @@ public class MainActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false); // رنة المكالمات والطلبات
         s.setSupportMultipleWindows(false);
-        s.setUserAgentString(s.getUserAgentString() + (BuildConfig.SCREEN ? " SoraScreenApp/" : BuildConfig.KITCHEN ? " SoraKitchenApp/" : " SoraCashierApp/") + BuildConfig.VERSION_NAME);
+        // تطبيق المطبخ وتطبيق المجهز: SoraKds/sec أو SoraKds/prep — الصفحة تقفل على شاشته
+        s.setUserAgentString(s.getUserAgentString() + (BuildConfig.SCREEN ? " SoraScreenApp/" : BuildConfig.KITCHEN ? " SoraKitchenApp/" : " SoraCashierApp/") + BuildConfig.VERSION_NAME
+            + (BuildConfig.KITCHEN ? (BuildConfig.PREP ? " SoraKds/prep" : " SoraKds/sec") : ""));
 
         // الشاشة وشاشة المطبخ ما تحتاج جسر الطباعة والخط — تعرض بس
         final boolean early = !BuildConfig.SCREEN && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
@@ -101,7 +103,6 @@ public class MainActivity extends Activity {
         }
         // شبكة المطعم (بنت أو بدون نت) — كل التطبيقات. تتصل وحدها بآخر إعدادات حتى قبل ما تفتح الصفحة
         web.addJavascriptInterface(new LanBridge(this), "SoraLanNative");
-        if (BuildConfig.KITCHEN) web.addJavascriptInterface(new KitchenIcon(this), "SoraKitchenNative");   // أيقونة المطبخ / المجهز
         if (early) WebViewCompat.addDocumentStartJavaScript(web, LanBridge.SHIM, Collections.singleton(Bridge.ORIGIN));
         Lan.get(this).attach(web, this);
         Lan.get(this).autoStart();
@@ -676,7 +677,7 @@ public class MainActivity extends Activity {
     }
 
     private static final String OFFLINE = "<html dir=rtl><body style='margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0B1220;color:#EEF2F7;font-family:sans-serif;text-align:center'>"
-        + "<div style='padding:24px'><div style='font-size:52px'>📶</div><h2>" + (BuildConfig.LINE ? "ما كدرنا نفتح الصفحة" : BuildConfig.SCREEN ? "ما كدرنا نفتح الشاشة" : BuildConfig.KITCHEN ? "ما كدرنا نفتح شاشة المطبخ" : "ما كدرنا نفتح الكاشير") + "</h2>"
+        + "<div style='padding:24px'><div style='font-size:52px'>📶</div><h2>" + (BuildConfig.LINE ? "ما كدرنا نفتح الصفحة" : BuildConfig.SCREEN ? "ما كدرنا نفتح الشاشة" : BuildConfig.PREP ? "ما كدرنا نفتح شاشة المجهز" : BuildConfig.KITCHEN ? "ما كدرنا نفتح شاشة المطبخ" : "ما كدرنا نفتح الكاشير") + "</h2>"
         + "<p style='color:#A9B5C6;line-height:1.8'>" + (BuildConfig.LINE ? "ربط الخط يحتاج إنترنت. شغّل النت ونعيد المحاولة."
             : BuildConfig.SCREEN || BuildConfig.KITCHEN ? "أول تشغيل يحتاج إنترنت حتى تنحفظ الشاشة بالجهاز. بعدها تشتغل ويا الكاشير على نفس الواي فاي حتى لو انقطع النت — نعيد المحاولة وحدنا."
             : "أول تشغيل يحتاج إنترنت حتى ينحفظ الكاشير بالجهاز. بعدها يشتغل حتى لو انقطع النت.") + "</p>"
