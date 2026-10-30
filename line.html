@@ -127,7 +127,7 @@ async function lanKey(rid) {
   const LAN = lanApi();
   if (!LAN) return;
   try {
-    const ref = doc(db, 'restaurants', rid, 'settings', 'lan');
+    const ref = doc(db, 'restaurants', rid, 'lan', 'key');
     let k = (await getDoc(ref)).data();
     k = k && k.key;
     if (!k) k = await runTransaction(db, async (tx) => {

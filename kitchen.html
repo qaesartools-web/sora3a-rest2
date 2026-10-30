@@ -324,7 +324,7 @@ function start() {
   svc(svcState(me.rest));
   // الكاش فارغ وماكو نت: ما نمسح الخدمات والأقسام (ننتظر السيرفر أو الكاشير)
   unsubs.push(onSnapshot(R(), (s) => { if (!s.exists() && s.metadata.fromCache) return; svc(svcState(s.exists() ? s.data() : {})); }, () => {}));
-  getDoc(R('settings', 'lan')).then((s) => {
+  getDoc(R('lan', 'key')).then((s) => {
     const k = s.exists() && s.data().key;
     if (k && me) lan.start({ rid: me.rid, key: k, name: SECMODE ? 'شاشة المطبخ' + (SEC ? ' — ' + secById(SEC).name : '') : 'شاشة المجهز' });
   }).catch(() => {});

@@ -2417,12 +2417,12 @@ const ordCancelCore = id=>{
     }
   }
   const newLanKey = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0')).join('');
-  // الرمز السري للمطعم (settings/lan): كل أجهزة المطعم تتصافح بيه. يسويه صاحب المطعم أو كاشير عنده صلاحية الإعدادات
+  // الرمز السري للمطعم (lan/key): كل أجهزة المطعم تتصافح بيه. يسويه صاحب المطعم أو كاشير عنده صلاحية الإعدادات
   async function lanKeyFromCloud(r) {
-    const s = await fb().getDoc(sub('settings', 'lan'));
+    const s = await fb().getDoc(sub('lan', 'key'));
     if (s.exists() && s.data().key) return s.data().key;
     if (!(isOwnerPOS() || can('settings'))) return '';
-    const ref = sub('settings', 'lan');
+    const ref = sub('lan', 'key');
     return fb().runTransaction(fb().db, async (tx) => {
       const x = await tx.get(ref);
       if (x.exists() && x.data().key) return x.data().key;

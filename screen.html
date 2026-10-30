@@ -444,7 +444,7 @@ staffGate($('gate'), {
     if (unsubRest) unsubRest();
     unsubRest = onSnapshot(doc(db, 'restaurants', rid), (s) => { if (!s.exists() && s.metadata.fromCache) return; feats = (s.exists() && s.data().features) || {}; svcUi(); }, () => {});
     // الرمز السري لشبكة المطعم (ينحفظ بالتطبيق — بعدها يتصل بالكاشير حتى بدون نت)
-    getDoc(doc(db, 'restaurants', rid, 'settings', 'lan')).then((s) => { const k = s.exists() && s.data().key; if (k && rid === u.rid) lan.start({ rid, key: k, name: 'شاشة طلبك جاهز' }); }).catch(() => {});
+    getDoc(doc(db, 'restaurants', rid, 'lan', 'key')).then((s) => { const k = s.exists() && s.data().key; if (k && rid === u.rid) lan.start({ rid, key: k, name: 'شاشة طلبك جاهز' }); }).catch(() => {});
     svcUi(); clock(); keepOn(); listen();
   },
   onOut: () => {
