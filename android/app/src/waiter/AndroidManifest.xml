@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- تطبيق الويتر: نفس صفحة الويتر، والطلب يوصل للكاشير بنت أو بدون نت (على نفس الواي فاي ويا الكاشير). ما يطلب أي إذن حساس -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application />
+</manifest>

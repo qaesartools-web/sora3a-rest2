@@ -104,6 +104,10 @@ button{cursor:pointer}
 .od-i{color:var(--muted);font-size:13px;margin-top:4px}
 .od button{margin-top:8px;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:7px 12px;font-size:13px;font-weight:600}
 .empty{text-align:center;color:var(--muted);padding:30px 10px}
+/* بدون نت: شريط صغير يوضح وين تروح الطلبات */
+.net{margin:10px 0 0;border-radius:14px;padding:8px 12px;font-size:13px;font-weight:600;line-height:1.6;background:var(--soft);border:1px solid var(--line)}
+.net.ok{border-color:rgba(74,222,128,.45);color:var(--neon)}
+.net.wait{border-color:rgba(251,191,36,.45);color:var(--saf)}
 .toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-16px);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;transition:.2s;z-index:90;pointer-events:none;max-width:calc(100vw - 32px)}
 .toast.on{opacity:1;transform:translateX(-50%)}
 /* الخدمة موقوفة من الإدارة */
@@ -139,6 +143,7 @@ button{cursor:pointer}
     <button type="button" class="hb" id="outBtn" title="فصل هذا الجهاز">🔌</button>
   </div></header>
   <div class="wrap">
+    <div class="net" id="net" hidden></div>
     <div class="tabs"><button type="button" class="tab on" data-tab="tables">🪑 الطاولات</button><button type="button" class="tab" data-tab="orders">🧾 طلباتي <span class="bd" id="rdBadge" hidden></span></button></div>
     <section id="vTables"></section>
     <section id="vMenu" hidden>
@@ -165,7 +170,7 @@ button{cursor:pointer}
 // ── تثبيت تطبيق الويتر: أول ما ينفتح الرابط يطلب التثبيت (منفصل عن Firebase حتى يشتغل حتى بدون نت) ──
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true || /SoraWaiterApp\//.test(navigator.userAgent || '');
   var ua = navigator.userAgent || '';
   var ios = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var mobile = ios || /android|mobile/i.test(ua);
@@ -203,6 +208,7 @@ button{cursor:pointer}
 
 <script type="module">
 import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, getDoc, setDoc, collection, query, where, onSnapshot } from './staff.js';
+import { lanLink, wScore } from './lanlink.js?v=2';
 // تلفون الويتر ينربط بالمطعم برمز (بدون إيميل ولا كلمة سر) — مثل شاشة المطبخ؛ اسم الويتر يكتبه اللي يربطه
 const db = screenFb().db;
 document.getElementById('gateCss').textContent = GATE_CSS;
@@ -214,6 +220,12 @@ const ST = { new: '⏳ عند الكاشير', preparing: '👨‍🍳 يتحض�
 
 let me = null, cats = [], tables = 0, table = '', cart = [], sel = null, mine = [], unsubs = [], activeCat = 0, sending = false;
 const readySeen = new Set(); let firstSnap = true;
+// بدون نت: تطبيق «سرعة - الويتر» يرسل الطلب للكاشير مباشرة على نفس الواي فاي، ويشوف حالة طلباته منه.
+//  الطلب نفسه ينحفظ بالتلفون ويترفع للسيرفر وحده من يرجع النت — بنفس المعرّف، فما يتكرر عند الكاشير
+//  fsLive: متصل بالسيرفر هسه — catsFs/tablesFs/mineFs: نسخة السيرفر (أو المحفوظة بالتلفون)
+let fsLive = true, catsFs = [], tablesFs = null, mineFs = [], pendIds = new Set();
+const lanTried = new Map();
+const lan = lanLink({ role: 'waiter', onChange: () => lanView() });
 
 function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2200); }
 const stOf = (w) => (w.status === 'new' ? 'new' : w.status === 'rejected' ? 'rejected' : w.stage || 'preparing');
@@ -245,23 +257,78 @@ function start() {
   $('wName').textContent = '🧑‍🍳 ' + (me.name || 'الويتر');
   const R = (...p) => doc(db, 'restaurants', me.rid, ...p);
   unsubs.push(onSnapshot(R(), (s) => { const d = s.exists() ? s.data() : {}; me.rest = { ...me.rest, features: d.features, svcOff: d.svcOff }; svc(waiterOn(d)); }, () => {}));
-  unsubs.push(onSnapshot(R('menu', 'main'), (s) => { cats = s.exists() ? (s.data().cats || []).filter((c) => (c.items || []).length) : []; if (!$('vMenu').hidden) renderMenu(); }, () => {}));
+  // الرمز السري لشبكة المطعم: ينحفظ بالتطبيق — حتى لو انقطع النت يتصل بالكاشير وحده
+  let lanKey = '';
+  unsubs.push(onSnapshot(R('lan', 'key'), (s) => {
+    const k = s.exists() && s.data().key;
+    if (k && me && k !== lanKey) { lanKey = k; lan.start({ rid: me.rid, key: k, name: '🧑‍🍳 ' + (me.name || 'الويتر') }); }
+  }, () => {}));
+  unsubs.push(onSnapshot(R('menu', 'main'), (s) => {
+    if (!s.exists() && s.metadata.fromCache) return;   // ماكو نت والمنيو مو محفوظ: ناخذه من الكاشير
+    catsFs = s.exists() ? (s.data().cats || []).filter((c) => (c.items || []).length) : [];
+    useMenu();
+  }, () => {}));
   unsubs.push(onSnapshot(R('settings', 'main'), (s) => {
+    if (!s.exists() && s.metadata.fromCache) return;
     const d = s.exists() ? s.data() : {};
-    tables = Number(d.tables) || 0;
+    tablesFs = Number(d.tables) || 0;
     if (d.receiptTitle) $('rName').textContent = d.receiptTitle;
-    renderTables();
+    useTables();
   }, () => renderTables()));
   // طلباتي اليوم (وأمس للي يشتغلون بعد نص الليل)
-  unsubs.push(onSnapshot(query(collection(db, 'webOrders'), where('restaurantId', '==', me.rid), where('waiterUid', '==', me.uid), where('day', 'in', [bagDay(), bagDay(Date.now() - 86400000)])), (s) => {
-    mine = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((w) => Date.now() - (w.createdAtMs || 0) < 14 * 3600000).sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
-    let ding = false;
-    mine.forEach((w) => { if (stOf(w) === 'ready' && !readySeen.has(w.id)) { readySeen.add(w.id); if (!firstSnap) { ding = true; toast('✅ طاولة ' + w.table + ' جاهزة — وصّلها'); } } });
-    firstSnap = false;
-    if (ding) { try { navigator.vibrate && navigator.vibrate([250, 120, 250]); } catch (e) {} beep(); }
-    renderTables(); renderOrders();
-  }, (e) => console.warn('mine', e.code)));
+  unsubs.push(onSnapshot(query(collection(db, 'webOrders'), where('restaurantId', '==', me.rid), where('waiterUid', '==', me.uid), where('day', 'in', [bagDay(), bagDay(Date.now() - 86400000)])), { includeMetadataChanges: true }, (s) => {
+    fsLive = !s.metadata.fromCache;
+    mineFs = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+    pendIds = new Set(s.docs.filter((d) => d.metadata.hasPendingWrites).map((d) => d.id));   // لسه ما وصلت السيرفر
+    mergeMine(); netUi(); resendLan();
+  }, (e) => { console.warn('mine', e.code); fsLive = false; netUi(); }));
   show('tables');
+}
+// المنيو والطاولات: من السيرفر (أو المحفوظ بالتلفون)، وإذا ماكو — من الكاشير على الواي فاي
+function useMenu() {
+  const lm = lan.menu();
+  cats = catsFs.length || !lm ? catsFs : lm.filter((c) => c && (c.items || []).length);
+  if (!$('vMenu').hidden) renderMenu();
+}
+function useTables() { const ls = lan.settings(); tables = tablesFs != null ? tablesFs : Number(ls && ls.tables) || 0; renderTables(); }
+// طلباتي = نسخة السيرفر + نسخة الكاشير على الواي فاي: لكل طلب الحالة الأكثر تقدّماً (فما ترجع لورا لما يرجع النت)
+function mergeMine() {
+  if (!me) return;
+  const m = new Map(mineFs.map((w) => [w.id, w]));
+  lan.orders().forEach((w, id) => {
+    if (w.waiterUid !== me.uid) return;
+    const x = m.get(id);
+    if (!x || wScore(w) > wScore(x)) m.set(id, x ? { ...x, ...w } : w);
+  });
+  mine = [...m.values()].filter((w) => Date.now() - (w.createdAtMs || 0) < 14 * 3600000).sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+  let ding = false;
+  mine.forEach((w) => { if (stOf(w) === 'ready' && !readySeen.has(w.id)) { readySeen.add(w.id); if (!firstSnap) { ding = true; toast('✅ طاولة ' + w.table + ' جاهزة — وصّلها'); } } });
+  firstSnap = false;
+  if (ding) { try { navigator.vibrate && navigator.vibrate([250, 120, 250]); } catch (e) {} beep(); }
+  renderTables(); renderOrders();
+}
+function lanView() { if (!me) return; useMenu(); useTables(); mergeMine(); netUi(); resendLan(); }
+// طلب انحفظ بالتلفون وما وصل للسيرفر ولا للكاشير (مثلاً الكاشير انفتح بعدين): نرسله للكاشير أول ما يتصل
+function resendLan() {
+  if (!me || !lan.on() || !pendIds.size) return;
+  const L = lan.orders();
+  mineFs.forEach((w) => {
+    if (!pendIds.has(w.id) || w.status !== 'new' || L.has(w.id) || Date.now() - (lanTried.get(w.id) || 0) < 20000) return;
+    lanTried.set(w.id, Date.now());
+    const { id, ...data } = w;
+    lan.actAll('order', { w: { ...data, id } });
+  });
+}
+// شريط صغير بس لما النت مقطوع
+function netUi() {
+  const e = $('net'); if (!e) return;
+  if (fsLive) { e.hidden = true; return; }
+  const n = mineFs.filter((w) => pendIds.has(w.id) && !lan.orders().has(w.id)).length;
+  e.hidden = false;
+  e.className = 'net ' + (lan.on() ? 'ok' : 'wait');
+  e.textContent = lan.on() ? '📶 ماكو نت — الطلبات توصل للكاشير على الواي فاي' + (n ? ' (' + n + ' بالطريق)' : '')
+    : lan.app() ? '📶 ماكو نت — ' + (n ? n + ' طلب محفوظ بالتلفون، ' : '') + 'يوصل للكاشير أول ما يرجع النت أو يتصل الكاشير على نفس الواي فاي'
+    : '📶 ماكو نت — ' + (n ? n + ' طلب محفوظ بالتلفون، ' : '') + 'يوصل أول ما يرجع النت (تطبيق «سرعة - الويتر» يوصله للكاشير على الواي فاي حتى بدون نت)';
 }
 
 // ── التبويبات ──
@@ -374,14 +441,24 @@ async function send() {
     items: cart.map((c) => (c.note ? { name: c.name, variant: c.variant, price: c.price, qty: c.qty, note: c.note } : { name: c.name, variant: c.variant, price: c.price, qty: c.qty })) };
   if (note) data.note = note.slice(0, 500);
   sending = true; renderCart();
-  try {
-    await setDoc(ref, data);
-    toast('📨 انرسل طلب طاولة ' + table);
-    cart = []; table = ''; sending = false; close_(); show('orders');
-  } catch (e) {
-    sending = false; renderCart();
-    toast(e.code === 'permission-denied' ? '⛔ ما ينقبل — الخدمة موقوفة أو خارج وقت دوامك' : '📶 ما انرسل — تأكد من الإنترنت');
-  }
+  const t = table;
+  // بنفس الوقت: السيرفر (ينحفظ بالتلفون ويترفع وحده من يرجع النت) + الكاشير على الواي فاي مباشرة — نفس المعرّف، فما يتكرر
+  const fsP = setDoc(ref, data).then(() => 'ok', (e) => e.code || 'err');
+  const lanP = lan.on() ? lan.actAll('order', { w: { ...data, id: ref.id } }, 5000) : Promise.resolve(false);
+  if (lan.on()) lanTried.set(ref.id, Date.now());
+  const res = await new Promise((done) => {
+    let left = 2;
+    const miss = () => { if (--left === 0) done('queued'); };
+    fsP.then((r) => (r === 'ok' ? done('ok') : r === 'permission-denied' ? done('denied') : miss()));
+    lanP.then((ok) => (ok ? done('lan') : miss()));
+    setTimeout(() => done('queued'), 2500);
+  });
+  sending = false;
+  if (res === 'denied') { renderCart(); toast('⛔ ما ينقبل — الخدمة موقوفة أو خارج وقت دوامك'); return; }
+  toast(res === 'queued' ? '📥 انحفظ طلب طاولة ' + t + ' — يوصل للكاشير أول ما يرجع النت' : '📨 انرسل طلب طاولة ' + t);
+  cart = []; table = ''; close_(); show('orders');
+  // رفض متأخر من السيرفر (بعد ما رجع النت)
+  fsP.then((r) => { if (r === 'permission-denied' && res !== 'denied' && !lan.orders().has(ref.id)) toast('⛔ طلب طاولة ' + t + ' ما انقبل — الخدمة موقوفة أو خارج وقت الدوام'); });
 }
 
 // ── طلباتي ──

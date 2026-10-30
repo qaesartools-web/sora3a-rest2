@@ -25,7 +25,7 @@ public final class Lan {
     private static Lan inst;
     public static synchronized Lan get(Context c) { if (inst == null) inst = new Lan(c.getApplicationContext()); return inst; }
 
-    public static String role() { return BuildConfig.LINE ? "line" : BuildConfig.SCREEN ? "screen" : BuildConfig.KITCHEN ? "kitchen" : "hub"; }
+    public static String role() { return BuildConfig.LINE ? "line" : BuildConfig.SCREEN ? "screen" : BuildConfig.KITCHEN ? "kitchen" : BuildConfig.WAITER ? "waiter" : "hub"; }
     static boolean isHub() { return "hub".equals(role()); }
 
     private final Context ctx;
@@ -51,7 +51,7 @@ public final class Lan {
     }
 
     private static String defName() {
-        switch (role()) { case "kitchen": return "شاشة المطبخ"; case "screen": return "شاشة طلبك جاهز"; case "line": return "خط المطعم"; default: return "الكاشير"; }
+        switch (role()) { case "kitchen": return "شاشة المطبخ"; case "screen": return "شاشة طلبك جاهز"; case "line": return "خط المطعم"; case "waiter": return "الويتر"; default: return "الكاشير"; }
     }
 
     // من الصفحة: {rid, key, dev?, name?} — تنحفظ وتشتغل

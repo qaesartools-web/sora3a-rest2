@@ -603,7 +603,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
         <button class="mtab on" id="mt4" onclick="showMTab('settings')">⚙️ الإعدادات</button>
       </div>
       <div class="ac-sub" style="margin:4px 2px 10px">🍔 تعديل المنيو (الأصناف والأسعار والفروع والصور) صار من تطبيق الإدارة ← «المنيو»، ويوصل هنا وحده</div>
-      <div class="ac-sub" id="setDiag" style="margin:-6px 2px 10px;opacity:.7">نسخة الكاشير 60</div>
+      <div class="ac-sub" id="setDiag" style="margin:-6px 2px 10px;opacity:.7">نسخة الكاشير 63</div>
       <div id="mSetSec" style="display:none;"></div>
       <div id="mAddSec" style="display:none;">
         <div class="flbl">اسم الصنف *</div>
@@ -2733,11 +2733,11 @@ document.addEventListener('click',function(e){
     var d=document.getElementById('setDiag'),m=document.getElementById('mSetSec');if(!d||!m)return;
     var empty=!m.innerHTML.trim()||m.style.display==='none',errs=(window.__errs||[]).slice(-3);
     d.style.color=empty?'#ef4444':'';d.style.opacity=empty?'1':'.7';
-    d.textContent='نسخة الكاشير 60'+(empty?' • ⚠️ الإعدادات ما انعرضت'+(errs.length?' • '+errs.join(' | '):''):'');
+    d.textContent='نسخة الكاشير 63'+(empty?' • ⚠️ الإعدادات ما انعرضت'+(errs.length?' • '+errs.join(' | '):''):'');
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=62"></script>
+<script src="pos-pro.js?v=63"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){

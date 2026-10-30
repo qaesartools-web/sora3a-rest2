@@ -13,7 +13,7 @@ const UDP_PORT = 47800, TCP_PORT = 47801, VER = 1;
 const MAX_LINE = 16 * 1024 * 1024;
 const PING_MS = 15000, IDLE_MS = 45000, AUTH_MS = 10000;
 const EV_AGE = 10 * 60000;
-const ROLES = ['kitchen', 'screen', 'line'];
+const ROLES = ['kitchen', 'screen', 'line', 'waiter'];
 
 const hmac = (key, s) => crypto.createHmac('sha256', Buffer.from(String(key), 'utf8')).update(String(s), 'utf8').digest('hex');
 const nonce = () => crypto.randomBytes(16).toString('hex');
