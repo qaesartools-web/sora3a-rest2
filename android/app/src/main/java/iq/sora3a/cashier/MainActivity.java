@@ -43,10 +43,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-// ثلاث تطبيقات من نفس الكود (BuildConfig.LINE / BuildConfig.SCREEN):
+// أربع تطبيقات من نفس الكود (BuildConfig.LINE / BuildConfig.SCREEN / BuildConfig.KITCHEN):
 //  • الكاشير: نفس الكاشير من الإنترنت (أي تحديث يوصل فوراً) + طباعة مباشرة على الطابعة المدمجة والشبكة والبلوتوث
 //  • خط المطعم: صفحة وحدة لربط رقم المطعم، والتلفون يبعث رقم المتصل للكاشير
 //  • الشاشة: «طلبك جاهز» على التلفزيون/التيفي بوكس — ملء الشاشة، ما تطفي، وتفتح وحدها مع تشغيل الجهاز
+//  • شاشة المطبخ/المجهز: صفحة المطبخ، ما تطفي
+//  وكلها على «شبكة المطعم» (Lan): بنت أو بدون نت على نفس الراوتر ويا الكاشير
 public class MainActivity extends Activity {
     private static final String START_URL = BuildConfig.START_URL;
     private static final int REQ_BT = 7, REQ_PHONE = 8, REQ_HOME = 9;
@@ -86,17 +88,22 @@ public class MainActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false); // رنة المكالمات والطلبات
         s.setSupportMultipleWindows(false);
-        s.setUserAgentString(s.getUserAgentString() + (BuildConfig.SCREEN ? " SoraScreenApp/" : " SoraCashierApp/") + BuildConfig.VERSION_NAME);
+        s.setUserAgentString(s.getUserAgentString() + (BuildConfig.SCREEN ? " SoraScreenApp/" : BuildConfig.KITCHEN ? " SoraKitchenApp/" : " SoraCashierApp/") + BuildConfig.VERSION_NAME);
 
-        // الشاشة ما تحتاج جسر الطباعة والخط — تعرض بس
+        // الشاشة وشاشة المطبخ ما تحتاج جسر الطباعة والخط — تعرض بس
         final boolean early = !BuildConfig.SCREEN && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
-        if (!BuildConfig.SCREEN) {
+        if (!BuildConfig.SCREEN && !BuildConfig.KITCHEN) {
             Simulator sim = new Simulator(this);
             AndroidBackend backend = new AndroidBackend(this);
             HtmlRenderer renderer = new HtmlRenderer(this, root);
             web.addJavascriptInterface(new Bridge(this, web, backend, renderer, sim), "SoraPOS");
             if (early) WebViewCompat.addDocumentStartJavaScript(web, Bridge.SHIM, Collections.singleton(Bridge.ORIGIN));
         }
+        // شبكة المطعم (بنت أو بدون نت) — كل التطبيقات. تتصل وحدها بآخر إعدادات حتى قبل ما تفتح الصفحة
+        web.addJavascriptInterface(new LanBridge(this), "SoraLanNative");
+        if (early) WebViewCompat.addDocumentStartJavaScript(web, LanBridge.SHIM, Collections.singleton(Bridge.ORIGIN));
+        Lan.get(this).attach(web, this);
+        Lan.get(this).autoStart();
 
         // نوافذ الصفحة (تأكيد/تنبيه/إدخال) + اختيار صورة — بدون هذا الأندرويد يتجاهلها ويرجّع «لا» وحده
         //  (زر «خروج» ما كان يشتغل، وكل «متأكد؟»، ورفع صور المنيو)
@@ -149,9 +156,13 @@ public class MainActivity extends Activity {
             }
             @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap icon) {
                 pageUrl = url == null ? "" : url;
-                if (!BuildConfig.SCREEN && !early && pageOriginOk()) v.evaluateJavascript(Bridge.SHIM, null);
+                if (!BuildConfig.SCREEN && !BuildConfig.KITCHEN && !early && pageOriginOk()) v.evaluateJavascript(Bridge.SHIM, null);
+                if (!early && pageOriginOk()) v.evaluateJavascript(LanBridge.SHIM, null);
             }
-            @Override public void onPageFinished(WebView v, String url) { if (BuildConfig.SCREEN) { checkPageWorks(); pushAuto(); } }
+            @Override public void onPageFinished(WebView v, String url) {
+                if (!early && pageOriginOk()) v.evaluateJavascript(LanBridge.SHIM, null);   // احتياط: محركات التلفزيون القديمة
+                if (BuildConfig.SCREEN) { checkPageWorks(); pushAuto(); }
+            }
             @Override public void doUpdateVisitedHistory(WebView v, String url, boolean reload) { pageUrl = url == null ? "" : url; }
             @Override public void onReceivedError(WebView v, WebResourceRequest req, WebResourceError err) {
                 if (req.isForMainFrame()) v.loadDataWithBaseURL(null, OFFLINE, "text/html", "utf-8", null);
@@ -335,6 +346,7 @@ public class MainActivity extends Activity {
         if (web != null && pageOriginOk()) web.evaluateJavascript("window.dispatchEvent(new Event('sora:resume'))", null);
     }
     @Override protected void onResume() { super.onResume(); leaving = false; notifyPage(); if (BuildConfig.SCREEN) pushAuto(); }
+    @Override protected void onDestroy() { Lan.get(this).detach(web); super.onDestroy(); }
     // الشاشة: المطعم نفسه طالع منها (إعدادات، رابط، تحديث...) ← لا ترجع وحدها فوق اللي فتحه
     private boolean leaving;
     private void leave() { leaving = true; ScreenWatch.pause(this); }
@@ -663,9 +675,9 @@ public class MainActivity extends Activity {
     }
 
     private static final String OFFLINE = "<html dir=rtl><body style='margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0B1220;color:#EEF2F7;font-family:sans-serif;text-align:center'>"
-        + "<div style='padding:24px'><div style='font-size:52px'>📶</div><h2>" + (BuildConfig.LINE ? "ما كدرنا نفتح الصفحة" : BuildConfig.SCREEN ? "ما كدرنا نفتح الشاشة" : "ما كدرنا نفتح الكاشير") + "</h2>"
+        + "<div style='padding:24px'><div style='font-size:52px'>📶</div><h2>" + (BuildConfig.LINE ? "ما كدرنا نفتح الصفحة" : BuildConfig.SCREEN ? "ما كدرنا نفتح الشاشة" : BuildConfig.KITCHEN ? "ما كدرنا نفتح شاشة المطبخ" : "ما كدرنا نفتح الكاشير") + "</h2>"
         + "<p style='color:#A9B5C6;line-height:1.8'>" + (BuildConfig.LINE ? "ربط الخط يحتاج إنترنت. شغّل النت ونعيد المحاولة."
-            : BuildConfig.SCREEN ? "الشاشة تحتاج إنترنت. تأكد إن البوكس متصل بالواي فاي — نعيد المحاولة وحدنا."
+            : BuildConfig.SCREEN || BuildConfig.KITCHEN ? "أول تشغيل يحتاج إنترنت حتى تنحفظ الشاشة بالجهاز. بعدها تشتغل ويا الكاشير على نفس الواي فاي حتى لو انقطع النت — نعيد المحاولة وحدنا."
             : "أول تشغيل يحتاج إنترنت حتى ينحفظ الكاشير بالجهاز. بعدها يشتغل حتى لو انقطع النت.") + "</p>"
         + "<button style='font-size:18px;padding:12px 28px;border:0;border-radius:14px;background:#16A34A;color:#fff' onclick=\"location.href='" + START_URL + "'\">🔄 إعادة المحاولة</button>"
         + "</div><script>setTimeout(function(){location.href='" + START_URL + "'},10000)</script></body></html>";

@@ -180,8 +180,13 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 </div>
 <button type="button" class="hint" id="hint" hidden>🔊 اضغط هنا حتى يشتغل صوت التنبيه</button>
 
+<script>
+// الشاشة تنحفظ بالجهاز: تفتح حتى لو انقطع النت (وتكمل ويا الكاشير على نفس الواي فاي)
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('screen-sw.js', { scope: './screen' }).catch(function () {});
+</script>
 <script type="module">
-import { db, staffGate, logout, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc } from './staff.js';
+import { db, staffGate, logout, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc, getDoc } from './staff.js';
+import { lanLink } from './lanlink.js?v=1';
 document.getElementById('gateCss').textContent = GATE_CSS;
 window.__scrOk = true;   // تطبيق «سرعة — الشاشة» يتأكد إن الصفحة اشتغلت (وإلا يطلب تحديث محرك الإنترنت)
 const $ = (id) => document.getElementById(id);
@@ -191,6 +196,18 @@ if (inApp) $('fsBtn').hidden = true;
 const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 
 let orders = [], unsub = null, rid = '', day = '', first = true, sound = ls.get('scr_sound', true), audio = null;
+// شبكة المطعم: بتطبيق الشاشة الطلبات توصل من الكاشير على نفس الواي فاي حتى لو النت مقطوع
+let fsOrders = [], fsLive = false, setFromFs = false;
+const lan = lanLink({ role: 'screen', onChange: () => view() });
+function view() {
+  if (!rid) return;
+  const L = lan.orders(), m = new Map(fsOrders.map((o) => [o.id, o]));
+  L.forEach((o, id) => { if (!fsLive || !m.has(id)) m.set(id, o); });
+  orders = [...m.values()];
+  const st = lan.settings();
+  if (st && !setFromFs) { scr = { salon: true, delivery: false, qr: true, ...(st.screen || {}) }; if (st.receiptTitle) setName(st.receiptTitle); }
+  render();
+}
 // شنو يطلع على الشاشة (يحدده المطعم من إعدادات الكاشير): السفري والبيجر دائماً
 let scr = { salon: true, delivery: false, qr: true }, unsubSet = null, pm = null, unsubPm = null, qrUrl = '';
 // خدمات المطعم (يشغّلها أو يوقفها المدير الأعلى): الشاشة نفسها، والباركود (كود المنيو بالزاوية)
@@ -262,10 +279,11 @@ function listen() {
   day = bagDay();
   if (unsub) unsub();
   // اليوم وأمس (المطاعم اللي تشتغل بعد نص الليل) — مساواة بس، ما تحتاج فهارس
-  unsub = onSnapshot(query(collection(db, 'orders'), where('restaurantId', '==', rid), where('day', 'in', [day, bagDay(Date.now() - 86400000)])), (s) => {
-    orders = s.docs.map((d) => ({ id: d.id, ...d.data() }));
-    render();
-  }, (e) => { console.warn('orders', e.code); setTimeout(listen, 5000); });
+  unsub = onSnapshot(query(collection(db, 'orders'), where('restaurantId', '==', rid), where('day', 'in', [day, bagDay(Date.now() - 86400000)])), { includeMetadataChanges: true }, (s) => {
+    fsOrders = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+    fsLive = !s.metadata.fromCache;
+    view();
+  }, (e) => { console.warn('orders', e.code); fsLive = false; view(); setTimeout(listen, 5000); });
 }
 
 // ── الصوت: نغمة + «الطلب رقم ١٢ جاهز» بصوت الجهاز (إذا عنده عربي) ──
@@ -412,6 +430,8 @@ staffGate($('gate'), {
     // الإعدادات مباشرة: أي تغيير من الكاشير ينطبق على الشاشة فوراً
     if (unsubSet) unsubSet();
     unsubSet = onSnapshot(doc(db, 'restaurants', rid, 'settings', 'main'), (s) => {
+      if (!s.exists() && s.metadata.fromCache) return;   // ماكو نت والكاش فارغ: الإعدادات من الكاشير
+      setFromFs = true;
       const d = s.exists() ? s.data() : {};
       scr = { salon: true, delivery: false, qr: true, ...(d.screen || {}) };
       setName(d.receiptTitle || name0);
@@ -422,14 +442,16 @@ staffGate($('gate'), {
     unsubPm = onSnapshot(doc(db, 'publicMenus', rid), (s) => { pm = s.exists() ? s.data() : null; qrUi(); }, () => { pm = null; qrUi(); });
     feats = (u.rest && u.rest.features) || {};
     if (unsubRest) unsubRest();
-    unsubRest = onSnapshot(doc(db, 'restaurants', rid), (s) => { feats = (s.exists() && s.data().features) || {}; svcUi(); }, () => {});
+    unsubRest = onSnapshot(doc(db, 'restaurants', rid), (s) => { if (!s.exists() && s.metadata.fromCache) return; feats = (s.exists() && s.data().features) || {}; svcUi(); }, () => {});
+    // الرمز السري لشبكة المطعم (ينحفظ بالتطبيق — بعدها يتصل بالكاشير حتى بدون نت)
+    getDoc(doc(db, 'restaurants', rid, 'lan', 'key')).then((s) => { const k = s.exists() && s.data().key; if (k && rid === u.rid) lan.start({ rid, key: k, name: 'شاشة طلبك جاهز' }); }).catch(() => {});
     svcUi(); clock(); keepOn(); listen();
   },
   onOut: () => {
     if (unsub) { unsub(); unsub = null; } if (unsubSet) { unsubSet(); unsubSet = null; } if (unsubPm) { unsubPm(); unsubPm = null; } if (unsubRest) { unsubRest(); unsubRest = null; }
     feats = {}; $('off').hidden = true;
     pm = null; qrUrl = ''; $('qrBox').hidden = true;
-    rid = ''; orders = []; $('scr').hidden = true; $('hint').hidden = true; menu.hidden = true;
+    rid = ''; orders = []; fsOrders = []; fsLive = false; setFromFs = false; $('scr').hidden = true; $('hint').hidden = true; menu.hidden = true;
   },
 });
 </script>

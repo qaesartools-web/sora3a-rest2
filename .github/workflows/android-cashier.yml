@@ -1,7 +1,8 @@
-# يبني ثلاث تطبيقات للأندرويد من نفس الكود — روابط تنزيل ثابتة:
+# يبني أربع تطبيقات للأندرويد من نفس الكود — روابط تنزيل ثابتة:
 #   الكاشير:    releases/download/cashier-android/sora3a-cashier.apk
 #   خط المطعم:  releases/download/line-android/sora3a-line.apk
 #   الشاشة:     releases/download/screen-android/sora3a-screen.apk  (تلفزيون / تيفي بوكس)
+#   المطبخ:     releases/download/kitchen-android/sora3a-kitchen.apk (شاشة المطبخ/المجهز — بنت أو بدون نت ويا الكاشير)
 # (ما يصيرون «latest» حتى ما يأثرون على تحديث برنامج الحاسبة)
 name: Android cashier app
 
@@ -47,11 +48,12 @@ jobs:
       - name: Unit tests + build
         working-directory: android
         env: { VERSION_CODE: '${{ github.run_number }}' }
-        run: gradle --no-daemon testCashierDebugUnitTest assembleCashierRelease assembleLineRelease assembleScreenRelease
+        run: gradle --no-daemon testCashierDebugUnitTest assembleCashierRelease assembleLineRelease assembleScreenRelease assembleKitchenRelease
       - run: |
           cp android/app/build/outputs/apk/cashier/release/app-cashier-release.apk sora3a-cashier.apk
           cp android/app/build/outputs/apk/line/release/app-line-release.apk sora3a-line.apk
           cp android/app/build/outputs/apk/screen/release/app-screen-release.apk sora3a-screen.apk
+          cp android/app/build/outputs/apk/kitchen/release/app-kitchen-release.apk sora3a-kitchen.apk
           # التطبيق يقرا هذا الملف حتى يعرف أكو نسخة أحدث، ويحدّث نفسه بس إذا بصمة التوقيع نفسها
           printf '{"version":%s,"name":"1.%s","cert":"%s"}\n' "${{ github.run_number }}" "${{ github.run_number }}" "$SIGN_CERT" > version.json
       - uses: actions/upload-artifact@v4
@@ -88,4 +90,15 @@ jobs:
           body: نسخة ${{ github.run_number }} — نزّل sora3a-screen.apk وثبّته على التيفي بوكس أو التلفزيون أندرويد أو التابلت. سجّل دخول مرة وحدة، والشاشة تفتح وحدها مع تشغيل الجهاز.
           files: |
             sora3a-screen.apk
+            version.json
+      - name: Publish kitchen app (fixed tag, not latest)
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kitchen-android
+          name: تطبيق شاشة المطبخ والمجهز للأندرويد
+          make_latest: false
+          body: نسخة ${{ github.run_number }} — نزّل sora3a-kitchen.apk وثبّته على تابلت المطبخ أو المجهز واربطه بالرمز من لوحة الإدارة. يشتغل بنت أو بدون نت ما دام على نفس الواي فاي ويا الكاشير.
+          files: |
+            sora3a-kitchen.apk
             version.json

@@ -29,6 +29,7 @@
       "main.js",
       "preload.js",
       "printer.js",
+      "lan.js",
       "offline.html",
       "simulator.html",
       "simulator-preload.js",

@@ -136,9 +136,17 @@ public final class LineStore {
             if (done != null) done.run();
             return;
         }
+        // طريقين بنفس اللحظة: النت (السحابة) + الواي فاي مباشرة للكاشير (يشتغل حتى لو النت مقطوع). الكاشير يشيل المكرر
+        final java.util.concurrent.atomic.AtomicInteger left = new java.util.concurrent.atomic.AtomicInteger(2);
+        final Runnable one = () -> { if (left.decrementAndGet() == 0 && done != null) done.run(); };
+        final String ln = whatsapp ? "واتساب " + cfg.line : cfg.line;
+        new Thread(() -> {
+            try { Lan.get(c).reportCall(cfg.restaurantId, ln, CallLine.clean(number)); }
+            finally { one.run(); }
+        }).start();
         new Thread(() -> {
             try { send(c, cfg, number, whatsapp, slot); }
-            finally { if (done != null) done.run(); }
+            finally { one.run(); }
         }).start();
     }
 }

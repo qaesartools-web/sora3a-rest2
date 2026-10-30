@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- المشترك بين التطبيقين. صلاحيات كل تطبيق بملفه: src/cashier و src/line -->
+<!-- المشترك بين التطبيقات. صلاحيات كل تطبيق بملفه: src/cashier و src/line و src/screen و src/kitchen -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- التحديث من داخل التطبيق (Updater): المطعم يضغط «تثبيت» بس، بدون فلاشة -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- شبكة المطعم (بنت أو بدون نت): الأجهزة على نفس الراوتر يلكون الكاشير بالبث ويتصلون بيه — أذونات عادية بدون سؤال -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <application
         android:name=".App"

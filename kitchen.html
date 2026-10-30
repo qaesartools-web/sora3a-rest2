@@ -12,6 +12,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="kitchen-apple-180.png">
 <script>
+// تطبيق «سرعة - المطبخ» يفتح kitchen.html دائماً: يرجع لآخر شاشة اختارها الجهاز (المجهز أو قسم بالمطبخ)
+(function () {
+  try {
+    if (/SoraKitchenApp/.test(navigator.userAgent) && !/[?&]sec(=|&|$)/.test(location.search) && localStorage.getItem('kds_mode') === 'sec')
+      location.replace('kitchen.html?sec=' + encodeURIComponent(localStorage.getItem('kds_sec') || ''));
+  } catch (e) {}
+})();
 // ── تثبيت الشاشة (أندرويد وآيفون) — شاشتين منفصلتين:
 //    kitchen.html        = «شاشة المجهز»: كل الطلبات
 //    kitchen.html?sec=…  = «شاشة المطبخ» (الأقسام): كل جهاز يختار قسمه ويشوف طلباته بس
@@ -60,6 +67,8 @@ button{cursor:pointer}
 .top small{color:var(--muted);font-size:12.5px}
 .pill{background:var(--new);color:#06160c;border-radius:999px;min-width:40px;height:40px;padding:0 14px;display:flex;align-items:center;justify-content:center;font-family:var(--num);font-weight:800;font-size:20px}
 .pill.zero{background:var(--card2);color:var(--muted)}
+.lanb{flex:none;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700;background:rgba(61,240,139,.14);color:var(--ok);border:1px solid rgba(61,240,139,.35);white-space:nowrap}
+.lanb.warn{background:rgba(255,176,32,.14);color:#FFB020;border-color:rgba(255,176,32,.4)}
 .mb{flex:none;width:46px;height:46px;border-radius:14px;border:1px solid var(--line);background:var(--card2);font-size:20px;display:flex;align-items:center;justify-content:center}
 
 /* ── الشبكة ── */
@@ -145,6 +154,7 @@ button{cursor:pointer}
   <div class="top">
     <button class="mb" id="menuBtn" aria-label="الإعدادات">⚙️</button>
     <div class="t"><b id="rName">المطبخ</b><small id="sub">طلبات قيد التحضير</small></div>
+    <div class="lanb" id="lanB" hidden></div>
     <div class="pill zero" id="pill">0</div>
   </div>
   <div class="rdy" id="rdy" hidden></div>
@@ -154,6 +164,7 @@ button{cursor:pointer}
 <div class="menu" id="menu" hidden role="dialog" aria-label="الإعدادات">
   <div class="mt">⚙️ إعدادات المطبخ</div>
   <button type="button" id="mSec" hidden></button>
+  <button type="button" id="mMode" hidden></button>
   <button type="button" id="mSnd"></button>
   <button type="button" id="fsBtn">⛶ ملء الشاشة</button>
   <button type="button" id="mReload">🔄 تحديث</button>
@@ -186,8 +197,8 @@ button{cursor:pointer}
 // ── طلب التثبيت أول ما ينفتح الرابط (منفصل عن Firebase حتى يشتغل حتى بدون نت) — نفس الويتر ──
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
   var ua = navigator.userAgent || '';
+  var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true || /SoraKitchenApp/.test(ua);
   var ios = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var mobile = ios || /android|mobile/i.test(ua);
   var deferred = null;
@@ -226,7 +237,8 @@ button{cursor:pointer}
 
 <script src="vendor/qrcode.js"></script>
 <script type="module">
-import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from './staff.js';
+import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, getDoc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from './staff.js';
+import { lanLink } from './lanlink.js?v=1';
 // الشاشة تنربط بالمطعم برمز (بدون إيميل ولا كلمة سر) — جلستها بتطبيق Firebase خاص بالشاشات
 const db = screenFb().db;
 document.getElementById('gateCss').textContent = GATE_CSS;
@@ -239,6 +251,10 @@ function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on
 
 let outArmed = false, me = null, orders = [], sections = [], unsubs = [], sound = true, ready = false, baseName = 'المطبخ', secOnSet = true;
 const seen = new Set();
+// شبكة المطعم: بتطبيق «سرعة - المطبخ» الطلبات توصل من الكاشير على نفس الواي فاي حتى لو النت مقطوع
+//  fsLive: Firestore متصل بالسيرفر هسه (لو لا، نعتمد نسخة الكاشير)
+let fsOrders = [], fsLive = false, setFromFs = false;
+const lan = lanLink({ role: 'kitchen', onChange: () => syncView() });
 try { sound = localStorage.getItem('kds_sound') !== '0'; } catch (e) {}
 
 const getType = (o) => o.orderType === 'salon' ? 'salon' : o.orderType === 'takeaway' ? 'takeaway' : 'delivery';
@@ -306,8 +322,15 @@ function start() {
   baseName = me.rest.name || 'المطبخ'; titleUi();
   const R = (...p) => doc(db, 'restaurants', me.rid, ...p);
   svc(svcState(me.rest));
-  unsubs.push(onSnapshot(R(), (s) => { svc(svcState(s.exists() ? s.data() : {})); }, () => {}));
+  // الكاش فارغ وماكو نت: ما نمسح الخدمات والأقسام (ننتظر السيرفر أو الكاشير)
+  unsubs.push(onSnapshot(R(), (s) => { if (!s.exists() && s.metadata.fromCache) return; svc(svcState(s.exists() ? s.data() : {})); }, () => {}));
+  getDoc(R('lan', 'key')).then((s) => {
+    const k = s.exists() && s.data().key;
+    if (k && me) lan.start({ rid: me.rid, key: k, name: SECMODE ? 'شاشة المطبخ' + (SEC ? ' — ' + secById(SEC).name : '') : 'شاشة المجهز' });
+  }).catch(() => {});
   unsubs.push(onSnapshot(R('settings', 'main'), (s) => {
+    if (!s.exists() && s.metadata.fromCache) return;
+    setFromFs = true;
     const d = s.exists() ? s.data() : {};
     sections = (d.sections || []).filter((x) => x && x.name); secOnSet = !!d.kSecOn;
     if (d.receiptTitle) baseName = d.receiptTitle;
@@ -316,15 +339,42 @@ function start() {
   }, () => {}));
   // طلبات اليوم وأمس (للي يشتغلون بعد نص الليل)
   const since = Date.now() - 36 * 3600000;
-  unsubs.push(onSnapshot(query(collection(db, 'orders'), where('restaurantId', '==', me.rid), where('createdAtMs', '>=', since)), (s) => {
-    orders = s.docs.map((d) => ({ id: d.id, ...d.data() }));
-    // تنبيه عند وصول طلب جديد للمطبخ
-    let fresh = false;
-    newList().forEach((o) => { if (!seen.has(o.id)) { seen.add(o.id); if (ready) fresh = true; } });
-    ready = true;
-    render();
-    if (fresh && sound && !$('app').hidden) beep();
-  }, (e) => console.warn('orders', e.code)));
+  unsubs.push(onSnapshot(query(collection(db, 'orders'), where('restaurantId', '==', me.rid), where('createdAtMs', '>=', since)), { includeMetadataChanges: true }, (s) => {
+    fsOrders = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+    fsLive = !s.metadata.fromCache;
+    syncView();
+  }, (e) => { console.warn('orders', e.code); fsLive = false; syncView(); }));
+}
+
+// الطلبات = نسخة السيرفر + نسخة الكاشير على الواي فاي (بدون نت نسخة الكاشير تغلب — هي الأحدث)
+function syncView() {
+  if (!me) return;
+  const L = lan.orders(), m = new Map(fsOrders.map((o) => [o.id, o]));
+  L.forEach((o, id) => { if (!fsLive || !m.has(id)) m.set(id, o); });
+  orders = [...m.values()];
+  // ماكو نت والكاش فارغ: الأقسام واسم المطعم من الكاشير
+  const ls = lan.settings();
+  if (ls && !setFromFs) {
+    sections = (ls.sections || []).filter((x) => x && x.name); secOnSet = !!ls.kSecOn;
+    if (ls.receiptTitle) baseName = ls.receiptTitle;
+    titleUi();
+  }
+  lanUi();
+  // تنبيه عند وصول طلب جديد للمطبخ
+  let fresh = false;
+  newList().forEach((o) => { if (!seen.has(o.id)) { seen.add(o.id); if (ready) fresh = true; } });
+  ready = true;
+  render();
+  if (fresh && sound && !$('app').hidden) beep();
+}
+// شارة صغيرة بالأعلى بس لما النت مقطوع
+function lanUi() {
+  const b = $('lanB');
+  if (fsLive) { b.hidden = true; return; }
+  b.hidden = false;
+  const on = lan.on();
+  b.classList.toggle('warn', !on);
+  b.textContent = on ? '🛜 بدون نت — متصل بالكاشير' : lan.app() ? '📶 ماكو نت — ندوّر على الكاشير…' : '📶 ماكو نت';
 }
 
 // بقسم: الطلب يبين إذا بيه أصناف لهذا القسم وبعده ما خلص (نفس شاشة المطبخ بالكاشير)
@@ -371,6 +421,7 @@ $('grid').addEventListener('click', (e) => {
 
 async function done(id) {
   const o = orders.find((x) => x.id === id); if (!o) return;
+  if (!fsLive && lan.has(id)) { const ok = await lan.act(id, 'ready', { at: Date.now() }); toast(ok ? '✅ #' + kNum(o) + ' جاهز' : '❌ تعذّر — تأكد إن الكاشير شغّال'); return; }
   const fields = { kitchen: 'ready', kitchenReadyAt: Date.now() };
   if (o.kSec) fields.kSec = Object.fromEntries(Object.entries(o.kSec).map(([k, v]) => [k, { ...v, readyAt: v.readyAt || Date.now() }]));
   // طلب أونلاين قيد التحضير ← نعلن «جاهز» حتى يوصل للزبون، ويرجع للكاشير للتسليم/الكابتن (نفس القديم)
@@ -380,6 +431,11 @@ async function done(id) {
 }
 async function secDone(id, sid) {
   const o = orders.find((x) => x.id === id); if (!o || !o.kSec || !o.kSec[sid]) return;
+  if (!fsLive && lan.has(id)) {
+    const on = !o.kSec[sid].readyAt, ok = await lan.act(id, 'sec', { sec: sid, on, at: Date.now() });
+    toast(ok ? (on ? '✅ ' : '↩️ ') + secById(sid).name : '❌ تعذّر — تأكد إن الكاشير شغّال');
+    return;
+  }
   const ks = { ...o.kSec, [sid]: { ...o.kSec[sid], readyAt: o.kSec[sid].readyAt ? 0 : Date.now() } };
   if (Object.values(ks).every((v) => v.readyAt)) { o.kSec = ks; return done(id); }
   try { await updateDoc(doc(db, 'orders', id), { kSec: ks }); toast((ks[sid].readyAt ? '✅ ' : '↩️ ') + secById(sid).name); }
@@ -398,7 +454,13 @@ function beep() {
 const menu = $('menu');
 function sndUi() { $('mSnd').textContent = sound ? '🔔 الصوت: يعمل' : '🔕 الصوت: مطفأ'; }
 function secUi() { $('mSec').hidden = !SECMODE; $('mSec').textContent = '🔄 تغيير القسم' + (SEC ? ' (' + secLabel() + ')' : ''); }
-function openMenu() { sndUi(); secUi(); outArmed = false; $('mOut').textContent = '🔌 فصل هذه الشاشة'; menu.hidden = false; $(SECMODE ? 'mSec' : 'mSnd').focus(); }
+const IN_APP = /SoraKitchenApp/.test(navigator.userAgent);
+function modeUi() { $('mMode').hidden = !IN_APP; $('mMode').textContent = SECMODE ? '🔀 تحويل لشاشة المجهز (كل الطلبات)' : '🔀 تحويل لشاشة المطبخ (الأقسام)'; }
+$('mMode').onclick = () => {
+  try { localStorage.setItem('kds_mode', SECMODE ? 'all' : 'sec'); } catch (e) {}
+  location.href = SECMODE ? 'kitchen.html' : 'kitchen.html?sec=' + encodeURIComponent(SEC || (function () { try { return localStorage.getItem('kds_sec') || ''; } catch (e) { return ''; } })());
+};
+function openMenu() { sndUi(); secUi(); modeUi(); outArmed = false; $('mOut').textContent = '🔌 فصل هذه الشاشة'; menu.hidden = false; $(SECMODE ? 'mSec' : 'mSnd').focus(); }
 function closeMenu() { menu.hidden = true; }
 $('mSec').onclick = () => { closeMenu(); showPick(!!SEC); };
 $('pickG').onclick = (e) => { const b = e.target.closest('[data-pick]'); if (b) setSec(b.dataset.pick); };
@@ -411,7 +473,7 @@ $('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exit
 $('mOut').onclick = () => { if (!outArmed) { outArmed = true; $('mOut').textContent = '⚠️ متأكد؟ اضغط مرة ثانية'; return; } $('menu').hidden = true; unlinkScreen(); };
 
 // الوقت على البطاقات يمشي، والشاشة ما تطفي
-setInterval(() => { if (!$('app').hidden) render(); }, 30000);
+setInterval(() => { if (!$('app').hidden) { lanUi(); render(); } }, 30000);
 let lock = null;
 async function keepOn() { try { if ('wakeLock' in navigator && !document.hidden) lock = await navigator.wakeLock.request('screen'); } catch (e) {} }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) keepOn(); });
