@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<script>window.__errs=[];addEventListener('error',function(e){__errs.push(String(e.message||'خطأ').slice(0,160));});addEventListener('unhandledrejection',function(e){var r=e.reason;__errs.push(String((r&&r.message)||r||'').slice(0,160));});</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#008b2c">
 <meta name="mobile-web-app-capable" content="yes">
@@ -602,6 +603,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);hei
         <button class="mtab on" id="mt4" onclick="showMTab('settings')">⚙️ الإعدادات</button>
       </div>
       <div class="ac-sub" style="margin:4px 2px 10px">🍔 تعديل المنيو (الأصناف والأسعار والفروع والصور) صار من تطبيق الإدارة ← «المنيو»، ويوصل هنا وحده</div>
+      <div class="ac-sub" id="setDiag" style="margin:-6px 2px 10px;opacity:.7">نسخة الكاشير 60</div>
       <div id="mSetSec" style="display:none;"></div>
       <div id="mAddSec" style="display:none;">
         <div class="flbl">اسم الصنف *</div>
@@ -2724,8 +2726,18 @@ function showThemeSwitcher() {
 
 // SW
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
+// تشخيص الإعدادات: بعد ما تنفتح، إذا الصفحة فارغة يطلع السبب بسطر أحمر (المطعم يصوّره ويدزّه)
+document.addEventListener('click',function(e){
+  if(!e.target.closest||!e.target.closest('[data-tab="menu"],#mt4'))return;
+  setTimeout(function(){
+    var d=document.getElementById('setDiag'),m=document.getElementById('mSetSec');if(!d||!m)return;
+    var empty=!m.innerHTML.trim()||m.style.display==='none',errs=(window.__errs||[]).slice(-3);
+    d.style.color=empty?'#ef4444':'';d.style.opacity=empty?'1':'.7';
+    d.textContent='نسخة الكاشير 60'+(empty?' • ⚠️ الإعدادات ما انعرضت'+(errs.length?' • '+errs.join(' | '):''):'');
+  },600);
+},true);
 </script>
-<script src="pos-pro.js?v=59"></script>
+<script src="pos-pro.js?v=60"></script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
