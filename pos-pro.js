@@ -1187,6 +1187,8 @@ const showMTabCore = tab=>{
       </div>
       <div class="sh-card"><div class="sh-title">👨‍🍳 أقسام المطبخ والطابعات</div>
         <label class="set-check"><input type="checkbox" id="stSecOn" ${s.kSecOn ? 'checked' : ''}> تقسيم الطلب على أقسام المطبخ — كل قسم يطبع أصنافه فقط، ورقم الطلب يوحّدها</label>
+        <div class="flbl">⏱️ شاشة المطبخ: الطلب يصير أصفر بعد كم دقيقة، وأحمر (متأخر) بعد كم دقيقة</div>
+        <div class="set-row"><div><input class="finp" id="stKWarn" type="number" min="1" max="120" value="${esc(s.kWarn || 10)}" placeholder="أصفر"></div><div><input class="finp" id="stKLate" type="number" min="2" max="240" value="${esc(s.kLate || 20)}" placeholder="أحمر"></div></div>
         <div class="flbl">الأقسام (اترك الاسم فارغاً لإلغاء القسم)</div>
         ${part(() => secArr(s.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join(''))}
         <div class="flbl" style="margin-top:10px">كل فئة بالمنيو تابعة لأي قسم؟</div>
@@ -1236,6 +1238,7 @@ const showMTabCore = tab=>{
       defaultFee: settings.defaultFee ?? DEFAULTS.defaultFee, feePresets: settings.feePresets || DEFAULTS.feePresets, taxPct: settings.taxPct || 0, servicePct: settings.servicePct || 0,
       tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
       kSecOn: $('stSecOn').checked,
+      kWarn: Math.round(clamp($('stKWarn').value || 10, 1, 120)), kLate: Math.max(Math.round(clamp($('stKWarn').value || 10, 1, 120)) + 1, Math.round(clamp($('stKLate').value || 20, 2, 240))),
       sections: secArr(settings.sections).map((x, i) => ({ id: x.id || 'sec' + (i + 1), emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
       catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
       quickAdd: $('stQuick').checked, quickNotes: list($('stNotes').value).slice(0, 10).map((x) => x.slice(0, 30)),
@@ -1485,6 +1488,7 @@ const ordCancelCore = id=>{
   }
   const kNum = (o) => o.ticketNo || o.salonNum || o.holdNum || String(o.id || '').slice(0, 4).toUpperCase();
   window.kNum = kNum;
+  window.kSecOf = (name) => (secOn() ? secOfItem(name) : '');
   function applySections(o) {
     o.ticketNo = nextTicket();
     if (!secOn()) return;
@@ -2406,7 +2410,7 @@ const ordCancelCore = id=>{
     return x;
   };
   const lanList = () => orders.filter((o) => Date.now() - (o.createdAtMs || 0) < 36 * 3600000).map(lanOrder);
-  const lanSettings = () => ({ sections: settings.sections || [], kSecOn: !!settings.kSecOn, receiptTitle: settings.receiptTitle || '', screen: settings.screen || null });
+  const lanSettings = () => ({ sections: settings.sections || [], kSecOn: !!settings.kSecOn, kWarn: settings.kWarn || 10, kLate: settings.kLate || 20, receiptTitle: settings.receiptTitle || '', screen: settings.screen || null });
   const lanRest = () => ({ name: (restData && restData.name) || '', features: (restData && restData.features) || {}, svcOff: (restData && restData.svcOff) || {} });
   const lanName = () => String((window.posUser && window.posUser.name) || 'الكاشير').slice(0, 40);
   const toScreens = (m) => { const L = lanApi(); if (L && lanOn) { L.send('role:kitchen', m); L.send('role:screen', m); } if (m.settings) wSend({ t: 'state', settings: wSettings() }); };

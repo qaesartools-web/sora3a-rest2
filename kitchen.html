@@ -126,13 +126,37 @@ button{cursor:pointer}
 .it .nm{flex:1}
 .it .note{display:block;color:var(--warn);font-size:13.5px;margin-top:2px}
 .it .sec{font-size:12px;color:var(--muted)}
-.onote{margin:0 14px 10px;background:color-mix(in srgb,var(--warn) 16%,var(--card2));color:var(--warn);border-radius:10px;padding:7px 10px;font-size:13.5px}
+.onote{margin:0 14px 10px;background:rgba(255,182,39,.16);color:var(--warn);border-radius:10px;padding:7px 10px;font-size:13.5px}
 .secs{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px}
 .sec{border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:6px 11px;font-size:13px;font-weight:600}
-.sec.done{background:color-mix(in srgb,var(--ok) 22%,var(--card2));border-color:var(--ok);color:var(--ok)}
+.sec.done{background:rgba(61,240,139,.22);border-color:var(--ok);color:var(--ok)}
 .done-b{border:0;background:var(--ok);color:#06160c;font-weight:800;font-size:17px;padding:14px;margin:0;border-top:1px solid var(--line)}
 .done-b:active{filter:brightness(.92)}
 .empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:12vh 20px}
+/* الطلب الملغي: بطاقة حمرة تبقى لحد ما الطباخ يضغط «شفته» */
+.card.canc{border-color:var(--late);border-top-color:var(--late);background:#2a0e0b;animation:cancPulse 1.2s ease-in-out 3}
+@keyframes cancPulse{50%{box-shadow:0 0 0 6px rgba(255,77,46,.45)}}
+.canc-h{background:var(--late);color:#fff;font-weight:800;font-size:21px;text-align:center;padding:10px 8px}
+.card.canc .it{text-decoration:line-through;opacity:.75}
+.canc-why{padding:0 14px 10px;color:#ffb4a6;font-size:14px}
+.ack-b{border:0;background:#fff;color:#8a1a0a;font-weight:800;font-size:17px;padding:14px;margin:0}
+/* الطلب المعدّل: شريط أزرق + شنو انضاف (أخضر) وشنو انشال (مشطوب) */
+.card.edited{border-color:#5aa9ff;border-top-color:#5aa9ff}
+.edit-h{display:flex;align-items:center;justify-content:space-between;background:#1d4f91;color:#fff;font-weight:800;font-size:16px;padding:8px 12px}
+.edit-h button{border:0;border-radius:10px;background:#fff;color:#1d4f91;font-weight:800;font-size:14px;padding:7px 12px;margin-right:8px}
+.ed{padding:8px 14px 2px;font-size:15.5px;line-height:1.6}
+.ed .add{color:var(--new);font-weight:800}
+.ed .rem{color:var(--late);text-decoration:line-through}
+.it.it-add{background:rgba(61,240,139,.13);border-radius:8px;padding-left:6px;padding-right:6px}
+.tbl{display:inline-block;min-width:24px;padding:0 7px;border-radius:7px;color:#fff;font-weight:800;text-align:center;margin-right:2px}
+/* مجموع الأصناف بكل الطلبات المفتوحة (حتى الطباخ يطبخهن سوة) */
+.tot{display:flex;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--card)}
+.tot>*{flex:none;margin-left:8px}
+.tot .tl{color:var(--muted);font-size:13.5px;align-self:center}
+.tot b{display:inline-block;border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:5px 12px;font-size:15px;font-weight:700}
+.tot b i{font-style:normal;font-family:var(--num);color:var(--new);margin-left:4px}
+/* تراجع عن «جاهز» */
+.undo{position:fixed;left:16px;bottom:16px;bottom:calc(16px + var(--sbF,0px));z-index:60;border:0;border-radius:14px;background:#fff;color:#111;font-weight:800;font-size:17px;padding:14px 18px;box-shadow:0 10px 30px rgba(0,0,0,.45)}
 .empty .i{font-size:72px;opacity:.5}
 .empty b{display:block;font-size:20px;margin-top:10px;color:var(--text)}
 
@@ -140,7 +164,7 @@ button{cursor:pointer}
 .rdy{padding:10px 16px;background:#0a0f14;border-bottom:1px solid var(--line)}
 .rdy .t{font-size:13px;color:var(--muted);margin-bottom:7px}
 .rdy .row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
-.rdy-b{flex:none;border:1px solid var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--text);border-radius:12px;padding:8px 12px;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:92px}
+.rdy-b{flex:none;border:1px solid var(--ok);background:rgba(61,240,139,.14);color:var(--text);border-radius:12px;padding:8px 12px;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:92px}
 .rdy-b b{font-family:var(--num);font-size:17px}
 .rdy-b em{font-style:normal;color:var(--ok);font-size:12px;font-weight:700}
 .cook{padding:10px 16px;background:#0d1219;border-bottom:1px solid var(--line)}
@@ -175,7 +199,7 @@ button{cursor:pointer}
 .pick-g button:active{transform:scale(.98)}
 .pick .none{color:var(--warn);max-width:460px;margin:0 auto;line-height:1.9}
 .pick .back{margin-top:22px;border:1px solid var(--line);background:var(--card2);border-radius:12px;padding:10px 20px;font-size:15px}
-.hint{grid-column:1/-1;margin:0 auto;max-width:520px;text-align:center;color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,var(--card2));border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.8}
+.hint{grid-column:1/-1;margin:0 auto;max-width:520px;text-align:center;color:var(--warn);background:rgba(255,182,39,.12);border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.8}
 /* تثبيت الشاشة */
 .inst{position:fixed;inset:calc(10px + env(safe-area-inset-top)) 10px auto 10px;z-index:150;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:12px;
   background:#0A100D;color:#FAF7F0;border:1px solid #2A3830;border-radius:20px;padding:12px 12px 12px 10px;box-shadow:0 18px 50px rgba(0,0,0,.45);animation:pop .3s ease}
@@ -209,8 +233,10 @@ button{cursor:pointer}
   <div class="flow" id="flow" hidden></div>
   <div class="cook" id="cook" hidden></div>
   <div class="rdy" id="rdy" hidden></div>
+  <div class="tot" id="tot" hidden></div>
   <div class="grid" id="grid"></div>
 </div>
+<button type="button" class="undo" id="undoB" hidden></button>
 
 <div class="menu" id="menu" hidden role="dialog" aria-label="الإعدادات">
   <div class="mt">⚙️ إعدادات المطبخ</div>
@@ -218,6 +244,7 @@ button{cursor:pointer}
   <button type="button" id="mMode" hidden></button>
   <button type="button" id="mInst" hidden>📲 تثبيت الشاشة على هذا الجهاز</button>
   <button type="button" id="mSnd"></button>
+  <button type="button" id="mTot"></button>
   <button type="button" id="fsBtn">⛶ ملء الشاشة</button>
   <button type="button" id="mReload">🔄 تحديث</button>
   <button type="button" id="mOut" class="warn">🔌 فصل هذه الشاشة</button>
@@ -296,7 +323,7 @@ button{cursor:pointer}
 
 <script src="vendor/qrcode.js"></script>
 <script type="module">
-import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from './staff.js';
+import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, updateDoc, arrayUnion, deleteField, collection, query, where, onSnapshot } from './staff.js';
 import { lanLink, score } from './lanlink.js?v=2';
 // الشاشة تنربط بالمطعم برمز (بدون إيميل ولا كلمة سر) — جلستها بتطبيق Firebase خاص بالشاشات
 const db = screenFb().db;
@@ -400,7 +427,7 @@ function start() {
     if (!s.exists() && s.metadata.fromCache) return;
     setFromFs = true;
     const d = s.exists() ? s.data() : {};
-    sections = (d.sections || []).filter((x) => x && x.name); secOnSet = !!d.kSecOn;
+    sections = (d.sections || []).filter((x) => x && x.name); secOnSet = !!d.kSecOn; kTimes(d);
     if (d.receiptTitle) baseName = d.receiptTitle;
     titleUi(); render();
     if (needPick() || !$('pick').hidden) showPick(!needPick());
@@ -424,7 +451,7 @@ function syncView() {
   // ماكو نت والكاش فارغ: الأقسام واسم المطعم من الكاشير
   const ls = lan.settings();
   if (ls && !setFromFs) {
-    sections = (ls.sections || []).filter((x) => x && x.name); secOnSet = !!ls.kSecOn;
+    sections = (ls.sections || []).filter((x) => x && x.name); secOnSet = !!ls.kSecOn; kTimes(ls);
     if (ls.receiptTitle) baseName = ls.receiptTitle;
     titleUi();
   }
@@ -435,6 +462,7 @@ function syncView() {
   ready = true;
   render();
   if (fresh && sound && !$('app').hidden) beep();
+  alerts();
 }
 // شارة صغيرة بالأعلى بس لما النت مقطوع — وإذا ما لگينا الكاشير نوضّح ليش
 let lanReady = false, lanSince = 0;
@@ -467,10 +495,90 @@ const cookList = () => SEC ? [] : orders.filter((o) => inKitchen(o) && cooking(o
 const readyWaiting = () => orders.filter((o) => (o.kitchen === 'ready' || o.status === 'ready') && !['delivered', 'cancelled', 'done'].includes(o.status) && !o.captainId && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < 20 * 60000)
   .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
 
+// ── أوقات التأخير: من إعدادات الكاشير (أصفر بعد كذا دقيقة، أحمر بعد كذا) ──
+let kWarn = 10, kLate = 20, totOn = true;
+try { totOn = localStorage.getItem('kds_tot') !== '0'; } catch (e) {}
+function kTimes(d) { const w = Math.round(+d.kWarn || 10), l = Math.round(+d.kLate || 20); kWarn = Math.max(1, Math.min(120, w)); kLate = Math.max(kWarn + 1, Math.min(240, l)); }
+// لون ثابت لكل طاولة (نفس الطاولة نفس اللون بكل الشاشات)
+const tblColor = (n) => { let h = 0; String(n).split('').forEach((c) => { h = (h * 31 + c.charCodeAt(0)) % 360; }); const k = parseInt(n, 10); return 'hsl(' + (isNaN(k) ? h : (k * 47) % 360) + ',62%,40%)'; };
+const typeLabel = (o) => { const t = getType(o); return t === 'salon' ? '🪑 ' + (o.tableNo ? 'طاولة <span class="tbl" style="background:' + tblColor(o.tableNo) + '">' + esc(o.tableNo) + '</span>' : 'صالة') : t === 'takeaway' ? '🥡 سفري' : '🏍️ دلفري'; };
+
+// ── الطلب الملغي والمعدّل: يبقى التنبيه لحد ما الطباخ يضغط «شفته» (كل شاشة بروحها، محفوظ بالجهاز) ──
+const ACK_K = 'kds_ack_v1';
+let ack = {};
+try { ack = JSON.parse(localStorage.getItem(ACK_K) || '{}') || {}; } catch (e) { ack = {}; }
+function ackSave() { const lim = Date.now() - 3 * 86400000; Object.keys(ack).forEach((k) => { if ((+ack[k] || 0) < lim && k.charAt(0) === 'c') delete ack[k]; }); try { localStorage.setItem(ACK_K, JSON.stringify(ack)); } catch (e) {} }
+const relevant = (list) => (list || []).filter((i) => i && (!SEC || !i.sec || i.sec === SEC));
+const editsOf = (o) => (o.kEdits || []).filter((e) => e && e.at > (+ack['e:' + o.id] || 0) && Date.now() - e.at < 6 * 3600000 && (relevant(e.add).length || relevant(e.rem).length));
+// انلغى وهو بالمطبخ (بعده ما صار جاهز) — خلال آخر 30 دقيقة
+const cancList = () => orders.filter((o) => o.status === 'cancelled' && o.kitchen === 'new' && inSec(o) && !ack['c:' + o.id] && Date.now() - (o.cancelledAt || o.createdAtMs || 0) < 30 * 60000)
+  .sort((a, b) => (b.cancelledAt || 0) - (a.cancelledAt || 0));
+const itLine = (i) => `<div class="it"><span class="q">${toA(i.qty || 1)}×</span><span class="nm">${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' <small class="sec">(' + esc(i.variant) + ')</small>' : ''}</span></div>`;
+function cancCard(o) {
+  const items = (o.items || []).filter((i) => !SEC || i.sec === SEC).map(itLine).join('');
+  return `<div class="card canc" data-id="${esc(o.id)}"><div class="canc-h">❌ ملغي — لا تحضّره</div><div class="ch"><div><div class="cnum">#${esc(kNum(o))}</div><div class="clbl">${typeLabel(o)}</div></div></div>
+    <div class="items">${items || '<div class="it">—</div>'}</div>${o.cancelReason ? `<div class="canc-why">السبب: ${esc(o.cancelReason)}</div>` : ''}
+    <button type="button" class="ack-b" data-ack-c="${esc(o.id)}">👌 شفته — شيله من الشاشة</button></div>`;
+}
+function editBanner(o, ed) {
+  let add = [], rem = [];
+  ed.forEach((e) => { add = add.concat(relevant(e.add)); rem = rem.concat(relevant(e.rem)); });
+  const ln = (a, c, s) => `<div class="${c}">${s} ${toA(a.qty || 1)}× ${esc(a.name)}${a.variant && a.variant !== 'وحدة' ? ' (' + esc(a.variant) + ')' : ''}</div>`;
+  return `<div class="edit-h"><span>✏️ انعدل الطلب</span><button type="button" data-ack-e="${esc(o.id)}|${ed[ed.length - 1].at}">👌 شفته</button></div>
+    <div class="ed">${add.map((a) => ln(a, 'add', '+ انضاف')).join('')}${rem.map((a) => ln(a, 'rem', '− انشال')).join('')}</div>`;
+}
+// صوت مختلف: الملغي نازل وطويل ويتكرر كل 20 ثانية لحد «شفته»، والمعدّل نغمتين
+const alerted = new Set();
+function tone(kind) {
+  if (!sound || $('app').hidden) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const seq = kind === 'cancel' ? [[0, 740], [0.28, 520], [0.56, 370], [0.9, 740], [1.18, 520], [1.46, 370]] : [[0, 880], [0.18, 1175], [0.5, 880], [0.68, 1175]];
+    seq.forEach(([d, f]) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.type = kind === 'cancel' ? 'sawtooth' : 'square'; o.frequency.value = f;
+      g.gain.setValueAtTime(.0001, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.3, ctx.currentTime + d + .03); g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d + .24); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .26); });
+  } catch (e) {}
+}
+function alerts() {
+  let c = false, e = false;
+  cancList().forEach((o) => { if (!alerted.has('c:' + o.id)) { alerted.add('c:' + o.id); c = true; } });
+  newList().forEach((o) => { const ed = editsOf(o); if (ed.length) { const k = 'e:' + o.id + ':' + ed[ed.length - 1].at; if (!alerted.has(k)) { alerted.add(k); e = true; } } });
+  if (c) tone('cancel'); else if (e) tone('edit');
+}
+setInterval(() => { if (cancList().length) tone('cancel'); }, 20000);
+
+// ── تراجع: «جاهز» انضغط بالغلط ← زر «رجّع» دقيقة وحدة ──
+let undo = null;
+function undoPrev(o, prevKSec) {
+  const p = { kitchen: o.kitchen || 'new', kitchenReadyAt: o.kitchenReadyAt || deleteField() };
+  const ks = prevKSec || o.kSec; if (ks) p.kSec = ks;
+  if (o.status === 'preparing') { p.status = 'preparing'; p.readyAt = o.readyAt || deleteField(); }
+  return p;
+}
+function undoUi() { const b = $('undoB'); b.hidden = !undo; if (undo) b.textContent = '↩️ رجّع #' + undo.num + ' (انضغط «جاهز» بالغلط)'; }
+function setUndo(o, prev) { undo = { id: o.id, num: kNum(o), prev }; undoUi(); clearTimeout(setUndo.t); setUndo.t = setTimeout(() => { undo = null; undoUi(); }, 60000); }
+$('undoB').onclick = async () => {
+  const u = undo; if (!u) return; undo = null; undoUi();
+  const o = orders.find((x) => x.id === u.id);
+  if (!o || ['delivered', 'done', 'cancelled'].includes(o.status) || o.servedAtMs || o.captainId) { toast('⚠️ ما يرجع — الطلب انسلّم أو انلغى'); return; }
+  try { await updateDoc(doc(db, 'orders', u.id), u.prev); toast('↩️ #' + u.num + ' رجع للشاشة'); }
+  catch (e) { toast('❌ تعذّر الرجوع — ' + (e.code || '')); }
+};
+
+// مجموع الأصناف بالطلبات اللي على الشاشة
+function totals(list) {
+  const m = new Map();
+  list.forEach((o) => (o.items || []).filter((i) => !SEC || i.sec === SEC).forEach((i) => { const k = i.name + (i.variant && i.variant !== 'وحدة' ? ' (' + i.variant + ')' : ''); m.set(k, (m.get(k) || 0) + (+i.qty || 1)); }));
+  return [...m.entries()].sort((a, b) => b[1] - a[1]);
+}
+
 function render() {
   if ($('app').hidden) return;
   const list = newList();
   const p = $('pill'); p.textContent = toA(list.length); p.classList.toggle('zero', !list.length);
+  const tt = totOn && list.length > 1 ? totals(list) : [], tb = $('tot');
+  tb.hidden = !tt.length;
+  const th = tt.length ? '<span class="tl">🧮 المجموع:</span>' + tt.map(([k, n]) => '<b><i>' + toA(n) + '×</i>' + esc(k) + '</b>').join('') : '';
+  if (tb.innerHTML !== th) tb.innerHTML = th;
   const assemble = !SEC && kitchenOn();   // المجهز يستلم من المطبخ
   $('sub').textContent = list.length ? toA(list.length) + (assemble ? ' طلب جاهز للتجهيز' : ' طلب قيد التحضير') : 'ماكو طلبات هسه';
   // شرح التسلسل بسطر واحد حتى محد يتيه بين الشاشتين
@@ -491,17 +599,18 @@ function render() {
 
   // القسم انمسح من الإعدادات، أو تقسيم الطلب على الأقسام مطفّى بالكاشير: نوضّح بدل شاشة فارغة
   const hint = !SEC ? '' : !secOnSet ? '⚠️ «تقسيم الطلب على أقسام المطبخ» مطفّى بالكاشير — شغّله من الكاشير ← الإعدادات ← أقسام المطبخ حتى توصل طلبات القسم' : '';
-  const gridHtml = (hint ? `<div class="hint">${hint}</div>` : '') + (list.length ? list.map((o) => {
+  const gridHtml = (hint ? `<div class="hint">${hint}</div>` : '') + cancList().map(cancCard).join('') + (list.length ? list.map((o) => {
     const m = Math.floor((Date.now() - (o.createdAtMs || Date.now())) / 60000), t = getType(o);
-    const cls = m >= 20 ? 'late' : m >= 10 ? 'warn' : '';
-    const label = t === 'salon' ? '🪑 ' + (o.tableNo ? 'طاولة ' + esc(o.tableNo) : 'صالة') : t === 'takeaway' ? '🥡 سفري' : '🏍️ دلفري';
+    const cls = m >= kLate ? 'late' : m >= kWarn ? 'warn' : '';
+    const ed = editsOf(o), addSet = new Set([].concat.apply([], ed.map((e) => relevant(e.add))).map((a) => a.name + '|' + (a.variant || ''))), edH = ed.length ? editBanner(o, ed) : '';
+    const label = typeLabel(o);
     // المجهز: الأقسام للعلم (المطبخ هو اللي يعلّمها) — وإذا شاشة المطبخ مطفية المجهز يعلّمها بنفسه
     const secChips = !SEC && o.kSec ? `<div class="secs">${Object.entries(o.kSec).map(([sid, v]) => { const sc = secById(sid); return `<button type="button" class="sec ${v.readyAt ? 'done' : ''}"${assemble ? ' disabled' : ` data-sec="${esc(o.id)}|${esc(sid)}"`}>${v.readyAt ? '✅' : '⏳'} ${esc(sc.emoji || '')} ${esc(sc.name)}</button>`; }).join('')}</div>` : '';
-    const items = (o.items || []).filter((i) => !SEC || i.sec === SEC).map((i) => `<div class="it"><span class="q">${toA(i.qty || 1)}×</span><span class="nm">${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' <small class="sec">(' + esc(i.variant) + ')</small>' : ''}${!SEC && i.sec && sections.length ? ' <small class="sec">' + esc((secById(i.sec).emoji) || '') + '</small>' : ''}${i.note ? `<span class="note">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('');
+    const items = (o.items || []).filter((i) => !SEC || i.sec === SEC).map((i) => `<div class="it${addSet.has(i.name + '|' + (i.variant || '')) ? ' it-add' : ''}"><span class="q">${toA(i.qty || 1)}×</span><span class="nm">${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' <small class="sec">(' + esc(i.variant) + ')</small>' : ''}${!SEC && i.sec && sections.length ? ' <small class="sec">' + esc((secById(i.sec).emoji) || '') + '</small>' : ''}${i.note ? `<span class="note">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('');
     // بقسم: «جاهز» يعلّم هذا القسم بس، ولما تخلص كل الأقسام الطلب يصير جاهز وحده
     const btn = SEC && o.kSec ? `<button class="done-b" data-sec="${esc(o.id)}|${esc(SEC)}">✅ ${esc(secById(SEC).name)} جاهز</button>`
       : `<button class="done-b" data-done="${esc(o.id)}">${t === 'delivery' ? '✅ تم التجهيز — يرجع لكاشير الدلفري' : '✅ تم التجهيز — جاهز للزبون'}</button>`;
-    return `<div class="card ${cls}" data-id="${esc(o.id)}"><div class="ch"><div><div class="cnum">#${esc(kNum(o))}</div><div class="clbl">${label}${o.pager ? ' • 📟 ' + esc(o.pager) : ''} • ${esc(t12(o.createdAt))}</div></div><div class="ctime"><span class="m">${toA(m)}</span> د</div></div>
+    return `<div class="card ${cls}${ed.length ? ' edited' : ''}" data-id="${esc(o.id)}">${edH}<div class="ch"><div><div class="cnum">#${esc(kNum(o))}</div><div class="clbl">${label}${o.pager ? ' • 📟 ' + esc(o.pager) : ''} • ${esc(t12(o.createdAt))}</div></div><div class="ctime"><span class="m">${toA(m)}</span> د</div></div>
       <div class="items">${items || '<div class="it">—</div>'}</div>
       ${o.note ? `<div class="onote">📝 ${esc(o.note)}</div>` : ''}${secChips}
       ${btn}</div>`;
@@ -528,14 +637,17 @@ window.addEventListener('resize', () => { lastSig = ''; render(); });
 
 // ضغط «جاهز» أو شريحة قسم
 $('grid').addEventListener('click', (e) => {
+  const ac = e.target.closest('[data-ack-c]'); if (ac) { ack['c:' + ac.dataset.ackC] = Date.now(); ackSave(); render(); return; }
+  const ae = e.target.closest('[data-ack-e]'); if (ae) { const p = ae.dataset.ackE.split('|'); ack['e:' + p[0]] = +p[1]; ackSave(); render(); return; }
   const d = e.target.closest('[data-done]'); if (d) return done(d.dataset.done);
   const s = e.target.closest('[data-sec]'); if (s) { const [id, sid] = s.dataset.sec.split('|'); secDone(id, sid); }
 });
 
 // الضغطة تروح للكاشير على الواي فاي إذا ماكو نت، أو الطلب لسه ما وصل السيرفر (انسجّل بدون نت والكاشير يرفعه هسه)
 const viaLan = (id) => lan.has(id) && (!fsLive || !fsOrders.some((o) => o.id === id));
-async function done(id) {
+async function done(id, prevKSec) {
   const o = orders.find((x) => x.id === id); if (!o || pendOn('d:' + id)) return;
+  const prev = undoPrev(o, prevKSec);
   pend.set('d:' + id, Date.now() + 20000); render();
   const back = (msg) => { pend.delete('d:' + id); render(); toast(msg); };
   if (viaLan(id)) { const ok = await lan.act(id, 'ready', { at: Date.now() }); if (ok) toast('✅ #' + kNum(o) + ' جاهز'); else back('❌ تعذّر — تأكد إن الكاشير شغّال'); return; }
@@ -544,7 +656,7 @@ async function done(id) {
   // طلب أونلاين قيد التحضير ← نعلن «جاهز» حتى يوصل للزبون، ويرجع للكاشير للتسليم/الكابتن (نفس القديم)
   if (o.status === 'preparing') { fields.status = 'ready'; fields.readyAt = Date.now(); fields.timeline = arrayUnion({ status: 'ready', time: nowT(), text: 'الطلب جاهز للاستلام' }); }
   toast('✅ #' + kNum(o) + ' جاهز');
-  try { await updateDoc(doc(db, 'orders', id), fields); }
+  try { await updateDoc(doc(db, 'orders', id), fields); setUndo(o, prev); }
   catch (err) { back('❌ تعذّر التحديث — #' + kNum(o) + ' رجع للقائمة'); }
 }
 async function secDone(id, sid) {
@@ -559,11 +671,12 @@ async function secDone(id, sid) {
     toast(!ok ? '❌ تعذّر — تأكد إن الكاشير شغّال' : last && prepOn() ? '✅ خلص المطبخ — #' + kNum(o) + ' راح للمجهز' : (on ? '✅ ' : '↩️ ') + secById(sid).name);
     return;
   }
-  const ks = { ...o.kSec, [sid]: { ...o.kSec[sid], readyAt: o.kSec[sid].readyAt ? 0 : Date.now() } };
+  const ks = { ...o.kSec, [sid]: { ...o.kSec[sid], readyAt: o.kSec[sid].readyAt ? 0 : Date.now() } }, origKSec = o.kSec;
   const all = Object.values(ks).every((v) => v.readyAt);
-  if (all && !prepOn()) { o.kSec = ks; if (opt) pend.delete(pk); return done(id); }   // ماكو مجهز ← خلص المطبخ = جاهز
+  if (all && !prepOn()) { o.kSec = ks; if (opt) pend.delete(pk); return done(id, origKSec); }   // ماكو مجهز ← خلص المطبخ = جاهز
   try {
     await updateDoc(doc(db, 'orders', id), all ? { kSec: ks, kitchenSecDoneAt: Date.now() } : { kSec: ks });
+    if (opt) setUndo(o, all ? { kSec: origKSec, kitchenSecDoneAt: o.kitchenSecDoneAt || deleteField() } : { kSec: origKSec });
     toast(all ? '✅ خلص المطبخ — #' + kNum(o) + ' راح للمجهز' : (ks[sid].readyAt ? '✅ ' : '↩️ ') + secById(sid).name);
   }
   catch (err) { back(); toast('❌ تعذّر التحديث'); }
@@ -579,7 +692,8 @@ function beep() {
 
 // ── القائمة ⚙️ ──
 const menu = $('menu');
-function sndUi() { $('mSnd').textContent = sound ? '🔔 الصوت: يعمل' : '🔕 الصوت: مطفأ'; }
+function sndUi() { $('mSnd').textContent = sound ? '🔔 الصوت: يعمل' : '🔕 الصوت: مطفأ'; $('mTot').textContent = totOn ? '🧮 مجموع الأصناف: يبين' : '🧮 مجموع الأصناف: مخفي'; }
+$('mTot').onclick = () => { totOn = !totOn; try { localStorage.setItem('kds_tot', totOn ? '1' : '0'); } catch (e) {} sndUi(); render(); };
 function secUi() { $('mSec').hidden = !SECMODE; $('mSec').textContent = '🔄 تغيير القسم' + (SEC ? ' (' + secLabel() + ')' : ''); }
 const IN_APP = /SoraKitchenApp/.test(navigator.userAgent);
 // تطبيق المطبخ وتطبيق المجهز (منفصلين): كل واحد مقفول على شاشته — ماكو تحويل

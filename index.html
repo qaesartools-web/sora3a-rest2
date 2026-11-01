@@ -2591,7 +2591,20 @@ window.edSave=async()=>{
   const o=s.o,id=s.id;
   const merged={};s.work.forEach(i=>{const k=i.name+'|'+i.variant;if(merged[k])merged[k].qty+=i.qty;else merged[k]={...i};});
   const newItems=Object.values(merged);
+  // كل صنف ياخذ قسمه بالمطبخ (حتى الصنف الجديد)
+  if(window.kSecOf)newItems.forEach(i=>{if(!i.sec){const sc=window.kSecOf(i.name);if(sc)i.sec=sc;}});
   const upd={items:newItems,notes:notesOf(newItems),value:v.newValue,modifiedAt:Date.now()};
+  // شاشة المطبخ: شنو انضاف وشنو انشال (تبين للطباخ لحد ما يضغط «شفته»)
+  const edLine=a=>({name:a.name,variant:a.variant||'',qty:a.qty,sec:(window.kSecOf&&window.kSecOf(a.name))||''});
+  const kEdit={at:Date.now(),add:v.added.map(edLine),rem:v.removed.map(edLine)};
+  if(o.kitchen){
+    upd.kEdits=[...(o.kEdits||[]),kEdit].slice(-10);
+    // الصنف المضاف لازم ينطبخ: الطلب يرجع للمطبخ إذا بعده ما انسلّم، وقسمه يرجع «قيد التحضير»
+    if(kEdit.add.length&&!['delivered','done','cancelled'].includes(o.status)&&!o.servedAtMs){
+      upd.kitchen='new';
+      if(o.kSec){const ks=JSON.parse(JSON.stringify(o.kSec));kEdit.add.forEach(a=>{if(!a.sec)return;const x=ks[a.sec]||(ks[a.sec]={n:0,readyAt:0});x.n=(+x.n||0)+(+a.qty||1);x.readyAt=0;});upd.kSec=ks;}
+    }
+  }
   if(o.captainId&&getOrderType(o)==='delivery')upd.commission=Math.round(v.newValue*.1);
   const txt='تعديل الطلب'+(v.added.length?' | أُضيف: '+v.added.map(a=>a.name+'×'+a.qty).join('، '):'')+(v.removed.length?' | نُقص: '+v.removed.map(a=>a.name+'×'+a.qty).join('، '):'');
   try{await orderUpdate(id,upd,txt);}catch(e){toast('❌ '+e.message);return;}
