@@ -264,6 +264,7 @@ function start() {
 
 function renderHead() {
   $('rName').textContent = M.name || 'المنيو';
+  if (window.SB) SB.welcome({ app: 'menu', name: '', rest: M.name || '', role: 'أهلاً وسهلاً — اطلب من المنيو', ms: 1500 });
   if (window.setMenuApp) window.setMenuApp(M.name || '');
   $('rSub').innerHTML = [M.area ? '📍 ' + esc(M.area) : '', M.phone ? `<a href="tel:${esc(digits(M.phone).replace(/[^\d+]/g, ''))}" dir="ltr">📞 ${esc(M.phone)}</a>` : ''].filter(Boolean).join('');
   const m = modes();

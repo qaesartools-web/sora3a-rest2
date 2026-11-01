@@ -48,12 +48,37 @@
     setTimeout(done, 3000);
   }
 
+  // شاشة الترحيب: تطلع عند كل دخول (بعد تسجيل الدخول أو ربط الشاشة) — لون التطبيق، تحية حسب الوقت، الاسم والمطعم.
+  // تختفي وحدها بعد ثانيتين تقريباً أو بضغطة. o: { app, name, rest, role, ms }
+  var curApp = '';
+  function welcome(o) {
+    o = o || {};
+    var app = o.app || curApp, a = APPS[app], B = document.body;
+    if (!a || !B || welcome.done || (window.SB_NO_WELCOME && !window.SB_WELCOME_TEST)) return;
+    welcome.done = true;
+    var h = new Date().getHours(), greet = h >= 5 && h < 12 ? 'صباح الخير' : h >= 12 && h < 17 ? 'هلا بيك' : 'مساء الخير';
+    var w = el('sb-welcome', '<div class="sb-w-in"><span class="sb-w-m">' + mark('currentColor') + '</span>' +
+      '<div class="sb-w-g">' + greet + (o.name ? '، <bdi>' + esc(o.name) + '</bdi>' : '') + ' 👋</div>' +
+      (o.rest ? '<div class="sb-w-r"><bdi>' + esc(o.rest) + '</bdi></div>' : '') +
+      '<div class="sb-w-a">' + esc(o.role || a[0]) + '</div></div>' +
+      '<div class="sb-w-ft"><b class="sb-wm">سرعة</b> نتمنالك يوم موفق</div>');
+    w.setAttribute('role', 'status');
+    w.style.setProperty('--sbG1', a[1]); w.style.setProperty('--sbG2', a[2]); w.style.setProperty('--sbOn', a[3] || '#fff');
+    var gone = false, hide = function () { if (gone) return; gone = true; w.classList.add('sb-gone'); setTimeout(function () { if (w.parentNode) w.parentNode.removeChild(w); }, 450); };
+    w.addEventListener('click', hide);
+    document.addEventListener('keydown', function k() { document.removeEventListener('keydown', k); hide(); });
+    // شاشة الفتح تختفي حتى ما يتداخلن
+    var sp = document.querySelectorAll('.sb-splash'); for (var i = 0; i < sp.length; i++) sp[i].style.visibility = 'hidden';
+    B.appendChild(w);
+    setTimeout(hide, o.ms || 1900);
+  }
+
   // opts: { bar:false } بدون شريط (منيو المطعم)، { foot:false } بدون سطر تحت (الصفحة تحط الحقوق بمكانها بـ SB.fill)، { splash:false }
   function mount(app, o) {
     o = o || {};
     var a = APPS[app], H = document.documentElement, B = document.body;
     if (!a || !B || H.classList.contains('sb-on')) return;
-    H.classList.add('sb-on', 'sb-' + app);
+    H.classList.add('sb-on', 'sb-' + app); curApp = app;
     if (o.bar === false) H.classList.add('sb-nobar');
     if (o.foot === false) H.classList.add('sb-nofoot');
     H.style.setProperty('--sbG1', a[1]); H.style.setProperty('--sbG2', a[2]); H.style.setProperty('--sbOn', a[3] || '#fff');
@@ -103,7 +128,7 @@
   }
 
   window.SB = {
-    mount: mount, fill: fill, receipt: receipt, sync: sync, mark: mark,
+    mount: mount, fill: fill, receipt: receipt, sync: sync, mark: mark, welcome: welcome,
     get phone() { return cur.phone; }, get email() { return cur.email; }, apps: APPS
   };
 })();

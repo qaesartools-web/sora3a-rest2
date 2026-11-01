@@ -3130,6 +3130,8 @@ function enterAppCore(){
   document.getElementById('restName').textContent=restData.name||'المطعم';
   loadAcc();renderMenu();renderCart();startListeners();initMenuManage();updateAccBadge();shrinkOldImages();renderHold();
   showThemeSwitcher();
+  // شاشة الترحيب عند كل دخول
+  if (window.SB) SB.welcome({ app: 'cashier', name: (window.posUser && window.posUser.name) || '', rest: restData.name || '', role: window.posUser && window.posUser.role === 'owner' ? 'الكاشير — صاحب المطعم' : 'الكاشير' });
 }
   window.enterApp = function () {
     disc = { type: 'amt', value: 0, reason: '' }; prodQuery = ''; shift = null; kdsSeen.clear(); kdsReady = false;

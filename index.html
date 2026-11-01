@@ -2601,7 +2601,7 @@ window.edSave=async()=>{
     upd.kEdits=[...(o.kEdits||[]),kEdit].slice(-10);
     // الصنف المضاف لازم ينطبخ: الطلب يرجع للمطبخ إذا بعده ما انسلّم، وقسمه يرجع «قيد التحضير»
     if(kEdit.add.length&&!['delivered','done','cancelled'].includes(o.status)&&!o.servedAtMs){
-      upd.kitchen='new';
+      upd.kitchen='new';if(o.status==='ready')upd.status='preparing';
       if(o.kSec){const ks=JSON.parse(JSON.stringify(o.kSec));kEdit.add.forEach(a=>{if(!a.sec)return;const x=ks[a.sec]||(ks[a.sec]={n:0,readyAt:0});x.n=(+x.n||0)+(+a.qty||1);x.readyAt=0;});upd.kSec=ks;}
     }
   }
