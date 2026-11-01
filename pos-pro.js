@@ -3131,6 +3131,7 @@ function enterAppCore(){
   loadAcc();renderMenu();renderCart();startListeners();initMenuManage();updateAccBadge();shrinkOldImages();renderHold();
   showThemeSwitcher();
   // شاشة الترحيب عند كل دخول
+  if (window.SB && window._fb) SB.health((hid, hd) => window._fb.setDoc(window._fb.doc(window._fb.db, 'devHealth', hid), hd), { rid: restData.id || '', rest: restData.name || '', who: (window.posUser && window.posUser.name) || '' });   // صحة الجهاز
   if (window.SB) SB.welcome({ app: 'cashier', name: (window.posUser && window.posUser.name) || '', rest: restData.name || '', role: window.posUser && window.posUser.role === 'owner' ? 'الكاشير — صاحب المطعم' : 'الكاشير' });
 }
   window.enterApp = function () {

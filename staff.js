@@ -18,7 +18,7 @@ export const app = initializeApp(CFG, "pos-v2");
 // App Check (reCAPTCHA Enterprise / Fraud Defense): السيرفر يعرف إن الطلب جاي من تطبيقاتنا الحقيقية (بدون ما يحس المستخدم) — على الموقع بس، مو بالتجارب المحلية
 const APPCHECK_KEY = '6LdWa_0tAAAAAEWXuLi8yrdnPjQmx-r-ayyoZ07h';
 const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; if (!document.getElementById('acHide')) document.head.insertAdjacentHTML('beforeend', '<style id="acHide">.grecaptcha-badge{visibility:hidden}</style>');
-  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true })).catch(() => {}); };
+  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => { const ac = m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); m.getToken(ac).then(() => { window.__acState = window.__acState || 'ok'; }, (e) => { window.__acState = 'err:' + String((e && (e.code || e.message)) || e).slice(0, 80); }); }).catch(() => {}); };
 appCheck(app);
 export const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
 // كاش محلي دائم: الشاشة تفتح بآخر بياناتها حتى لو انقطع النت (وتكمل ويا الكاشير على نفس الواي فاي — lanlink.js)
@@ -148,6 +148,7 @@ export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
       brandSync(db);
       watchClock();
       if (window.SB) SB.welcome({ name: d.name || '', rest: (rest && rest.name) || '' });   // شاشة الترحيب
+      if (window.SB) SB.health((hid, hd) => setDoc(doc(db, 'devHealth', hid), hd), { rid, rest: (rest && rest.name) || '', who: d.name || '' });   // صحة الجهاز
       onIn({ uid: user.uid, role: d.role, name: d.name || '', rid, rest });
     } catch (e) {
       if (e.code === 'permission-denied') deny('⛔ الحساب موقوف أو خارج وقت الدوام', true);
@@ -266,6 +267,7 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
       brandSync(F.db);
       watchClock();
       if (window.SB) SB.welcome({ name: kind === 'waiter' ? (d.name || '') : '', rest: (r.exists() && r.data().name) || '', role: kind === 'waiter' ? '' : (d.name || '') });   // شاشة الترحيب
+      if (window.SB) SB.health((hid, hd) => setDoc(doc(F.db, 'devHealth', hid), hd), { rid: d.restaurantId, rest: (r.exists() && r.data().name) || '', who: d.name || '' });   // صحة الجهاز
       onIn({ uid: user.uid, rid: d.restaurantId, rest: r.exists() ? r.data() : {}, screen: d });
     } catch (e) {
       if (user !== cur) return;

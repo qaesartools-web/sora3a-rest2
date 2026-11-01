@@ -127,8 +127,34 @@
     }).catch(function () {});
   }
 
+  // ── صحة الجهاز (مرة كل 12 ساعة): فرق ساعة الجهاز، عمر المتصفح، ونتيجة فحص الحماية — تنحفظ بـ devHealth/{الجهاز}
+  //    حتى برج سرعة يعرف يا جهاز يسبب رفض الطلبات (ساعة غلط أو متصفح قديم) قبل تفعيل الرفض. write(id, data) من التطبيق
+  var devId = function () { try { var k = localStorage.getItem('sb_dev'); if (!k) { k = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('sb_dev', k); } return k; } catch (e) { return ''; } };
+  var browserOf = function (ua) { var m = /(Edg|OPR|SamsungBrowser|Chrome|CriOS|Firefox|FxiOS|Version)\/(\d+)/.exec(ua) || []; var n = { Edg: 'Edge', OPR: 'Opera', SamsungBrowser: 'Samsung', CriOS: 'Chrome', FxiOS: 'Firefox', Version: 'Safari' }[m[1]] || m[1] || '?'; return (n + ' ' + (m[2] || '')).trim() + (/; wv\)/.test(ua) ? ' (تطبيق)' : ''); };
+  function health(write, info) {
+    info = info || {};
+    var id = devId(); if (!id || typeof write !== 'function') return;
+    try { if (!window.SB_HEALTH_TEST && Date.now() - (+localStorage.getItem('sb_health_at') || 0) < 12 * 3600000) return; } catch (e) {}
+    var t0 = Date.now();
+    var go = function (skew) {
+      var tries = 0;
+      (function wait() {   // ننتظر نتيجة فحص الحماية شوية (تجي من appCheck بالصفحة)
+        if (!window.__acState && /\.github\.io$/.test(location.hostname) && tries++ < 16) { setTimeout(wait, 500); return; }
+        var ua = String(navigator.userAgent || '');
+        var d = { app: curApp || '', page: (location.pathname.split('/').pop() || 'index.html').slice(0, 40), ua: ua.slice(0, 200), browser: browserOf(ua).slice(0, 40),
+          skewSec: skew == null ? null : skew, ac: String(window.__acState || (/\.github\.io$/.test(location.hostname) ? 'pending' : 'off')).slice(0, 100),
+          rid: String(info.rid || '').slice(0, 60), rest: String(info.rest || '').slice(0, 80), who: String(info.who || '').slice(0, 60), atMs: Date.now(), v: 1 };
+        Promise.resolve().then(function () { return write(id, d); }).then(function () { try { localStorage.setItem('sb_health_at', String(Date.now())); } catch (e) {} }).catch(function () {});
+      })();
+    };
+    fetch('brand.css', { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+      var t1 = Date.now(), srv = Date.parse(r.headers.get('date') || '');
+      go(srv ? Math.round(((t0 + t1) / 2 - srv) / 1000) : null);   // بالثواني: موجب = الجهاز مقدّم
+    }).catch(function () { go(null); });
+  }
+
   window.SB = {
-    mount: mount, fill: fill, receipt: receipt, sync: sync, mark: mark, welcome: welcome,
+    mount: mount, fill: fill, receipt: receipt, sync: sync, mark: mark, welcome: welcome, health: health,
     get phone() { return cur.phone; }, get email() { return cur.email; }, apps: APPS
   };
 })();
