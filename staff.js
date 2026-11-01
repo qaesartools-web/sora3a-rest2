@@ -28,6 +28,8 @@ export const logout = () => signOut(auth);
 
 export const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // يوم الطلب بتوقيت بغداد (نفس حقل day بطلبات الكاشير)
+// رقمنا وإيميلنا من البرج (config/brand، يقراه أي أحد) لشريط الهوية وسطر الحقوق — مرة كل ٦ ساعات بالأكثر (brand.js)
+const brandSync = (dbx) => { if (window.SB) window.SB.sync(async () => { const s = await getDoc(doc(dbx, 'config', 'brand')); return s.exists() ? s.data() : null; }); };
 export const bagDay = (ms) => new Date((ms == null ? Date.now() : ms) + 3 * 3600000).toISOString().slice(0, 10);
 
 const ERR = { 'auth/invalid-credential': 'الإيميل أو الرمز غلط', 'auth/wrong-password': 'الإيميل أو الرمز غلط', 'auth/user-not-found': 'الإيميل أو الرمز غلط',
@@ -122,6 +124,7 @@ export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
       }
       tries = 0;
       el.hidden = true; el.innerHTML = '';
+      brandSync(db);
       onIn({ uid: user.uid, role: d.role, name: d.name || '', rid, rest });
     } catch (e) {
       if (e.code === 'permission-denied') deny('⛔ الحساب موقوف أو خارج وقت الدوام', true);
@@ -213,6 +216,7 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
       const r = await getDoc(doc(F.db, 'restaurants', d.restaurantId));
       if (user !== cur || inUid) return;
       inUid = user.uid; el.hidden = true; el.innerHTML = '';
+      brandSync(F.db);
       onIn({ uid: user.uid, rid: d.restaurantId, rest: r.exists() ? r.data() : {}, screen: d });
     } catch (e) {
       if (user !== cur) return;
