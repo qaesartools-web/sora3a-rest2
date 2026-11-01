@@ -1,10 +1,16 @@
 /* هوية سرعة الموحدة («الشريط») — نفس الملف بكل مستودع. يشتغل ويا brand.js */
 /* --sbB حجم الشريط نفسه، و --sbH مكانه فوق (ويا حافة التلفون العلوية) — التطبيقات تستعمل --sbH و --sbF */
-html.sb-on{--sbB:46px;--sbF:28px;--sbH:calc(var(--sbB) + env(safe-area-inset-top,0px))}
+/* ⚠️ تلفزيونات قديمة (متصفح قديم): ممنوع clamp/min/max/env/inset/gap داخل المتغيرات — إذا المتصفح ما يفهمها تخرب الحجوم كلها.
+   نستعمل أرقام عادية، وبعدين @supports و @media للأحدث */
+html.sb-on{--sbB:46px;--sbF:28px;--sbH:var(--sbB)}
+@supports (padding-top:env(safe-area-inset-top)){html.sb-on{--sbH:calc(var(--sbB) + env(safe-area-inset-top,0px))}}
+/* الشاشات الكبيرة (تلفزيون/تابلت): الشريط يكبر ويا طول الشاشة */
+html.sb-screen,html.sb-kitchen,html.sb-prep{--sbB:44px;--sbF:26px}
+@media (min-height:800px){html.sb-screen,html.sb-kitchen,html.sb-prep{--sbB:50px;--sbF:30px}}
+@media (min-height:1000px){html.sb-screen,html.sb-kitchen,html.sb-prep{--sbB:60px;--sbF:36px}}
+@media (min-height:1300px){html.sb-screen,html.sb-kitchen,html.sb-prep{--sbB:72px;--sbF:44px}}
 html.sb-on.sb-nobar{--sbH:0px}
 html.sb-on.sb-nofoot{--sbF:0px}
-/* الشاشات الكبيرة (تلفزيون/تابلت): الشريط يكبر ويا الشاشة */
-html.sb-screen,html.sb-kitchen,html.sb-prep{--sbB:clamp(44px,5.6vh,72px);--sbF:clamp(26px,3.4vh,44px)}
 /* كل تطبيق يحجز مكان الشريطين بنفسه: الصفحات بطول الشاشة تنقص var(--sbH) و var(--sbF) من طولها،
    والصفحات اللي تنزل تزيد var(--sbF) على المسافة اللي تحت، وأشرطتها الثابتة تحت تصعد بقدره */
 html.sb-on body{box-sizing:border-box}
@@ -13,9 +19,11 @@ html.sb-on body{box-sizing:border-box}
 .sb-bar *,.sb-foot *,.sb-splash *,.sb-band *,.sb-inline *{box-sizing:border-box}
 .sb-wm{font-family:'Reem Kufi','IBM Plex Sans Arabic',Tahoma,sans-serif;font-weight:700;line-height:1.15}
 
-.sb-bar{position:sticky;top:0;z-index:45;box-sizing:border-box;height:var(--sbH);display:flex;align-items:center;gap:calc(var(--sbB)*.24);padding:env(safe-area-inset-top,0px) max(18px,env(safe-area-inset-right,0px)) 0 max(18px,env(safe-area-inset-left,0px));
+.sb-bar{position:relative;position:sticky;top:0;z-index:45;box-sizing:border-box;height:var(--sbH);overflow:hidden;display:flex;align-items:center;padding:0 18px;padding:env(safe-area-inset-top,0px) max(18px,env(safe-area-inset-right,0px)) 0 max(18px,env(safe-area-inset-left,0px));
   background:linear-gradient(270deg,var(--sbG1),var(--sbG2));color:var(--sbOn);font-size:calc(var(--sbB)*.33);user-select:none}
-.sb-bar .sb-m{width:calc(var(--sbB)*.64);height:calc(var(--sbB)*.64);flex:none;display:block}
+.sb-bar>*+*{margin-right:calc(var(--sbB)*.24)}
+.sb-bar .sb-m{width:calc(var(--sbB)*.64);height:calc(var(--sbB)*.64);max-height:100%;flex:none;display:block}
+.sb-bar .sb-m svg,.sb-band .sb-m svg,.sb-sp-m svg,.sb-tile svg{max-width:100%;max-height:100%}
 .sb-bar .sb-m svg{width:100%;height:100%;display:block}
 .sb-bar .sb-wm{font-size:calc(var(--sbB)*.46);color:var(--sbOn)}
 .sb-bar .sb-sep{width:1.5px;height:calc(var(--sbB)*.44);background:currentColor;opacity:.4;flex:none}
@@ -24,37 +32,43 @@ html.sb-on body{box-sizing:border-box}
 
 .sb-tile{display:inline-flex;align-items:center;justify-content:center;flex:none;width:1.35em;height:1.35em;border-radius:28%;background:linear-gradient(135deg,var(--sbG1,#2BC46A),var(--sbG2,#0F7A3D));color:#fff}
 .sb-tile svg{width:80%;height:80%;display:block}
-.sb-c{display:inline-flex;align-items:center;gap:.55em;white-space:nowrap;flex-wrap:wrap;justify-content:center}
+.sb-c{display:inline-flex;align-items:center;white-space:nowrap;flex-wrap:wrap;justify-content:center}
+.sb-c>*+*{margin-right:.55em}
 .sb-c b{font-weight:700}
 .sb-c i{font-style:normal;opacity:.45}
 .sb-c bdi{direction:ltr;unicode-bidi:isolate;font-weight:600}
 
 /* سطر الحقوق الثابت تحت — ألوانه تتبع التطبيق الفاتح أو الداكن */
-.sb-foot{position:fixed;left:0;right:0;bottom:0;z-index:20;height:var(--sbF);display:flex;align-items:center;justify-content:center;gap:8px;
+.sb-foot>*+*{margin-right:8px}
+.sb-foot{position:fixed;left:0;right:0;bottom:0;z-index:20;height:var(--sbF);display:flex;align-items:center;justify-content:center;
   padding:0 12px;font-size:calc(var(--sbF)*.43);background:rgba(255,255,255,.96);color:#3F4A44;border-top:1px solid rgba(0,0,0,.08);overflow:hidden}
 html.sb-dark .sb-foot{background:rgba(8,11,10,.94);color:rgba(255,255,255,.78);border-top-color:rgba(255,255,255,.08)}
 @media (max-width:420px){.sb-foot{font-size:11px}.sb-foot .sb-c b,.sb-foot .sb-c b+i{display:none}}
 
 /* سطر الحقوق داخل الصفحة (تذييل الشاشة) وشريط آخر منيو المطعم */
-.sb-inline{display:inline-flex;align-items:center;gap:.5em}
+.sb-inline{display:inline-flex;align-items:center}
+.sb-inline>*+*{margin-right:.5em}
 .sb-inline .sb-tile{background:#fff;color:var(--sbG2)}
-.sb-band{text-decoration:none;display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;background:linear-gradient(270deg,var(--sbG1),var(--sbG2));color:#fff;border-radius:16px;margin:10px 0}
-.sb-band-r{display:flex;align-items:center;gap:8px}
+.sb-band>*+*{margin-top:6px}
+.sb-band{text-decoration:none;display:flex;flex-direction:column;align-items:center;padding:16px 12px;background:linear-gradient(270deg,var(--sbG1),var(--sbG2));color:#fff;border-radius:16px;margin:10px 0}
+.sb-band-r{display:flex;align-items:center}
+.sb-band-r>*+*{margin-right:8px}
 .sb-band .sb-m{width:26px;height:26px;display:block}.sb-band .sb-m svg{width:100%;height:100%;display:block}
 .sb-band .sb-wm{font-size:20px;color:#fff}
 .sb-band .sb-c{font-size:12.5px;color:rgba(255,255,255,.92)}
 
 /* شاشة الفتح الموحدة */
-html .sb-splash,html #splash.sb-splash{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
-  padding:22vh 20px calc(6vh + env(safe-area-inset-bottom,0px));background:linear-gradient(160deg,var(--sbG1),var(--sbG2))!important;color:var(--sbOn,#fff);
+html .sb-splash,html #splash.sb-splash{position:fixed;top:0;right:0;bottom:0;left:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+  padding:22vh 20px 6vh;padding:22vh 20px calc(6vh + env(safe-area-inset-bottom,0px));background:linear-gradient(160deg,var(--sbG1),var(--sbG2))!important;color:var(--sbOn,#fff);
   transition:opacity .4s;pointer-events:none}
 html .sb-splash.sb-gone{opacity:0}
-.sb-sp-mid{display:flex;flex-direction:column;align-items:center;gap:10px}
-.sb-sp-m{width:clamp(84px,14vmin,150px);height:clamp(84px,14vmin,150px);display:block;animation:sbIn .6s ease-out both}
+.sb-sp-mid{display:flex;flex-direction:column;align-items:center}
+.sb-sp-mid>*+*{margin-top:10px}
+.sb-sp-m{width:14vmin;height:14vmin;width:clamp(84px,14vmin,150px);height:clamp(84px,14vmin,150px);display:block;animation:sbIn .6s ease-out both}
 .sb-sp-m svg{width:100%;height:100%;display:block}
-.sb-splash .sb-wm{font-size:clamp(30px,5vmin,56px);color:inherit}
-.sb-splash .sb-an{font-size:clamp(15px,2.2vmin,24px);font-weight:600;opacity:.92}
-.sb-sp-ft{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:clamp(12px,1.6vmin,17px);opacity:.82}
+.sb-splash .sb-wm{font-size:5vmin;font-size:clamp(30px,5vmin,56px);color:inherit}
+.sb-splash .sb-an{font-size:2.4vmin;font-size:clamp(15px,2.2vmin,24px);font-weight:600;opacity:.92}
+.sb-sp-ft{display:flex;flex-direction:column;align-items:center;font-size:1.8vmin;font-size:clamp(12px,1.6vmin,17px);opacity:.82}
 .sb-sp-ft bdi{direction:ltr;unicode-bidi:isolate;font-weight:700}
 @keyframes sbIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.sb-sp-m{animation:none}html .sb-splash{transition:none}}
