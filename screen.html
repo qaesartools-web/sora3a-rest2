@@ -191,6 +191,21 @@ html.th-whiteboard .qrbox{background:#fff;border:3px solid #1F2A44}
 html.th-whiteboard .qrt b,html.th-whiteboard .qrt b span+span,html.th-whiteboard .qrt small{color:#1F2A44}
 html.th-whiteboard .empty{color:#5B6680}
 html.th-whiteboard .foot .tip i{background:#fff;border-color:#C9CFD4}
+/* ══ ألوان كل جزء بروحه (يختارها برج سرعة لكل مطعم) — تتقدم على التصميم، والفارغ يبقى على التصميم ══ */
+html.xs-bg body{background:var(--x-bg)!important;background-image:none!important}
+html.xs-bg.th-whiteboard .scr{background:var(--x-bg)!important}
+html.xs-colBg .col{background:var(--x-colBg)!important}
+html.xs-nameFg .nm,html.xs-nameFg .live{color:var(--x-nameFg)!important}
+html.xs-clockFg .clk,html.xs-clockFg .dt,html.xs-clockFg .clk small{color:var(--x-clockFg)!important}
+html.xs-readyFg .ready .hd h2{color:var(--x-readyFg)!important}
+html.xs-readyNumBg .ready .n{background:var(--x-readyNumBg)!important}
+html.xs-readyNumFg .ready .n{color:var(--x-readyNumFg)!important}
+html.xs-prepFg .prep .hd h2{color:var(--x-prepFg)!important}
+html.xs-prepNumBg .prep .n{background:var(--x-prepNumBg)!important}
+html.xs-prepNumFg .prep .n{color:var(--x-prepNumFg)!important}
+html.xs-footFg .foot,html.xs-footFg .foot b,html.xs-footFg .foot .tip{color:var(--x-footFg)!important}
+html.xs-emptyBg .empty{background:var(--x-emptyBg)!important;border-radius:20px}
+html.xs-emptyFg .empty{color:var(--x-emptyFg)!important;opacity:1!important}
 
 /* ── قائمة الإعدادات (تشتغل بالريموت) ── */
 .menu{position:fixed;top:84px;left:24px;z-index:30;width:300px;max-height:calc(100% - 100px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
@@ -519,6 +534,8 @@ $('offOut').onclick = () => unlinkScreen();
 const TH = { classic: ['#F5891F', '#16A34A'], board: ['#16130E', '#FFC94A'], tickets: ['#1F5B57', '#FCE7A2'], whiteboard: ['#F6F8F8', '#2B59C3'] };
 const TH_FONT = { board: 'Space+Mono:wght@700', tickets: 'Lalezar', whiteboard: 'Marhey:wght@600;700&family=Caveat:wght@700' };
 const hexOk = (c) => /^#[0-9a-fA-F]{6}$/.test(c || '');
+// أجزاء الشاشة اللي البرج يلوّنها كل وحدة بروحها (نفس القائمة بالبرج)
+const XS = ['bg', 'colBg', 'nameFg', 'clockFg', 'readyFg', 'readyNumBg', 'readyNumFg', 'prepFg', 'prepNumBg', 'prepNumFg', 'footFg', 'emptyBg', 'emptyFg'];
 const rgbOf = (c) => [1, 3, 5].map((i) => parseInt(c.substr(i, 2), 16));
 const mixC = (a, b, t) => { const x = rgbOf(a), y = rgbOf(b); return '#' + x.map((v, i) => Math.round(v * (1 - t) + y[i] * t).toString(16).padStart(2, '0')).join(''); };
 const lumC = (c) => { const [r, g, b] = rgbOf(c).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
@@ -528,11 +545,13 @@ function applyTheme(th) {
   th = th || {};
   const design = TH[th.design] ? th.design : 'classic', diff = (c, d) => hexOk(c) && c.toLowerCase() !== d.toLowerCase();
   const custom = diff(th.c1, TH[design][0]) || diff(th.c2, TH[design][1]);   // ألوان التصميم نفسها = مو ألوان خاصة
-  const c1 = hexOk(th.c1) ? th.c1 : TH[design][0], c2 = hexOk(th.c2) ? th.c2 : TH[design][1], key = design + c1 + c2 + custom;
+  const x = th.x || {}, xk = XS.map((k) => (hexOk(x[k]) ? x[k] : '')).join(',');
+  const c1 = hexOk(th.c1) ? th.c1 : TH[design][0], c2 = hexOk(th.c2) ? th.c2 : TH[design][1], key = design + c1 + c2 + custom + xk;
   if (key === thKey) return;
   thKey = key;
   const H = document.documentElement, set = (k, v) => H.style.setProperty(k, v);
   H.classList.remove('th-classic', 'th-board', 'th-tickets', 'th-whiteboard'); H.classList.add('th-' + design);
+  XS.forEach((k) => { const v = hexOk(x[k]) ? x[k] : ''; H.classList.toggle('xs-' + k, !!v); if (v) set('--x-' + k, v); else H.style.removeProperty('--x-' + k); });
   ['--c1', '--c2', '--c1fg', '--c2fg', '--o1', '--o2', '--o3', '--odk', '--t1', '--t2', '--tfg', '--neon', '--neon-rgb', '--t-rgb'].forEach((k) => H.style.removeProperty(k));
   // التصميم الحالي بدون ألوان من البرج: يبقى مثل ما هو بالضبط
   if (design !== 'classic' || custom) { set('--c1', c1); set('--c2', c2); set('--c1fg', onC(c1)); set('--c2fg', onC(c2)); }
