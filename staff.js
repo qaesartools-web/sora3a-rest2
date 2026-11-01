@@ -239,7 +239,8 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
     busy = false;
     if (user !== cur) return;
     lsx.set(key, code);
-    if (ok && kind === 'ready' && !adopted) { adopted = true; await adoptOwnerScreen(user.uid, code, platform); await dropOwnerLogin(); if (user !== cur) return; }
+    // مفتوحة من زر الكاشير (شاشة ثانية على نفس الكمبيوتر): نخلي جلسة الكاشير، وإلا (تلفزيون) نطلّع جلسة صاحب المطعم منها
+    if (ok && kind === 'ready' && !adopted) { adopted = true; await adoptOwnerScreen(user.uid, code, platform); if (!/[?&]from=pos\b/.test(location.search)) await dropOwnerLogin(); if (user !== cur) return; }
     const link = new URL('../sora3a-admin/?pair=' + code, location.href).href;
     box(`<p>اربط ${kind === 'waiter' ? 'هذا التلفون' : 'هذي الشاشة'} بالمطعم — بدون إيميل وبدون رمز سري</p>
       <div class="pair-code" id="pairCode" dir="ltr">${esc(code)}</div><div class="pair-qr" id="pairQr"></div>
