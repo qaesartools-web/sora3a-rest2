@@ -43,7 +43,7 @@ const clockCheck = async () => {
     if (Math.abs(skew) < 5) { if (b) b.remove(); return; }
     if (!b) {
       b = document.createElement('div'); b.id = 'clockWarn'; b.setAttribute('role', 'alert');
-      b.style.cssText = 'position:fixed;left:0;right:0;top:var(--sbH,0px);z-index:150;background:#B45309;color:#fff;font-weight:700;font-size:clamp(14px,1.5vw,24px);line-height:1.6;padding:8px 14px;text-align:center;direction:rtl';
+      b.style.cssText = 'position:fixed;left:0;right:0;top:var(--sbH,0px);z-index:150;background:#B45309;color:#fff;font-weight:700;font-size:18px;font-size:clamp(14px,1.5vw,24px);line-height:1.6;padding:8px 14px;text-align:center;direction:rtl';
       document.body.appendChild(b);
     }
     const n = Math.abs(skew), amt = n >= 1440 ? Math.round(n / 1440) + ' يوم' : n >= 60 ? Math.round(n / 60) + ' ساعة' : n + ' دقيقة';
@@ -197,7 +197,12 @@ async function adoptOwnerScreen(uid, code, platform) {
     if (!o) return false;
     const u = await getDoc(doc(db, 'users', o.uid)), d = u.exists() ? u.data() : null;
     if (!d || d.role !== 'restaurant' || !d.restaurantId) return false;
-    const r = await getDoc(doc(db, 'restaurants', d.restaurantId));
+    const r = await getDoc(doc(db, 'restaurants', d.restaurantId)), max = +((r.exists() && r.data().screenMax) || 0);
+    // عدد شاشات «طلبك جاهز» يحدده البرج: إذا وصل الحد الشاشة تبقى على الرمز (ولوحة الإدارة تكول وصلت الحد)
+    if (max > 0) {
+      const n = (await getDocs(query(collection(db, 'screens'), where('restaurantId', '==', d.restaurantId)))).docs.filter((x) => x.data().kind === 'ready').length;
+      if (n >= max) return false;
+    }
     await setDoc(doc(db, 'screens', uid), { restaurantId: d.restaurantId, restName: String((r.exists() && r.data().name) || '').slice(0, 80), kind: 'ready',
       name: 'شاشة طلبك جاهز', code, platform, pairedBy: 'owner', approved: false, atMs: Date.now() });
     return true;
@@ -281,7 +286,7 @@ export async function unlinkScreen() {
 
 // أنماط نموذج الدخول (مشتركة)
 export const GATE_CSS = `.gate{position:fixed;top:0;right:0;bottom:0;left:0;display:grid;place-items:center;padding:16px;z-index:100;background:var(--bg)}
-.gate-f{width:min(380px,100%);background:var(--card);border:1px solid var(--line);border-radius:24px;padding:26px 22px;text-align:center}
+.gate-f{width:100%;max-width:380px;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:26px 22px;text-align:center}
 .gate-logo{width:56px;height:56px;margin:0 auto 10px;border-radius:16px;background:#0A100D;color:#3DF08B;display:grid;place-items:center;font-size:30px;font-weight:700}
 .gate-f h1{font-size:21px;margin-bottom:4px}.gate-f p{color:var(--muted);font-size:13.5px;margin-bottom:14px}
 .gate-i{display:block;width:100%;margin-top:10px;padding:13px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:15px;text-align:left}
