@@ -180,7 +180,7 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
   <button type="button" id="mDiag" hidden>🩺 فحص التشغيل التلقائي</button>
   <button type="button" id="mReload">🔄 تحديث الشاشة</button>
   <button type="button" id="fsBtn">⛶ ملء الشاشة</button>
-  <button type="button" id="mOut">🚪 تسجيل خروج</button>
+  <button type="button" id="mOut">🔌 فصل الشاشة</button>
   <button type="button" id="mClose">✕ رجوع</button>
   <div class="hintk">بالريموت: ⬆️⬇️ للتنقل و OK للاختيار</div>
 </div>
@@ -191,7 +191,9 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('screen-sw.js', { scope: './screen' }).catch(function () {});
 </script>
 <script type="module">
-import { db, staffGate, logout, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc } from './staff.js';
+import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc } from './staff.js';
+// الشاشة تنربط برمز ويعتمدها البرج (بدون إيميل ولا كلمة سر) — جلستها «مجهولة» بتطبيق Firebase منفصل
+const db = screenFb().db;
 import { lanLink } from './lanlink.js?v=1';
 document.getElementById('gateCss').textContent = GATE_CSS;
 window.__scrOk = true;   // تطبيق «سرعة — الشاشة» يتأكد إن الصفحة اشتغلت (وإلا يطلب تحديث محرك الإنترنت)
@@ -218,6 +220,8 @@ function view() {
 let scr = { salon: true, delivery: false, qr: true }, unsubSet = null, pm = null, unsubPm = null, qrUrl = '';
 // خدمات المطعم (يشغّلها أو يوقفها المدير الأعلى): الشاشة نفسها، والباركود (كود المنيو بالزاوية)
 let feats = {}, unsubRest = null, unsubKey = null;
+// كاشيرية هذي الشاشة (فارغة = كل الكاشيرية)
+let cashiers = [], unsubMe = null;
 const svcOn = () => feats.screen !== false;
 const seenReady = new Set(), fresh = new Map();   // fresh: رقم ← وقت صار جاهز (للوميض)
 const READY_KEEP = 20 * 60000;
@@ -226,6 +230,8 @@ const TYPE = { takeaway: 'سفري', salon: 'صالة', delivery: 'دلفري' }
 // أي طلب يطلع على الشاشة؟ السفري والبيجر دائماً، والصالة بدون بيجر والدلفري حسب إعدادات المطعم
 function where_(o) {
   if (o.status === 'cancelled' || Date.now() - (o.createdAtMs || 0) > 12 * 3600000) return null;
+  // شاشة طابق: طلبات كاشيريتها بس (الطلبات القديمة بدون اسم كاشير تطلع بكل الشاشات)
+  if (cashiers.length && o.byUid && !cashiers.includes(o.byUid)) return null;
   const t = o.orderType || 'delivery';
   if (t === 'delivery' && (!scr.delivery || ['pickup', 'delivering', 'delivered'].includes(o.status))) return null;   // استلمه الكابتن
   if (t === 'salon' && !o.pager && !scr.salon) return null;
@@ -347,7 +353,7 @@ if (typeof window.__adbOn === 'boolean') window.__setAdb(window.__adbOn);
 function menuUi() {
   soundUi();
   if (autoOn !== null) $('mAuto').textContent = autoOn ? '🚀 يفتح وحده مع التلفزيون: يشتغل' : '🚀 يفتح وحده مع التلفزيون: مطفي';
-  $('mOut').textContent = outArmed ? '⚠️ متأكد؟ اضغط مرة ثانية للخروج' : '🚪 تسجيل خروج';
+  $('mOut').textContent = outArmed ? '⚠️ متأكد؟ اضغط مرة ثانية للفصل' : '🔌 فصل الشاشة';
   $('mOut').classList.toggle('warn', outArmed);
 }
 function openMenu() { outArmed = false; menuUi(); menu.hidden = false; $($('mUpd').hidden ? 'mSnd' : 'mUpd').focus(); armClose(); }
@@ -365,7 +371,7 @@ $('mReload').onclick = () => location.reload();
 $('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else if (d.documentElement.requestFullscreen) d.documentElement.requestFullscreen().catch(() => {}); closeMenu(); };
 $('mOut').onclick = () => {
   if (!outArmed) { outArmed = true; menuUi(); armClose(); return; }
-  closeMenu(); logout();
+  closeMenu(); unlinkScreen();
 };
 $('mClose').onclick = closeMenu;
 document.addEventListener('keydown', (e) => {
@@ -430,17 +436,21 @@ function svcUi() {
   else soundUi();
   qrUi();
 }
-$('offOut').onclick = () => logout();
+$('offOut').onclick = () => unlinkScreen();
 function setName(name) {
   $('nm').textContent = name; document.title = 'طلبك جاهز — ' + name;
   // حرف الشعار: أول حرف من الاسم بدون «مطعم/كافيه…» وبدون «ال»
   const w = String(name).trim().replace(/^(مطعم|مطاعم|كافيه|كافي|مشويات|مقهى)\s+/, '').split(/\s+/)[0].replace(/^ال(?=..)/, '');
   $('mk').textContent = w[0] || 'س';
 }
-staffGate($('gate'), {
-  title: 'شاشة «طلبك جاهز»', remember: true, sub: 'افتحها على تلفزيون أو تابلت قدام الزبائن — سجّل دخول بحساب المطعم',
+screenGate($('gate'), {
+  title: 'شاشة «طلبك جاهز»', kind: 'ready', label: 'شاشة طلبك جاهز',
   onIn: async (u) => {
     rid = u.rid; first = true; seenReady.clear();
+    // هذي الشاشة: أي كاشيرية تطلع طلباتهم (مطعم بيه أكثر من صالة) — يحددها صاحب المطعم من لوحة الإدارة ويتطبق فوراً
+    cashiers = (u.screen && u.screen.cashiers) || [];
+    if (unsubMe) unsubMe();
+    unsubMe = onSnapshot(doc(db, 'screens', u.uid), (s) => { if (!s.exists()) return; const c = s.data().cashiers || []; if (c.join() !== cashiers.join()) { cashiers = c; render(); } }, () => {});
     const name0 = u.rest.name || '';
     setName(name0);
     // الإعدادات مباشرة: أي تغيير من الكاشير ينطبق على الشاشة فوراً
@@ -466,7 +476,7 @@ staffGate($('gate'), {
     svcUi(); clock(); keepOn(); listen();
   },
   onOut: () => {
-    if (unsub) { unsub(); unsub = null; } if (unsubSet) { unsubSet(); unsubSet = null; } if (unsubPm) { unsubPm(); unsubPm = null; } if (unsubRest) { unsubRest(); unsubRest = null; } if (unsubKey) { unsubKey(); unsubKey = null; }
+    if (unsub) { unsub(); unsub = null; } if (unsubMe) { unsubMe(); unsubMe = null; } cashiers = []; if (unsubSet) { unsubSet(); unsubSet = null; } if (unsubPm) { unsubPm(); unsubPm = null; } if (unsubRest) { unsubRest(); unsubRest = null; } if (unsubKey) { unsubKey(); unsubKey = null; }
     feats = {}; $('off').hidden = true;
     pm = null; qrUrl = ''; $('qrBox').hidden = true;
     rid = ''; orders = []; fsOrders = []; fsLive = false; setFromFs = false; $('scr').hidden = true; $('hint').hidden = true; menu.hidden = true;
