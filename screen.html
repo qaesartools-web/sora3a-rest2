@@ -31,7 +31,8 @@ body{font-family:var(--font);color:var(--text);overflow:hidden;
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus{outline:3px solid var(--neon);outline-offset:3px}
 
-.scr{position:relative;height:100vh;height:calc(100dvh - var(--sbH,0px));display:flex;flex-direction:column}
+.scr{position:relative;height:100vh;height:calc(100vh - var(--sbH,0px));display:flex;flex-direction:column}
+@supports (height:100dvh){.scr{height:calc(100dvh - var(--sbH,0px))}}
 .scr::before{content:'';position:absolute;top:0;right:0;left:0;height:5px;
   background:linear-gradient(270deg,#3DF08B 0,#3DF08B 25%,#FFB547 25%,#FFB547 50%,#93A6FF 50%,#93A6FF 75%,#3EE6CF 75%,#3EE6CF 100%)}
 
