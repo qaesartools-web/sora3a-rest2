@@ -11,6 +11,9 @@
 <meta name="apple-mobile-web-app-title" content="المطبخ">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="kitchen-apple-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@600;700&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="brand.css">
 <script>
 // التطبيقات تفتح kitchen.html دائماً:
 //  «سرعة - المطبخ» (SoraKds/sec) مقفول على شاشة المطبخ (الأقسام) — يرجع لقسم الجهاز
@@ -72,11 +75,14 @@ window.kdsManifest = function (secMode, secId, secName) {
 :root{
   --bg:#0c1116; --card:#141c24; --card2:#1b2530; --line:#283440; --text:#eef3f8; --muted:#90a0b0;
   --new:#3df08b; --warn:#ffb627; --late:#ff4d2e; --ok:#3df08b;
-  --font:system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;
+  --font:'IBM Plex Sans Arabic',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;
   --num:'Sora',system-ui,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
+/* هوية سرعة: المطبخ فيروزي والمجهز بنفسجي — نفس لون أيقونة كل تطبيق */
+html.sb-kitchen{--new:#22C7D9;--ok:#22C7D9}
+html.sb-prep{--new:#A78BFA;--ok:#A78BFA}
 html,body{height:100%}
 body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.5;overflow:hidden}
 button,input{font:inherit;color:inherit}
@@ -96,7 +102,7 @@ button{cursor:pointer}
 
 /* ── الشبكة ── */
 .grid{flex:1;min-height:0;overflow-y:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));grid-template-columns:repeat(auto-fill,minmax(calc(270px * var(--z,1)),1fr));gap:14px;gap:calc(14px * var(--z,1));align-content:start;grid-auto-rows:max-content}
-#app:not([hidden]){display:flex;flex-direction:column;height:100vh;height:100dvh}
+#app:not([hidden]){display:flex;flex-direction:column;height:100vh;height:calc(100dvh - var(--sbH,0px) - var(--sbF,0px))}
 #app>*:not(.grid){flex:none}
 /* كثرت الطلبات: البطاقات تصغر وحدها حتى تبين كلها (--z من 1 لـ 0.6) */
 .card{zoom:var(--z,1);background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;border-top:5px solid var(--new)}
@@ -184,6 +190,8 @@ button{cursor:pointer}
 </style>
 </head>
 <body>
+<script src="brand.js"></script>
+<script>document.documentElement.classList.add('sb-dark'); window.SB && SB.mount(/[?&]sec(=|&|$)/.test(location.search) ? 'kitchen' : 'prep')</script>
 <div class="gate" id="gate" hidden></div>
 
 <div id="app" hidden>

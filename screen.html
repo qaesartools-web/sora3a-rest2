@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Reem+Kufi:wght@600;700&family=Sora:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="brand.css">
 <style>
 :root{
   /* «برتقالي مشمس»: خلفية برتقالية زاهية، بطاقات بيضاء، الجاهز أخضر، التحضير برتقالي، كود المنيو أزرق — ألوان تطبيقات سرعة */
@@ -30,7 +31,7 @@ body{font-family:var(--font);color:var(--text);overflow:hidden;
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus{outline:3px solid var(--neon);outline-offset:3px}
 
-.scr{position:relative;height:100vh;height:100dvh;display:flex;flex-direction:column}
+.scr{position:relative;height:100vh;height:calc(100dvh - var(--sbH,0px));display:flex;flex-direction:column}
 .scr::before{content:'';position:absolute;top:0;right:0;left:0;height:5px;
   background:linear-gradient(270deg,#3DF08B 0,#3DF08B 25%,#FFB547 25%,#FFB547 50%,#93A6FF 50%,#93A6FF 75%,#3EE6CF 75%,#3EE6CF 100%)}
 
@@ -145,6 +146,8 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 <script src="device.js?v=1"></script>
 </head>
 <body>
+<script src="brand.js"></script>
+<script>window.SB && SB.mount('screen', { foot: false })</script>
 <div class="gate" id="gate" hidden></div>
 <div class="scr" id="scr" hidden>
   <header class="top">
@@ -164,8 +167,9 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
       <div class="qrbox" id="qrBox" hidden><div class="qrc" id="qrCode"></div><div class="qrt"><b id="qrT"><span>📱 امسح الكود</span></b><small id="qrS"></small></div></div>
     </section>
   </main>
-  <footer class="foot"><span class="tip"><i>🧾</i>رقم طلبك على الفاتورة أو البيجر — أول ما يطلع بـ«جاهز» تفضل استلمه</span><span>مدعوم من <b>سرعة</b></span></footer>
+  <footer class="foot"><span class="tip"><i>🧾</i>رقم طلبك على الفاتورة أو البيجر — أول ما يطلع بـ«جاهز» تفضل استلمه</span><span id="sbCredit">مدعوم من <b>سرعة</b></span></footer>
 </div>
+<script>window.SB && SB.fill('#sbCredit')</script>
 <div class="off" id="off" hidden><div class="off-c"><b>⛔</b><h1>خدمة الشاشة موقوفة لهذا المطعم</h1><p>تواصل ويا إدارة سرعة حتى يفعّلونها — وأول ما تتفعّل ترجع الشاشة تشتغل وحدها.</p><button type="button" id="offOut">🚪 تسجيل خروج</button></div></div>
 <div class="menu" id="menu" hidden role="dialog" aria-label="الإعدادات">
   <div class="mt">⚙️ إعدادات الشاشة</div>

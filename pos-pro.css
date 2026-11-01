@@ -2,7 +2,7 @@
    يعتمد على متغيرات الثيم (--orange = اللون الأساسي) حتى تعمل كل الثيمات */
 :root{--accent-soft:color-mix(in srgb,var(--orange) 12%,transparent);--shadow:0 6px 22px rgba(16,36,24,.07);--r:14px;}
 body{font-size:14px;}
-button,input,select{font-family:'Tajawal',sans-serif;}
+button,input,select{font-family:'IBM Plex Sans Arabic',sans-serif;}
 kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:0 5px;color:var(--muted);margin-inline-start:4px;}
 
 /* شريط علوي وتنقل — بدون ألوان ثابتة */
@@ -175,7 +175,7 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
   .cmini,.cexp{display:block;}
   .cside.open .cexp{transform:rotate(180deg);}
 }
-.theme-switcher{top:12px!important;left:78px!important;}
+.theme-switcher{top:calc(12px + var(--sbH,0px))!important;left:78px!important;}
 .ts-btn{width:34px!important;height:34px!important;font-size:15px!important;}
 
 /* ── المكالمات الواردة ── */

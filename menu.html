@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="brand.css">
 <style>
 /* تصميم «بحري ومرجاني»: رأس كحلي، وأزرار مرجانية تفتح النفس — نفس الشكل حتى لو تلفون الزبون على الوضع الغامق */
 :root{
@@ -180,6 +181,8 @@ textarea.inp{resize:vertical;min-height:70px}
 <div class="sheet" id="cartSh" role="dialog" aria-modal="true" aria-label="طلبك"></div>
 <div class="toast" id="toast"></div>
 <footer class="ft wrap">مدعوم من <a href="https://qaesartools-web.github.io/sora3a-admin/site/" target="_blank" rel="noopener">سرعة</a> — نظام المطاعم</footer>
+<script src="brand.js"></script>
+<script>window.SB && SB.mount('menu', { bar: false, foot: false, splash: false }); window.SB && SB.fill('.ft', 'band', 'https://qaesartools-web.github.io/sora3a-admin/site/')</script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -200,6 +203,8 @@ const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; 
   import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true })).catch(() => {}); };
 appCheck(app);
 const db = getFirestore(app);
+// رقمنا وإيميلنا (config/brand) لشريط سرعة آخر المنيو — مرة كل ٦ ساعات بالأكثر
+if (window.SB) SB.sync(async () => { const s = await getDoc(doc(db, 'config', 'brand')); return s.exists() ? s.data() : null; });
 // الزبون يدخل «مجهول» تلقائياً (بدون ما يحس) — حتى السيرفر يحدد طلب واحد لكل جهاز كل 20 ثانية ويوقف الطلبات الوهمية
 const auth = getAuth(app);
 const GAP = 20000, GAP_KEY = 'sora3a_web_gap';   // وقت آخر طلب من هذا الجهاز (لأي مطعم)

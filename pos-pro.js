@@ -724,7 +724,8 @@ function orderActionsCore(o){
       ${p.card && p.method === 'mixed' ? `<div class="row"><span>بطاقة</span><span>${fmt(p.card)}</span></div>` : ''}
       ${p.method === 'credit' && p.cust ? `<div class="row" style="font-weight:900"><span>على حساب</span><span>${esc(p.cust.name)}${p.cust.phone ? ' • ' + esc(p.cust.phone) : ''}</span></div>` : ''}
       ${p.received && (p.method === 'cash' || p.method === 'mixed') ? `<div class="row"><span>المستلم نقداً</span><span>${fmt(p.received)}</span></div><div class="row"><span>الباقي</span><span>${fmt(p.change || 0)}</span></div>` : ''}
-      <div class="div"></div><div class="foot">${esc(settings.receiptFooter || 'شكراً لزيارتكم ❤️')}</div>`;
+      <div class="div"></div><div class="foot">${esc(settings.receiptFooter || 'شكراً لزيارتكم ❤️')}</div>
+      ${window.SB ? SB.receipt() : ''}`;
     const kt = withKitchen ? `<div class="pb kt"><div class="logo">🍳 تذكرة مطبخ</div><div class="div"></div>${head}${pg}
       <div class="row"><span>${esc(t12(o.createdAt))}</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div><div class="div"></div>
       ${items.map((i) => `<div class="item">${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<div class="n">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}</div>` : '';
@@ -3131,6 +3132,8 @@ function enterAppCore(){
     listenSettings();
     listenLoyalty();
     loadPushUrl();
+    // رقمنا وإيميلنا من البرج (config/brand) — يظهرن بالشريط والوصل، والمطعم ما يكدر يغيرهن
+    if (window.SB) SB.sync(async () => { const s = await fb().getDoc(fb().doc(fb().db, 'config', 'brand')); return s.exists() ? s.data() : null; });
     enterAppCore();
     listenMenu();
     listenShifts();

@@ -6,14 +6,15 @@
 <meta name="theme-color" content="#0F7A3D">
 <title>سرعة — خط المطعم</title>
 <link rel="icon" type="image/svg+xml" href="line-icon.svg">
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="brand.css">
 <style>
 /* صفحة تطبيق «سرعة — خط المطعم»: شغلها الوحيد ربط رقم المطعم (شريحة/واتساب) حتى يطلع رقم المتصل بالكاشير */
 :root{--bg:#F3F6F4;--card:#fff;--text:#10231A;--muted:#5B6B62;--line:#DCE5DF;--green:#16A34A;--green2:#0F7A3D;--warn:#B45309;--warnbg:#FFF7E6;--warnline:#F5C46B;--okbg:#ECFDF3;--okline:#A7E3BD;--bad:#B91C1C}
 @media (prefers-color-scheme:dark){:root{--bg:#0B1220;--card:#111C2E;--text:#EEF2F7;--muted:#9AA8B8;--line:#23324A;--warnbg:#2A2010;--warnline:#7A5A1C;--warn:#F5B44A;--okbg:#0E2A1B;--okline:#1F6B3F;--bad:#F87171}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:'Tajawal',Tahoma,Arial,sans-serif;font-size:15px;line-height:1.7}
-header{background:linear-gradient(160deg,#43C171,#12873F);color:#fff;padding:22px 18px 46px;text-align:center}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;font-size:15px;line-height:1.7;padding-bottom:var(--sbF,0px)}
+header{background:linear-gradient(160deg,#4B5563,#111827);color:#fff;padding:22px 18px 46px;text-align:center}
 header .ic{font-size:40px;line-height:1}
 header h1{margin:6px 0 2px;font-size:22px;font-weight:900}
 header p{margin:0;opacity:.9;font-size:14px}
@@ -55,7 +56,9 @@ input.in{width:100%;font:inherit;font-size:16px;padding:12px;border:1px solid va
 </style>
 </head>
 <body>
-<header><div class="ic">📞</div><h1>سرعة — خط المطعم</h1><p>الزبون يتصل ← رقمه وطلباته السابقة تطلع فوراً بكاشير المطعم</p></header>
+<script src="brand.js"></script>
+<script>window.SB && SB.mount('line')</script>
+<header><div class="ic">📞</div><h1>خط المطعم</h1><p>الزبون يتصل ← رقمه وطلباته السابقة تطلع فوراً بكاشير المطعم</p></header>
 <main id="app"><div class="card muted">⏳ لحظة…</div></main>
 <div class="toast" id="toast"></div>
 
@@ -80,6 +83,7 @@ const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; 
 appCheck(app);
 const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
 const db = initializeFirestore(app, {});
+if (window.SB) SB.sync(async () => { const s = await getDoc(doc(db, 'config', 'brand')); return s.exists() ? s.data() : null; });
 
 const APK = 'https://github.com/qaesartools-web/sora3a-rest2/releases/download/line-android/sora3a-line.apk';
 const DESK = window.SoraDesktop && window.SoraDesktop.canCallLine ? window.SoraDesktop : null;
