@@ -934,6 +934,11 @@ const defaultMenu=[
 
 let menu=JSON.parse(JSON.stringify(defaultMenu));
 let restData=null,captains=[],orders=[],unsubs=[];
+// يوم العمل (مبيعات اليوم والتقارير والمصروفات): من وقت فتح المطعم لوقت إغلاقه حتى لو يعبر نص الليل — posBizCut من pos-pro.js
+const bizCutMs=()=>((window.posBizCut&&window.posBizCut())||0)*60000;
+const bizStart=ms=>{const c=bizCutMs(),d=new Date((ms==null?Date.now():ms)-c);d.setHours(0,0,0,0);return d.getTime()+c;};
+const dayMsOf=v=>new Date(v+'T00:00:00').getTime()+bizCutMs();   // بداية يوم العمل لتاريخ (yyyy-mm-dd)
+const bizDay=()=>new Date(bizStart()-bizCutMs());                // تاريخ يوم العمل الحالي
 let activeCat=0,cart=[],selProd=null,selVar=null,qty=1;
 let selCapId=null,changingOrderId=null,rejOrderId=null;
 let nVars=[{name:'وحدة',price:0}],nImgData='';
@@ -1132,7 +1137,7 @@ window.doLogout=async()=>{
 // يحتاج فهرس orders (restaurantId + createdAtMs)؛ إذا مو موجود يرجع للطريقة القديمة حتى ما يوقف شي
 const ORD_OPEN=['pending','accepted','pickup','delivering','preparing','ready'];
 let ordSets={},ordUnsubs=[],ordSince=0,ordLegacy=false,ordTimer=0;
-const ordWinStart=()=>{const d=new Date();d.setHours(0,0,0,0);return d.getTime()-86400000;};
+const ordWinStart=()=>{const d=new Date();d.setHours(0,0,0,0);return Math.min(d.getTime(),bizStart())-86400000;};
 window.posOrdersSince=()=>ordLegacy?0:ordSince;
 function ordApply(){
   // الأحدث يغلب: المفتوحة/الآجلة أول، وبعدها نافذة الأيام (أحدث نسخة من السيرفر)
@@ -1379,7 +1384,7 @@ function getOrderType(o){
 
 function renderOrdSum(){
   const el=document.getElementById('ordSum');if(!el)return;
-  const t=new Date(),s=new Date(t.getFullYear(),t.getMonth(),t.getDate()).getTime(),e=s+86400000;
+  const s=bizStart(),e=s+86400000;   // يوم العمل (من الفتح للإغلاق)
   const os=orders.filter(o=>(o.createdAtMs||0)>=s&&(o.createdAtMs||0)<e);
   const f=finCalc(os,s,e);
   const low=acc.materials.filter(m=>matStatus(m)!=='ok');
@@ -1427,13 +1432,13 @@ window.setRepType=type=>{
 };
 
 window.setPreset=p=>{
-  const t=new Date(),f=new Date();
-  if(p==='today')f.setHours(0,0,0,0);
+  const t=bizDay(),f=bizDay();   // «اليوم» = يوم العمل الحالي (بالتاريخ المحلي)
+  if(p==='today'){}
   else if(p==='week')f.setDate(t.getDate()-7);
   else if(p==='month')f.setMonth(t.getMonth()-1);
   else if(p==='year')f.setFullYear(t.getFullYear()-1);
-  document.getElementById('repFrom').value=f.toISOString().slice(0,10);
-  document.getElementById('repTo').value=t.toISOString().slice(0,10);
+  document.getElementById('repFrom').value=ymd(f);
+  document.getElementById('repTo').value=ymd(t);
   renderRep();
 };
 
@@ -1441,8 +1446,8 @@ window.setPreset=p=>{
 function repRangeOrders(){
   const from=document.getElementById('repFrom')?.value;
   const to=document.getElementById('repTo')?.value;
-  const start=from?new Date(from+'T00:00:00').getTime():0;
-  const end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
+  const start=from?dayMsOf(from):0;
+  const end=to?dayMsOf(to)+86400000:Infinity;
   const r=posOrdersIn(start,end,()=>{if(document.getElementById('reportsScreen')?.classList.contains('on'))renderRep();});
   const el=document.getElementById('repLoading');if(el)el.hidden=!r.loading;
   return r.list;
@@ -1458,7 +1463,7 @@ function getRepOrders(){
 function renderRepExtra(fil){
   const el=document.getElementById('repFin');if(!el)return;
   const from=document.getElementById('repFrom')?.value,to=document.getElementById('repTo')?.value;
-  const start=from?new Date(from+'T00:00:00').getTime():0,end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
+  const start=from?dayMsOf(from):0,end=to?dayMsOf(to)+86400000:Infinity;
   const f=finCalc(fil,start,end);
   el.innerHTML=(f.noCost?`<div class="ac-row" style="border-color:#d97706"><div class="ac-sub" style="color:#d97706;font-weight:700">⚠️ ${toA(f.noCost)} صنف مباع بدون تكلفة — أضف وصفاته من «المخزون والحسابات» حتى يطلع الربح بدقة.</div></div>`:'')+stmtHTML(f)+cancelHTML(f);
 }
@@ -1742,7 +1747,9 @@ const MV={open:'رصيد افتتاحي',purchase:'وارد — مشتريات',
 
 let acc={materials:[],recipes:{},costs:{},moves:[],expenses:[]};
 let acCur='mat',acRec={ci:0,pi:0,vi:0},acMatQ='';
-let acRange={from:ymd(new Date()),to:ymd(new Date())};
+let acRange={from:ymd(new Date()),to:ymd(new Date())},acAuto=true;   // acAuto: الفترة الافتراضية (اليوم) — تمشي ويا يوم العمل
+// تغيّر وقت يوم العمل (أو انقرت الإعدادات): «اليوم» بالحسابات والمصروفات يصير يوم العمل الحالي
+window.posBizChanged=()=>{const d=ymd(bizDay());if(acAuto)acRange={from:d,to:d};if(acExpAuto)acExpDay=d;};
 
 function accKey(){return 'pos_acc_'+(restData?.id||'def');}
 function normAcc(d){
@@ -1947,12 +1954,12 @@ window.viewClose=()=>{document.getElementById('viewOv').classList.remove('on');e
 // ── الفترة ──
 function rangeMs(r){
   r=r||acRange;
-  const s=new Date(r.from+'T00:00:00').getTime(),e=new Date(r.to+'T00:00:00').getTime()+86400000;
+  const s=dayMsOf(r.from),e=dayMsOf(r.to)+86400000;
   return{start:isNaN(s)?0:s,end:isNaN(e)?Infinity:e};
 }
-window.acSetRange=(w,v)=>{if(!v)return;acRange[w]=v;if(acRange.from>acRange.to){if(w==='from')acRange.to=v;else acRange.from=v;}renderAcc();};
+window.acSetRange=(w,v)=>{if(!v)return;acAuto=false;acRange[w]=v;if(acRange.from>acRange.to){if(w==='from')acRange.to=v;else acRange.from=v;}renderAcc();};
 window.acPreset=p=>{
-  const t=new Date();let f=new Date();
+  const t=bizDay();let f=bizDay();acAuto=p==='today';
   if(p==='week')f.setDate(t.getDate()-6);
   else if(p==='month')f=new Date(t.getFullYear(),t.getMonth(),1);
   else if(p==='year')f=new Date(t.getFullYear(),0,1);
@@ -2196,22 +2203,22 @@ window.recDel=i=>{if(!ownerOnly())return;const k=curKey(),r=acc.recipes[k];if(!r
 window.recCost=val=>{const k=curKey();if(val===''||!(Number(val)>0))delete acc.costs[k];else acc.costs[k]=r2(val);saveAcc();renderAcc();};
 
 // ---- المصروفات التشغيلية ----
-let acExpDay=ymd(new Date());
-window.acSetExpDay=v=>{acExpDay=v||ymd(new Date());renderAcc();};
+let acExpDay=ymd(new Date()),acExpAuto=true;
+window.acSetExpDay=v=>{acExpAuto=!v;acExpDay=v||ymd(bizDay());renderAcc();};
 function tabExp(){
   const cashier=!isOwnerPOS();
-  const{start,end}=cashier?(()=>{const s=new Date(acExpDay+'T00:00:00').getTime();return{start:s,end:s+86400000};})():rangeMs();
+  const{start,end}=cashier?(()=>{const s=dayMsOf(acExpDay);return{start:s,end:s+86400000};})():rangeMs();
   const list=allExp().filter(e=>e.ts>=start&&e.ts<end).sort((a,b)=>b.ts-a.ts);
   const own=isOwnerPOS();
   const tot=list.reduce((s,e)=>s+e.amount,0),byCat={};list.forEach(e=>{byCat[e.cat]=(byCat[e.cat]||0)+e.amount;});
-  const dayBar=`<div class="rcard"><div class="rtitle">📅 اليوم</div><input type="date" class="dinput" value="${acExpDay}" max="${ymd(new Date())}" onchange="acSetExpDay(this.value)" style="width:100%"></div>`;
+  const dayBar=`<div class="rcard"><div class="rtitle">📅 اليوم</div><input type="date" class="dinput" value="${acExpDay}" max="${ymd(bizDay())}" onchange="acSetExpDay(this.value)" style="width:100%"></div>`;
   return (cashier?dayBar:rangeBar())+`<div class="rcard"><div class="rtitle">➕ تسجيل مصروف تشغيلي</div>
    <select class="fsel" id="exCat">${EXP_CATS.map(c=>`<option>${c}</option>`).join('')}</select>
    <input class="finp" id="exAmt" type="number" min="0" placeholder="المبلغ (د.ع)">
    <input class="finp" id="exNote" placeholder="ملاحظة (اختياري)">
    <input class="finp" id="exDate" type="date" value="${ymd(new Date())}">
    <button class="sivbtn" onclick="expAdd()">✅ حفظ المصروف</button></div>
-   <div class="rcard"><div class="rtitle">💸 ${cashier?(acExpDay===ymd(new Date())?'مصروفات اليوم':'مصروفات '+acExpDay):'مصروفات الفترة'}: <span class="ac-neg">${fmt(tot)} د.ع</span></div>
+   <div class="rcard"><div class="rtitle">💸 ${cashier?(acExpDay===ymd(bizDay())?'مصروفات اليوم':'مصروفات '+acExpDay):'مصروفات الفترة'}: <span class="ac-neg">${fmt(tot)} د.ع</span></div>
    ${Object.keys(byCat).map(k=>`<div class="ac-line"><span>${esc(k)}</span><b>${fmt(byCat[k])}</b></div>`).join('')||'<div class="ac-empty">لا توجد مصروفات بهذي الفترة</div>'}</div>
    ${list.map(e=>`<div class="ac-row"><div class="ac-top"><div><div class="ac-name">${esc(e.cat)}</div><div class="ac-sub">${esc(e.note||'')} • ${new Date(e.ts).toLocaleDateString('ar-IQ-u-nu-latn')}${e.by?' • 👤 '+esc(e.by):''}</div></div><div class="ac-qty ac-neg">${fmt(e.amount)}</div></div>${own?`<div class="ac-btns"><button class="ac-b del" onclick="expDel('${esc(e.id)}')">✖ حذف</button></div>`:''}</div>`).join('')}
    ${own?'':'<div class="ac-sub" style="text-align:center;margin-top:8px">🔒 تعديل أو حذف المصروفات من صلاحية الإدارة فقط</div>'}`;
@@ -2889,7 +2896,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=71"></script>
+<script src="pos-pro.js?v=72"></script>
 <script type="module">
 // «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
 if (window.STORE_MODE) {
