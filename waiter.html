@@ -109,6 +109,9 @@ button{cursor:pointer}
 .net{margin:10px 0 0;border-radius:14px;padding:8px 12px;font-size:13px;font-weight:600;line-height:1.6;background:var(--soft);border:1px solid var(--line)}
 .net.ok{border-color:rgba(74,222,128,.45);color:var(--neon)}
 .net.wait{border-color:rgba(251,191,36,.45);color:var(--saf)}
+.lanst{display:block;font-size:11.5px;font-weight:700;margin-top:2px}
+.lanst.ok{color:var(--neon)}
+.lanst.wait{color:var(--saf)}
 .toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-16px);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;transition:.2s;z-index:90;pointer-events:none;max-width:calc(100vw - 32px)}
 .toast.on{opacity:1;transform:translateX(-50%)}
 /* الخدمة موقوفة من الإدارة */
@@ -142,7 +145,7 @@ button{cursor:pointer}
 <div class="offw" id="off" hidden><div class="offc"><b id="offI">⛔</b><h2 id="offT">تطبيق الويتر موقوف لهذا المطعم</h2><p id="offP">صاحب المطعم يتواصل ويا إدارة سرعة حتى يفعّلونه — وأول ما يتفعّل يرجع يشتغل وحده.</p><button type="button" id="offOut">🔌 فصل الجهاز</button></div></div>
 <div id="app" hidden>
   <header class="hd"><div class="wrap">
-    <div class="t"><b id="rName"></b><small id="wName"></small></div>
+    <div class="t"><b id="rName"></b><small id="wName"></small><small class="lanst" id="lanSt" hidden></small></div>
     <button type="button" class="hb" id="outBtn" title="فصل هذا الجهاز">🔌</button>
   </div></header>
   <div class="wrap">
@@ -227,7 +230,7 @@ const readySeen = new Set(); let firstSnap = true;
 //  الطلب نفسه ينحفظ بالتلفون ويترفع للسيرفر وحده من يرجع النت — بنفس المعرّف، فما يتكرر عند الكاشير
 //  fsLive: متصل بالسيرفر هسه — catsFs/tablesFs/mineFs: نسخة السيرفر (أو المحفوظة بالتلفون)
 let fsLive = true, catsFs = [], tablesFs = null, mineFs = [], pendIds = new Set();
-const lanTried = new Map();
+const lanTried = new Map(), lanOk = new Set();   // lanOk: الكاشير أكّد استلامه على الواي فاي (أو عنده من قبل)
 const lan = lanLink({ role: 'waiter', onChange: () => lanView() });
 
 function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2200); }
@@ -311,19 +314,25 @@ function mergeMine() {
   renderTables(); renderOrders();
 }
 function lanView() { if (!me) return; useMenu(); useTables(); mergeMine(); netUi(); resendLan(); }
-// طلب انحفظ بالتلفون وما وصل للسيرفر ولا للكاشير (مثلاً الكاشير انفتح بعدين): نرسله للكاشير أول ما يتصل
+// طلب جديد ما وصل للكاشير على الواي فاي: نرسله أول ما يتصل الكاشير
+//  - انحفظ بالتلفون وما وصل للسيرفر (ماكو نت أبد)
+//  - أو وصل للسيرفر من نت التلفون (بيانات الموبايل) بس الكاشير ماعنده نت — بدون هذا يبقى ينتظر لحد ما يرجع نت الكاشير
+//  الكاشير يرد «وصل» إذا عنده من قبل، فما يتكرر
 function resendLan() {
-  if (!me || !lan.on() || !pendIds.size) return;
+  if (!me || !lan.on()) return;
   const L = lan.orders();
   mineFs.forEach((w) => {
-    if (!pendIds.has(w.id) || w.status !== 'new' || L.has(w.id) || Date.now() - (lanTried.get(w.id) || 0) < 20000) return;
+    if (w.status !== 'new' || L.has(w.id) || lanOk.has(w.id) || Date.now() - (w.createdAtMs || 0) > 3 * 3600000 || Date.now() - (lanTried.get(w.id) || 0) < 20000) return;
     lanTried.set(w.id, Date.now());
     const { id, ...data } = w;
-    lan.actAll('order', { w: { ...data, id } });
+    lan.actAll('order', { w: { ...data, id } }).then((ok) => { if (ok) { lanOk.add(id); netUi(); } });
   });
 }
 // شريط صغير بس لما النت مقطوع
 function netUi() {
+  // داخل تطبيق «سرعة - الويتر»: يبين دائماً إذا الكاشير متصل على الواي فاي (حتى لو التلفون عنده نت)
+  const ls = $('lanSt');
+  if (ls) { ls.hidden = !lan.app(); ls.className = 'lanst ' + (lan.on() ? 'ok' : 'wait'); ls.textContent = lan.on() ? '📶 الكاشير متصل على الواي فاي' : '📶 الكاشير مو متصل على الواي فاي'; }
   const e = $('net'); if (!e) return;
   if (fsLive) { e.hidden = true; return; }
   const n = mineFs.filter((w) => pendIds.has(w.id) && !lan.orders().has(w.id)).length;
@@ -448,7 +457,7 @@ async function send() {
   // بنفس الوقت: السيرفر (ينحفظ بالتلفون ويترفع وحده من يرجع النت) + الكاشير على الواي فاي مباشرة — نفس المعرّف، فما يتكرر
   const fsP = setDoc(ref, data).then(() => 'ok', (e) => e.code || 'err');
   const lanP = lan.on() ? lan.actAll('order', { w: { ...data, id: ref.id } }, 5000) : Promise.resolve(false);
-  if (lan.on()) lanTried.set(ref.id, Date.now());
+  if (lan.on()) { lanTried.set(ref.id, Date.now()); lanP.then((ok) => { if (ok) lanOk.add(ref.id); }); }
   const res = await new Promise((done) => {
     let left = 2;
     const miss = () => { if (--left === 0) done('queued'); };
