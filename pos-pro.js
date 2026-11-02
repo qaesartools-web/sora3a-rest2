@@ -1042,7 +1042,7 @@ function orderActionsCore(o){
     if (!$('kitchenScreen').classList.contains('on')) return;
     $('kdsSub').textContent = list.length ? toA(list.length) + ' طلب قيد التحضير' : '';
     // الجاهز اللي ينتظر الزبون (هو اللي يطلع بـ«جاهز» على التلفزيون): «تم التسليم» يشيله من الشاشة
-    const rdy = orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready') && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < 20 * 60000)
+    const rdy = orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready') && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < (window.posReadyKeep ? posReadyKeep() : 10 * 60000))
       .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
     const kr = $('kdsReady');
     if (kr) {
@@ -1110,11 +1110,14 @@ function renderOrdersCore(){
   };
   const stBadge={pending:'bp',accepted:'ba',pickup:'br',delivering:'br',delivered:'bd',cancelled:'bc',preparing:'ba',ready:'bd'};
   const stLabel={pending:'🟡 ينتظر',accepted:'🔵 مقبول',pickup:'🟠 في المطعم',delivering:'🛵 يتوصل',delivered:'✅ مسلّم',cancelled:'❌ ملغي',preparing:'🍳 قيد التحضير',ready:'✅ جاهز للاستلام'};
+  // رقم الطلب (اللي ينادى بيه الزبون ويطلع بالشاشة) كبير، والرمز الداخلي صغير تحته
+  const oNum=o=>o.ticketNo?'#'+o.ticketNo:o.salonNum?'#'+o.salonNum:o.holdNum?'#'+o.holdNum:o.tableNo?'طاولة '+o.tableNo:'';
+  window.posONum=oNum;
   document.getElementById('ordersList').innerHTML=fil.length?fil.map(o=>{
     const items=orderItemsFull(o);
     return `
     <div class="ocard">
-      <div class="orow"><span class="oid">${esc(o.id.substring(0,6).toUpperCase())}</span><span class="otime">${esc(t12(o.createdAt))}</span></div>
+      <div class="orow"><span class="onum-w">${oNum(o)?`<b class="onum">${esc(oNum(o))}</b>`:''}<small class="oid">${esc(o.id.substring(0,6).toUpperCase())}</small></span><span class="otime">${esc(t12(o.createdAt))}</span></div>
       <div style="margin-bottom:4px;">${typeBadge(o)}</div>
       ${o.customer?`<div class="oinfo">👤 ${esc(o.customer)}${o.phone?' • 📞 '+esc(o.phone):''}</div>`:''}
       ${o.address?`<div class="oinfo">📍 ${esc(o.address)}</div>`:''}
@@ -1133,6 +1136,7 @@ function renderOrdersCore(){
     renderOrdersCore();
     renderKds();
     renderPagers();
+    renderReadyBar();
     syncWebStages();
     renderCapWait();
     // الشاشات المفتوحة تتحدث مباشرة مع كل طلب (بدون ما نلمس خانة يكتب بيها المستخدم)
@@ -1245,7 +1249,7 @@ const showMTabCore = tab=>{
     };
     const onBefore = JSON.stringify(onlineCfg()), online = readOnlineForm();
     if (online) next.online = online;
-    next.screen = $('stScrSalon') ? { salon: $('stScrSalon').checked, delivery: $('stScrDel').checked, qr: $('stScrQr').checked } : scrCfg();
+    next.screen = $('stScrSalon') ? { salon: $('stScrSalon').checked, delivery: $('stScrDel').checked, qr: $('stScrQr').checked, keepMin: Math.round(clamp($('stScrKeep') ? $('stScrKeep').value : 10, 2, 60)) } : scrCfg();
     if (online && online.on && !online.viewOnly && !online.table && !online.pickup && !online.delivery) { toast('⚠️ اختار طريقة طلب وحدة على الأقل، أو «عرض المنيو بس»'); return; }
     settings = { ...DEFAULTS, ...next };
     lsSet(setKey(), settings);
@@ -2075,6 +2079,37 @@ const ordCancelCore = id=>{
         g.gain.setValueAtTime(.0001, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.25, ctx.currentTime + d + .02); g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d + .14); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .16); });
     } catch (e) {}
   }
+  // ── شريط «جاهز للزبون» فوق السلة: الطلبات اللي على شاشة «طلبك جاهز» — ضغطة على الرقم = «تم التسليم»، و«سلّم الكل» ──
+  const readyKeepMs = () => { const k = +scrCfg().keepMin; return k > 0 ? Math.max(2, Math.min(60, k)) * 60000 : 10 * 60000; };
+  window.posReadyKeep = readyKeepMs;
+  const readyNow = () => (restData && feat('screen')) ? orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready')
+    && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < readyKeepMs()).sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0)) : [];
+  function renderReadyBar() {
+    let el = $('readyBar');
+    if (!el) {
+      const anchor = $('curCust'); if (!anchor) return;
+      el = document.createElement('div'); el.id = 'readyBar'; el.className = 'ready-bar';
+      anchor.parentNode.insertBefore(el, anchor);
+      el.addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-served]');
+        if (b) { b.disabled = true; b.classList.add('going'); await window.ordServed(b.dataset.served); return; }
+        if (e.target.closest('[data-served-all]')) {
+          const L = readyNow(), paid = L.filter((o) => !(o.held && o.status !== 'delivered'));
+          if (!paid.length) { toast('⚠️ الطلبات الجاهزة بعدها ما انحسبت — دوس على كل رقم وحاسبه'); return; }
+          if (!confirm('تسليم ' + paid.length + ' طلب جاهز وإزالتهن من شاشة «طلبك جاهز»؟')) return;
+          await Promise.all(paid.map((o) => fb().updateDoc(fb().doc(fb().db, 'orders', o.id), { servedAtMs: Date.now(), kitchen: 'ready', ...(o.kitchenReadyAt ? {} : { kitchenReadyAt: Date.now() }), ...(o.pager ? { pagerDone: true } : {}) }).catch(() => {})));
+          toast('🤝 تم تسليم ' + paid.length + ' طلب' + (L.length > paid.length ? ' — ' + (L.length - paid.length) + ' بعدها تنتظر الحساب' : ''));
+        }
+      });
+    }
+    const L = readyNow();
+    if (!L.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    const ty = (o) => getOrderType(o) === 'salon' ? '🪑' : getOrderType(o) === 'delivery' ? '🏍️' : '🥡';
+    const h = `<div class="rb-t">🔔 جاهز للزبون (${toA(L.length)}) — دوس الرقم بعد ما تسلّمه</div><div class="rb-row">${L.map((o) => `<button type="button" class="rb-n" data-served="${esc(o.id)}" title="تم التسليم">${esc(String(kNum(o)))}<small>${ty(o)}${o.held && o.status !== 'delivered' ? ' 💵' : ''}</small></button>`).join('')}${L.length > 1 ? '<button type="button" class="rb-all" data-served-all>✅ سلّم الكل</button>' : ''}</div>`;
+    if (el.innerHTML !== h) el.innerHTML = h;
+  }
+  window.renderReadyBar = renderReadyBar;
   function renderPagers() {
     let el = $('pagerBar');
     const n = Number(settings.pagers != null ? settings.pagers : 10) || 0;
@@ -2703,7 +2738,7 @@ const ordCancelCore = id=>{
   const ONLINE_DEF = { on: false, viewOnly: false, table: true, pickup: true, delivery: false, autoTable: false, note: '' };
   const onlineCfg = () => ({ ...ONLINE_DEF, ...(settings.online || {}) });
   // شاشة «طلبك جاهز»: الصالة بدون بيجر تطلع افتراضياً، والدلفري لا
-  const scrCfg = () => ({ salon: true, delivery: false, qr: true, ...(settings.screen || {}) });
+  const scrCfg = () => ({ salon: true, delivery: false, qr: true, keepMin: 10, ...(settings.screen || {}) });
   const onlineOk = () => feat('online') && onlineCfg().on;
   const menuLink = (t) => SITE + 'menu.html?r=' + encodeURIComponent(rid() || '') + (t ? '&t=' + encodeURIComponent(t) : '');
   window.menuLink = menuLink;
@@ -3064,6 +3099,8 @@ const ordCancelCore = id=>{
         <div class="ac-sub" style="margin-bottom:6px;line-height:1.8">شنو يطلع على شاشة التلفزيون؟ طلبات السفري والطلبات اللي وياها بيجر تطلع دائماً.</div>
         <label class="set-check"><input type="checkbox" id="stScrSalon" ${scrCfg().salon ? 'checked' : ''}> 🪑 طلبات الصالة حتى بدون بيجر</label>
         <label class="set-check"><input type="checkbox" id="stScrDel" ${scrCfg().delivery ? 'checked' : ''}> 🏍️ طلبات الدلفري (لحد ما يستلمها الكابتن)</label>
+        <div class="flbl">⏱️ الطلب الجاهز يختفي من الشاشة وحده بعد كم دقيقة (إذا محد داس «تم التسليم»)</div>
+        <input class="finp" id="stScrKeep" type="number" min="2" max="60" value="${esc(scrCfg().keepMin || 10)}">
         <label class="set-check"><input type="checkbox" id="stScrQr" ${scrCfg().qr ? 'checked' : ''}> 📱 كود المنيو بزاوية الشاشة — الزبون يمسحه من مكانه (إذا خدمة الباركود شغّالة)</label>
       </div>`;
   }

@@ -411,7 +411,7 @@ html.store-mode .bnav .nb:not([data-tab="acc"]),html.store-mode .desktop-nav .dn
 html.store-mode .ac-ext{display:none!important}
 .store-note{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:rgba(176,122,74,.12);border:1px solid rgba(176,122,74,.35);color:#8a5a2b;font-size:13.5px;line-height:1.8}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=26">
+<link rel="stylesheet" href="pos-pro.css?v=27">
 <script src="device.js?v=2"></script>
 <script src="ask.js?v=2"></script>
 </head>
@@ -2587,22 +2587,22 @@ function renderEd(){
   const s=edState;if(!s)return;
   const v=edVals(),p=s.pick;
   if(!menu[p.ci]||!menu[p.ci].items[p.pi])s.pick={ci:0,pi:0,vi:0};
-  const pp=s.pick,it=menu[pp.ci]&&menu[pp.ci].items[pp.pi];
-  const opts=[];menu.forEach((c,ci)=>c.items.forEach((x,pi)=>opts.push(`<option value="${ci}-${pi}" ${ci===pp.ci&&pi===pp.pi?'selected':''}>${esc(c.emoji+' '+x.name)}</option>`)));
-  viewOpen('✏️ تعديل الطلب #'+s.o.id.substring(0,6).toUpperCase(),`
+  const onm=window.posONum?posONum(s.o):'';
+  viewOpen('✏️ تعديل الطلب '+(onm||'#'+s.o.id.substring(0,6).toUpperCase())+(onm?' ('+s.o.id.substring(0,6).toUpperCase()+')':''),`
    <div class="ac-sub" style="margin-bottom:8px">${esc(s.o.customer||'')} • ${getOrderType(s.o)==='delivery'?'🏍️ دلفري':getOrderType(s.o)==='takeaway'?'🥡 سفري':'🪑 صالة'} — لو الزبون اتصل يريد يضيف أو ينقص</div>
-   ${s.work.map((i,idx)=>`<div class="ac-line"><span>${esc(i.name)}${i.variant&&i.variant!=='وحدة'?' ('+esc(i.variant)+')':''}<div class="ac-sub">${fmt(i.price)} د.ع</div></span>
+   ${s.work.map((i,idx)=>`<div class="ac-line${s.lastKey===i.name+'|'+i.variant?' ed-line-new':''}"><span>${esc(i.name)}${i.variant&&i.variant!=='وحدة'?' ('+esc(i.variant)+')':''}<div class="ac-sub">${fmt(i.price)} د.ع</div></span>
      <span style="display:flex;gap:6px;align-items:center"><button class="ac-b" style="min-width:30px;flex:none" onclick="edQty(${idx},-1)">−</button><b>${toA(i.qty)}</b><button class="ac-b" style="min-width:30px;flex:none" onclick="edQty(${idx},1)">+</button><button class="ac-b del" style="min-width:30px;flex:none" onclick="edDel(${idx})">🗑</button></span></div>`).join('')}
-   <div class="rcard" style="margin-top:10px"><div class="rtitle">➕ إضافة صنف</div>
-    <select class="fsel" onchange="edPick(this.value)">${opts.join('')}</select>
-    ${it&&it.variants.length>1?`<select class="fsel" onchange="edState.pick.vi=+this.value;renderEd()">${it.variants.map((x,i)=>`<option value="${i}" ${i===pp.vi?'selected':''}>${esc(x.name)} — ${fmt(x.price)} د.ع</option>`).join('')}</select>`:''}
-    <div style="display:flex;gap:6px"><input class="finp" style="margin:0" type="number" min="1" value="${s.addQty}" onchange="edState.addQty=Math.max(1,parseInt(this.value)||1)"><button class="ac-b" style="flex:1" onclick="edAdd()">➕ أضف</button></div></div>
+   <div class="rcard" style="margin-top:10px"><div class="rtitle">➕ إضافة صنف — دوس على الصنف وينضاف</div>
+    <input class="finp" id="edQ" placeholder="🔍 ابحث عن صنف" value="${esc(s.q||'')}" oninput="edState.q=this.value;edGrid()">
+    <div class="ed-cats" id="edCats"></div>
+    <div class="ed-grid" id="edGrid"></div></div>
    <div class="ac-line"><span>المبلغ السابق</span><b>${fmt(s.o.value||0)} د.ع</b></div>
    <div class="ac-line"><span>المبلغ الجديد</span><b class="${v.newValue>=(s.o.value||0)?'ac-pos':'ac-neg'}">${fmt(v.newValue)} د.ع</b></div>
    ${v.removed.length&&s.o.inv?`<div class="dfield" style="margin-top:8px"><div class="dlbl">الأصناف المنقوصة (${v.removed.map(r=>esc(r.name)+' ×'+toA(r.qty)).join('، ')})</div>
     <select class="dinp" onchange="edState.restock=this.value"><option value="return" ${s.restock==='return'?'selected':''}>لم تُحضَّر — رجّع المواد للمخزن</option><option value="waste" ${s.restock==='waste'?'selected':''}>اتحضّرت — سجّلها تالف</option></select></div>`:''}
    <button class="confbtn" onclick="edSave()">💾 حفظ التعديل</button>
    <button class="cancel" onclick="viewClose()">إغلاق</button>`);
+  edGrid();
 }
 window.edPick=val=>{const [a,b]=val.split('-').map(Number);edState.pick={ci:a,pi:b,vi:0};renderEd();};
 window.edQty=(i,d)=>{const x=edState.work[i];if(!x)return;x.qty=Math.max(1,x.qty+d);renderEd();};
@@ -2613,8 +2613,24 @@ window.edAdd=()=>{
   const vr=it.variants[p.vi]||it.variants[0];
   const ex=s.work.find(x=>x.name===it.name&&x.variant===vr.name);
   if(ex)ex.qty+=s.addQty;else s.work.push({name:it.name,variant:vr.name,qty:s.addQty,price:vr.price,cost:unitCost(it.name,vr.name)});
+  s.lastKey=it.name+'|'+vr.name;
   s.addQty=1;renderEd();
 };
+// شبكة الأصناف بنافذة التعديل: فروع فوق + بحث، ودوس الصنف ينضاف (وإذا بيه أحجام تطلع أزرارها)
+window.edGrid=()=>{
+  const s=edState,g=document.getElementById('edGrid');if(!s||!g)return;
+  const q=(s.q||'').trim(),cat=s.cat==null?0:s.cat;
+  const cats=document.getElementById('edCats');
+  if(cats)cats.innerHTML=menu.map((c,ci)=>`<button type="button" class="ed-cat ${!q&&ci===cat?'on':''}" onclick="edState.cat=${ci};edState.q='';edState.open='';document.getElementById('edQ').value='';edGrid()">${esc(((c.emoji||'')+' '+c.cat).trim())}</button>`).join('');
+  const list=[];menu.forEach((c,ci)=>(c.items||[]).forEach((it,pi)=>{if(q?String(it.name).includes(q):ci===cat)list.push([ci,pi,it]);}));
+  g.innerHTML=list.length?list.map(([ci,pi,it])=>{
+    const vs=it.variants||[],out=typeof it.stock==='number'&&it.stock<=0,min=vs.length?Math.min(...vs.map(v=>Number(v.price)||0)):0,open=s.open===ci+'-'+pi;
+    return `<button type="button" class="ed-it ${out?'out':''}" data-ed-it="${ci}-${pi}" onclick="edTap(${ci},${pi})">${esc(it.name)}<small>${vs.length>1?'من ':''}${fmt(min)} د.ع${out?' • نفد':''}</small></button>`
+      +(open&&vs.length>1?`<div class="ed-vars">${vs.map((v,vi)=>`<button type="button" class="ed-var" data-ed-var="${vi}" onclick="edQuick(${ci},${pi},${vi})">${esc(v.name)} — ${fmt(v.price)}</button>`).join('')}</div>`:'');
+  }).join(''):'<div class="ac-sub">ماكو أصناف بهالاسم</div>';
+};
+window.edTap=(ci,pi)=>{const it=menu[ci]&&menu[ci].items[pi];if(!it||!edState)return;if((it.variants||[]).length>1){edState.open=edState.open===ci+'-'+pi?'':ci+'-'+pi;edGrid();return;}edQuick(ci,pi,0);};
+window.edQuick=(ci,pi,vi)=>{if(!edState)return;edState.pick={ci,pi,vi};edState.addQty=1;edState.open='';edAdd();};
 window.edSave=async()=>{
   const s=edState;if(!s)return;
   const v=edVals();
@@ -2785,7 +2801,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=68"></script>
+<script src="pos-pro.js?v=69"></script>
 <script type="module">
 // «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
 if (window.STORE_MODE) {
