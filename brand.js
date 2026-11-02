@@ -131,7 +131,12 @@
   // ── صحة الجهاز (مرة كل 12 ساعة): فرق ساعة الجهاز، عمر المتصفح، ونتيجة فحص الحماية — تنحفظ بـ devHealth/{الجهاز}
   //    حتى برج سرعة يعرف يا جهاز يسبب رفض الطلبات (ساعة غلط أو متصفح قديم) قبل تفعيل الرفض. write(id, data) من التطبيق
   var devId = function () { try { var k = localStorage.getItem('sb_dev'); if (!k) { k = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('sb_dev', k); } return k; } catch (e) { return ''; } };
-  var browserOf = function (ua) { var m = /(Edg|OPR|SamsungBrowser|Chrome|CriOS|Firefox|FxiOS|Version)\/(\d+)/.exec(ua) || []; var n = { Edg: 'Edge', OPR: 'Opera', SamsungBrowser: 'Samsung', CriOS: 'Chrome', FxiOS: 'Firefox', Version: 'Safari' }[m[1]] || m[1] || '?'; return (n + ' ' + (m[2] || '')).trim() + (/; wv\)/.test(ua) ? ' (تطبيق)' : ''); };
+  // اسم المتصفح ورقمه: تطبيقات الأندرويد (WebView) بيها «Version/4.0» قبل Chrome — نفحص Chrome أول حتى يطلع رقمه الحقيقي
+  var browserOf = function (ua) {
+    var L = [['Edge', /Edg\/(\d+)/], ['Opera', /OPR\/(\d+)/], ['Samsung', /SamsungBrowser\/(\d+)/], ['Chrome', /(?:Chrome|CriOS)\/(\d+)/], ['Firefox', /(?:Firefox|FxiOS)\/(\d+)/], ['Safari', /Version\/(\d+).*Safari/]];
+    for (var i = 0; i < L.length; i++) { var m = L[i][1].exec(ua); if (m) return L[i][0] + ' ' + m[1] + (/; wv\)/.test(ua) ? ' (تطبيق)' : ''); }
+    return '?';
+  };
   function health(write, info) {
     info = info || {};
     var id = devId(); if (!id || typeof write !== 'function') return;

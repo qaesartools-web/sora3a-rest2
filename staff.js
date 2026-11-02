@@ -18,7 +18,7 @@ export const app = initializeApp(CFG, "pos-v2");
 // App Check (reCAPTCHA Enterprise / Fraud Defense): السيرفر يعرف إن الطلب جاي من تطبيقاتنا الحقيقية (بدون ما يحس المستخدم) — على الموقع بس، مو بالتجارب المحلية
 const APPCHECK_KEY = '6LdWa_0tAAAAAEWXuLi8yrdnPjQmx-r-ayyoZ07h';
 const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; if (!document.getElementById('acHide')) document.head.insertAdjacentHTML('beforeend', '<style id="acHide">.grecaptcha-badge{visibility:hidden}</style>');
-  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => { const ac = m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); m.getToken(ac).then(() => { window.__acState = window.__acState || 'ok'; }, (e) => { window.__acState = 'err:' + String((e && (e.code || e.message)) || e).slice(0, 80); }); }).catch(() => {}); };
+  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => { const ac = m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); m.getToken(ac).then(() => { window.__acState = window.__acState || 'ok'; }, (e) => { window.__acState = 'err:' + String((e && ((e.code || '') + ' ' + (e.message || ''))) || e).replace(/\s+/g, ' ').slice(0, 95); }); }).catch(() => {}); };
 appCheck(app);
 export const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
 // كاش محلي دائم: الشاشة تفتح بآخر بياناتها حتى لو انقطع النت (وتكمل ويا الكاشير على نفس الواي فاي — lanlink.js)
