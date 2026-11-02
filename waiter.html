@@ -52,6 +52,7 @@ button{cursor:pointer}
 .tb.busy{border-color:var(--saf)}
 .tb.ready{border:2px solid transparent;background:linear-gradient(color-mix(in srgb,var(--neon) 18%,var(--card)),color-mix(in srgb,var(--neon) 18%,var(--card))) padding-box,conic-gradient(from var(--sb),transparent 0 62%,#4ADE80 78%,#ECFFF3 84%,#4ADE80 90%,transparent 100%) border-box;box-shadow:0 0 22px rgba(74,222,128,.22);animation:sbSpin 2.6s linear infinite}
 .tb.ready small{color:var(--ok)}
+.tb small.tt{color:var(--text);font-family:var(--num);font-size:11px;font-weight:700}
 .manual{display:flex;gap:8px;margin-top:12px}
 .inp{display:block;width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);font-size:15px;outline:none}
 .inp:focus{border-color:var(--ok)}
@@ -104,6 +105,22 @@ button{cursor:pointer}
 .od.ready .st{background:var(--neon);color:var(--ink)}
 .od-i{color:var(--muted);font-size:13px;margin-top:4px}
 .od button{margin-top:8px;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:7px 12px;font-size:13px;font-weight:600}
+/* المبلغ وأزرار الطلب: تعديل / إلغاء / تم التقديم */
+.od-t{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-weight:700}
+.od-t b{font-family:var(--num);font-size:17px}
+.od-a{display:flex;flex-wrap:wrap;gap:6px}
+.od-a button{margin-top:8px}
+.od-a .sv{background:var(--neon);color:var(--ink);border-color:transparent;font-weight:800}
+.od-a .cx{color:var(--chili);border-color:rgba(248,113,113,.5)}
+.od-a button:disabled{opacity:.45}
+.od-w{margin-top:8px;border-radius:12px;padding:6px 10px;font-size:13px;font-weight:700;background:rgba(251,191,36,.12);color:var(--saf);border:1px solid rgba(251,191,36,.4)}
+.od-x{margin-top:8px;border-radius:12px;padding:6px 10px;font-size:13px;font-weight:700;background:rgba(248,113,113,.1);color:var(--chili);border:1px solid rgba(248,113,113,.4)}
+.od-ok{margin-top:6px;font-size:12.5px;font-weight:700;color:var(--neon)}
+.tbar .pill.ed{background:var(--saf);color:var(--ink)}
+.edn{border-radius:14px;padding:8px 12px;margin-top:10px;font-size:13px;font-weight:600;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.4);color:var(--saf)}
+.sum.big{font-size:19px}
+.sum small{color:var(--muted);font-weight:600;font-size:13px}
+.sum-l{display:flex;justify-content:space-between;color:var(--muted);font-size:13.5px;margin-top:6px}
 .empty{text-align:center;color:var(--muted);padding:30px 10px}
 /* بدون نت: شريط صغير يوضح وين تروح الطلبات */
 .net{margin:10px 0 0;border-radius:14px;padding:8px 12px;font-size:13px;font-weight:600;line-height:1.6;background:var(--soft);border:1px solid var(--line)}
@@ -160,7 +177,7 @@ button{cursor:pointer}
     </section>
     <section id="vOrders" hidden><div class="ords" id="ords"></div></section>
   </div>
-  <div class="bar" id="bar" hidden><button type="button" id="barBtn"><span class="n" id="barN">0</span><span>مراجعة وإرسال</span><span class="tt" id="barT"></span></button></div>
+  <div class="bar" id="bar" hidden><button type="button" id="barBtn"><span class="n" id="barN">0</span><span id="barL">مراجعة وإرسال</span><span class="tt" id="barT"></span></button></div>
 </div>
 <div class="ov" id="ov"></div>
 <div class="sheet" id="itemSh"></div>
@@ -213,7 +230,7 @@ button{cursor:pointer}
 </script>
 
 <script type="module">
-import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, getDoc, setDoc, collection, query, where, onSnapshot } from './staff.js';
+import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, getDoc, setDoc, updateDoc, collection, query, where, onSnapshot } from './staff.js';
 import { lanLink, wScore } from './lanlink.js?v=2';
 // تلفون الويتر ينربط بالمطعم برمز (بدون إيميل ولا كلمة سر) — مثل شاشة المطبخ؛ اسم الويتر يكتبه اللي يربطه
 const db = screenFb().db;
@@ -225,6 +242,12 @@ const safeImg = (u) => typeof u === 'string' && /^data:image\/(png|jpe?g|webp|gi
 const ST = { new: '⏳ عند الكاشير', preparing: '👨‍🍳 يتحضر', ready: '✅ جاهز — وصّله', done: '✔️ تم', cancelled: '❌ انلغى', rejected: '⛔ انرفض' };
 
 let me = null, cats = [], tables = 0, table = '', cart = [], sel = null, mine = [], unsubs = [], activeCat = 0, sending = false;
+// تعديل طلب مرسول: edit = {id, table, total} — السلة تنملي بأصنافه، والحفظ يروح للكاشير كطلب تعديل
+let edit = null;
+// طلبات الويتر على طلباته (تعديل / إلغاء / تم التقديم): req = {id, type, atMs, items?} — الكاشير يطبّقها ويكتب النتيجة (reqDone/reqRes/reqReason)
+const reqPend = new Map();
+const lastReq = (w) => { const a = reqPend.get(w.id), b = w.req; return !a ? b || null : !b ? a : (a.atMs || 0) >= (b.atMs || 0) ? a : b; };
+const pendReq = (w) => { const r = lastReq(w); return r && r.id !== w.reqDone ? r : null; };
 const readySeen = new Set(); let firstSnap = true;
 // بدون نت: تطبيق «سرعة - الويتر» يرسل الطلب للكاشير مباشرة على نفس الواي فاي، ويشوف حالة طلباته منه.
 //  الطلب نفسه ينحفظ بالتلفون ويترفع للسيرفر وحده من يرجع النت — بنفس المعرّف، فما يتكرر عند الكاشير
@@ -234,7 +257,14 @@ const lanTried = new Map(), lanOk = new Set();   // lanOk: الكاشير أكّ
 const lan = lanLink({ role: 'waiter', onChange: () => lanView() });
 
 function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2200); }
-const stOf = (w) => (w.status === 'new' ? 'new' : w.status === 'rejected' ? 'rejected' : w.stage || 'preparing');
+const stOf = (w) => {
+  // نتيجة «إلغاء» أو «تم التقديم» تبين فوراً (قبل ما تتحدث المرحلة من الكاشير)
+  const r = lastReq(w), ok = r && w.reqDone === r.id && w.reqRes === 'ok';
+  if (ok && r.type === 'cancel') return 'cancelled';
+  if (w.status === 'rejected') return 'rejected';
+  if (ok && r.type === 'served' && w.status === 'accepted' && w.stage !== 'cancelled') return 'done';
+  return w.status === 'new' ? 'new' : w.stage || 'preparing';
+};
 
 screenGate($('gate'), {
   title: 'سرعة — الويتر', kind: 'waiter', label: 'الويتر',
@@ -304,9 +334,21 @@ function mergeMine() {
   lan.orders().forEach((w, id) => {
     if (w.waiterUid !== me.uid) return;
     const x = m.get(id);
-    if (!x || wScore(w) > wScore(x)) m.set(id, x ? { ...x, ...w } : w);
+    let y = !x || wScore(w) > wScore(x) ? (x ? { ...x, ...w } : w) : x;
+    // نتيجة طلب (تعديل/إلغاء/تم التقديم) وصلت من الكاشير على الواي فاي قبل السيرفر
+    const r = x && lastReq(x);
+    if (x && r && w.reqDone === r.id && x.reqDone !== r.id) y = { ...y, reqDone: w.reqDone, reqRes: w.reqRes, reqReason: w.reqReason || '', ...(w.items ? { items: w.items } : {}), ...(w.total != null ? { total: w.total } : {}) };
+    m.set(id, y);
   });
   mine = [...m.values()].filter((w) => Date.now() - (w.createdAtMs || 0) < 14 * 3600000).sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+  // نتيجة طلب وصلت: نبلّغ الويتر مرة وحدة
+  mine.forEach((w) => {
+    const r = reqPend.get(w.id); if (!r || w.reqDone !== r.id) return;
+    reqPend.delete(w.id);
+    if (firstSnap) return;
+    const T = { edit: 'التعديل', cancel: 'الإلغاء', served: '«تم التقديم»' }[r.type] || 'الطلب';
+    toast(w.reqRes === 'ok' ? (r.type === 'edit' ? '✏️ انعدّل طلب طاولة ' + w.table : r.type === 'cancel' ? '❌ انلغى طلب طاولة ' + w.table : '✅ طاولة ' + w.table + ' — انقدّم') : '⛔ ' + T + ' ما انقبل — ' + (w.reqReason || 'راجع الكاشير'));
+  });
   let ding = false;
   mine.forEach((w) => { if (stOf(w) === 'ready' && !readySeen.has(w.id)) { readySeen.add(w.id); if (!firstSnap) { ding = true; toast('✅ طاولة ' + w.table + ' جاهزة — وصّلها'); } } });
   firstSnap = false;
@@ -354,11 +396,11 @@ function show(v) {
 
 // ── الطاولات ──
 function renderTables() {
-  const st = {};
-  mine.forEach((w) => { const s = stOf(w); if (!w.table || ['done', 'cancelled', 'rejected'].includes(s)) return; if (st[w.table] !== 'ready') st[w.table] = s === 'ready' ? 'ready' : 'busy'; });
+  const st = {}, sum = {};
+  mine.forEach((w) => { const s = stOf(w); if (!w.table || ['done', 'cancelled', 'rejected'].includes(s)) return; sum[w.table] = (sum[w.table] || 0) + (Number(w.total) || 0); if (st[w.table] !== 'ready') st[w.table] = s === 'ready' ? 'ready' : 'busy'; });
   const n = Math.min(tables, 200);
   $('vTables').innerHTML = `<div class="lbl">اختار الطاولة</div>
-    ${n ? `<div class="tables">${Array.from({ length: n }, (_, i) => String(i + 1)).map((t) => `<button type="button" class="tb ${st[t] || ''}" data-t="${t}">${t}<small>${st[t] === 'ready' ? '✅ جاهز' : st[t] === 'busy' ? '👨‍🍳 يتحضر' : 'فارغة'}</small></button>`).join('')}</div>` : ''}
+    ${n ? `<div class="tables">${Array.from({ length: n }, (_, i) => String(i + 1)).map((t) => `<button type="button" class="tb ${st[t] || ''}" data-t="${t}">${t}<small>${st[t] === 'ready' ? '✅ جاهز' : st[t] === 'busy' ? '👨‍🍳 يتحضر' : 'فارغة'}</small>${sum[t] ? `<small class="tt">${money(sum[t])}</small>` : ''}</button>`).join('')}</div>` : ''}
     <div class="manual"><input class="inp" id="tIn" inputmode="numeric" maxlength="10" placeholder="${n ? 'أو اكتب رقم الطاولة' : 'رقم الطاولة'}"><button type="button" class="go" id="tGo">فتح</button></div>`;
   const rd = mine.filter((w) => stOf(w) === 'ready').length;
   $('rdBadge').hidden = !rd; $('rdBadge').textContent = rd;
@@ -369,12 +411,25 @@ $('vTables').addEventListener('click', (e) => {
   if (e.target.id === 'tGo') { const t = digits($('tIn').value).trim(); if (t) pickTable(t.slice(0, 10)); else $('tIn').focus(); }
 });
 function pickTable(t) {
+  if (edit) { if (!confirm('تلغي تعديل طلب طاولة ' + edit.table + '؟')) return; edit = null; cart = []; table = ''; }
   if (table && table !== t && cart.length && !confirm('عندك أصناف ما انرسلت لطاولة ' + table + ' — تمسحها؟')) return;
   if (table !== t) cart = [];
-  table = t; $('curTable').textContent = '🪑 طاولة ' + t; $('q').value = '';
-  show('menu');
+  table = t; $('q').value = '';
+  tbarUi(); show('menu');
 }
-$('chgTable').onclick = () => show('tables');
+// شريط الطاولة: بوضع التعديل يبين «تعديل طلب» وزر لإلغاء التعديل
+function tbarUi() {
+  $('curTable').textContent = (edit ? '✏️ تعديل طلب طاولة ' : '🪑 طاولة ') + table;
+  $('curTable').classList.toggle('ed', !!edit);
+  $('chgTable').textContent = edit ? '✖️ إلغاء التعديل' : '↩️ تغيير الطاولة';
+  let n = $('edNote');
+  if (edit && !n) { n = document.createElement('div'); n.id = 'edNote'; n.className = 'edn'; $('chgTable').parentNode.after(n); }
+  if (n) { n.hidden = !edit; n.textContent = edit ? 'زيد أو نقّص الأصناف، وبعدين «حفظ التعديل» — يوصل للكاشير والمطبخ يشوف شنو تغيّر' : ''; }
+}
+$('chgTable').onclick = () => {
+  if (edit) { edit = null; cart = []; table = ''; tbarUi(); show('orders'); toast('↩️ انلغى التعديل'); return; }
+  show('tables');
+};
 
 // ── المنيو ──
 const imgCache = new Map();
@@ -426,31 +481,48 @@ function addLine(p, v, qty, note) {
   renderMenu(); renderBar();
 }
 const total = () => cart.reduce((s, c) => s + c.price * c.qty, 0);
-function renderBar() { const n = cart.reduce((s, c) => s + c.qty, 0); $('bar').hidden = !n || $('vMenu').hidden; $('barN').textContent = n; $('barT').textContent = money(total()); }
+function renderBar() {
+  const n = cart.reduce((s, c) => s + c.qty, 0); $('bar').hidden = !n || $('vMenu').hidden; $('barN').textContent = n; $('barT').textContent = money(total());
+  $('barL').textContent = edit ? 'مراجعة وحفظ التعديل' : 'مراجعة وإرسال';
+}
 
 // ── المراجعة والإرسال ──
 $('barBtn').onclick = () => { renderCart(); open_('cartSh'); };
 function renderCart() {
   const note = ($('cNote') || {}).value || '';
-  $('cartSh').innerHTML = `<div class="grab"></div><h3>🪑 طاولة ${esc(table)}</h3>
+  // المبلغ: الطلب هذا + طلبات الطاولة الثانية اللي بعدها مفتوحة = المبلغ الكلي للطاولة
+  const open = mine.filter((w) => w.table === table && (!edit || w.id !== edit.id) && !['done', 'cancelled', 'rejected'].includes(stOf(w))).reduce((s, w) => s + (Number(w.total) || 0), 0);
+  $('cartSh').innerHTML = `<div class="grab"></div><h3>${edit ? '✏️ تعديل طلب طاولة ' : '🪑 طاولة '}${esc(table)}</h3>
     ${cart.map((c, i) => `<div class="ln"><div class="b"><b>${esc(c.name)}${c.variant && c.variant !== 'وحدة' ? ' — ' + esc(c.variant) : ''}</b><div class="nt">${money(c.price * c.qty)}${c.note ? ' • 📝 ' + esc(c.note) : ''}</div></div>
       <div class="qty"><button type="button" data-l="${i}" data-d="-1">−</button><b>${c.qty}</b><button type="button" data-l="${i}" data-d="1">+</button></div></div>`).join('')}
-    <div class="lbl">ملاحظة للطلب</div><input class="inp" id="cNote" maxlength="200" value="${esc(note)}" placeholder="مثال: الطاولة مستعجلة">
-    <div class="sum"><span>المجموع</span><span>${money(total())}</span></div>
-    <button type="button" class="go big" id="cSend"${sending ? ' disabled' : ''}>${sending ? '⏳ جاري الإرسال…' : '📨 إرسال للمطبخ'}</button>`;
+    ${edit ? '' : `<div class="lbl">ملاحظة للطلب</div><input class="inp" id="cNote" maxlength="200" value="${esc(note)}" placeholder="مثال: الطاولة مستعجلة">`}
+    ${edit ? `<div class="sum-l"><span>المبلغ قبل التعديل</span><span>${money(edit.total)}</span></div>` : ''}
+    <div class="sum${open ? '' : ' big'}"><span>${edit ? 'المبلغ بعد التعديل' : 'مبلغ هذا الطلب'}</span><span>${money(total())}</span></div>
+    ${open ? `<div class="sum-l"><span>طلبات الطاولة الثانية المفتوحة</span><span>${money(open)}</span></div><div class="sum big"><span>💰 المبلغ الكلي للطاولة</span><span id="cGrand">${money(open + total())}</span></div>` : ''}
+    <button type="button" class="go big" id="cSend"${sending ? ' disabled' : ''}>${sending ? '⏳ جاري الإرسال…' : edit ? '💾 حفظ التعديل' : '📨 إرسال للمطبخ'}</button>`;
 }
 $('cartSh').addEventListener('click', (e) => {
   const l = e.target.closest('[data-l]');
   if (l) { const c = cart[+l.dataset.l]; c.qty += +l.dataset.d; if (c.qty <= 0) cart.splice(+l.dataset.l, 1); renderMenu(); renderBar(); if (!cart.length) close_(); else renderCart(); return; }
   if (e.target.id === 'cSend') send();
 });
+const lines = () => cart.map((c) => (c.note ? { name: c.name, variant: c.variant, price: c.price, qty: c.qty, note: c.note } : { name: c.name, variant: c.variant, price: c.price, qty: c.qty }));
 async function send() {
   if (sending || !cart.length || !table) return;
+  if (edit) {
+    const w = mine.find((x) => x.id === edit.id);
+    if (!w) { toast('⚠️ الطلب مو موجود'); return; }
+    sending = true; renderCart();
+    const ok = await sendReq(w, 'edit', lines());
+    sending = false;
+    if (!ok) { renderCart(); return; }
+    edit = null; cart = []; table = ''; tbarUi(); close_(); show('orders');
+    return;
+  }
   const note = $('cNote').value.trim();
   const ref = doc(collection(db, 'webOrders'));
   const data = { restaurantId: me.rid, source: 'waiter', mode: 'table', table: String(table).slice(0, 10), status: 'new', createdAtMs: Date.now(), day: bagDay(),
-    waiter: String(me.name || 'الويتر').slice(0, 60), waiterUid: me.uid, total: total(),
-    items: cart.map((c) => (c.note ? { name: c.name, variant: c.variant, price: c.price, qty: c.qty, note: c.note } : { name: c.name, variant: c.variant, price: c.price, qty: c.qty })) };
+    waiter: String(me.name || 'الويتر').slice(0, 60), waiterUid: me.uid, total: total(), items: lines() };
   if (note) data.note = note.slice(0, 500);
   sending = true; renderCart();
   const t = table;
@@ -474,17 +546,63 @@ async function send() {
 }
 
 // ── طلباتي ──
+const RQ = { edit: '✏️ التعديل', cancel: '❌ الإلغاء', served: '✅ «تم التقديم»' };
 function renderOrders() {
   $('ords').innerHTML = mine.length ? mine.map((w) => {
     const s = stOf(w), cls = s === 'ready' ? 'ready' : ['rejected', 'cancelled'].includes(s) ? 'bad' : '';
     const mins = Math.max(0, Math.floor((Date.now() - (w.createdAtMs || 0)) / 60000));
-    return `<div class="od ${cls}"><div class="od-h"><span class="tn">🪑 ${esc(w.table)}</span>${w.ticket ? `<span>#${esc(w.ticket)}</span>` : ''}<span class="st">${ST[s] || s}</span></div>
-      <div class="od-i">${(w.items || []).map((i) => `${i.qty}× ${esc(i.name)}`).join('، ')} • قبل ${mins} د</div>
+    const pr = pendReq(w), lr = lastReq(w), live = !['done', 'rejected', 'cancelled'].includes(s), dis = pr ? ' disabled' : '', id = esc(w.id);
+    const res = !pr && lr && w.reqDone === lr.id ? (w.reqRes === 'ok' ? (lr.type === 'edit' ? '<div class="od-ok">✏️ انعدّل — المطبخ شاف التغيير</div>' : '')
+      : `<div class="od-x">⛔ ${RQ[lr.type] || 'الطلب'} ما انقبل: ${esc(w.reqReason || 'راجع الكاشير')}</div>`) : '';
+    return `<div class="od ${cls}" data-id="${id}"><div class="od-h"><span class="tn">🪑 ${esc(w.table)}</span>${w.ticket ? `<span>#${esc(w.ticket)}</span>` : ''}<span class="st">${ST[s] || s}</span></div>
+      <div class="od-i">${(w.items || []).map((i) => `${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}`).join('، ')} • قبل ${mins} د</div>
       ${s === 'rejected' && w.reason ? `<div class="od-i">السبب: ${esc(w.reason)}</div>` : ''}
-      ${['done', 'rejected', 'cancelled'].includes(s) ? '' : `<button type="button" data-more="${esc(w.table)}">➕ إضافة للطاولة</button>`}</div>`;
+      <div class="od-t"><span>💰 المبلغ</span><b>${money(w.total)}</b></div>
+      ${pr ? `<div class="od-w">⏳ ${RQ[pr.type] || 'الطلب'} بانتظار الكاشير…</div>` : res}
+      ${live ? `<div class="od-a">
+        ${s === 'ready' ? `<button type="button" class="sv" data-act="served" data-id="${id}"${dis}>✅ تم التقديم</button>` : ''}
+        <button type="button" data-act="edit" data-id="${id}"${dis}>✏️ تعديل</button>
+        ${s !== 'ready' ? `<button type="button" class="cx" data-act="cancel" data-id="${id}"${dis}>❌ إلغاء</button>` : ''}
+        <button type="button" data-more="${esc(w.table)}">➕ طلب جديد للطاولة</button></div>` : ''}</div>`;
   }).join('') : '<div class="empty">ماكو طلبات اليوم بعد — اختار طاولة وابدأ</div>';
 }
-$('ords').addEventListener('click', (e) => { const b = e.target.closest('[data-more]'); if (b) pickTable(b.dataset.more); });
+$('ords').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-more]'); if (b) { pickTable(b.dataset.more); return; }
+  const a = e.target.closest('[data-act]'); if (!a || a.disabled) return;
+  const w = mine.find((x) => x.id === a.dataset.id); if (!w || pendReq(w)) return;
+  if (a.dataset.act === 'edit') return startEdit(w);
+  if (a.dataset.act === 'cancel') { if (confirm('تلغي طلب طاولة ' + w.table + '؟\nالمطبخ يشوف إنه انلغى.')) sendReq(w, 'cancel'); return; }
+  if (a.dataset.act === 'served') sendReq(w, 'served');
+});
+// تعديل طلب: السلة تنملي بأصنافه (السعر من الطلب، أو من المنيو إذا ما موجود)
+function startEdit(w) {
+  if (cart.length && !confirm('عندك أصناف ما انرسلت لطاولة ' + table + ' — تمسحها وتعدّل هذا الطلب؟')) return;
+  const price = (i) => { if (Number(i.price) > 0) return Number(i.price); for (const c of cats) for (const p of c.items || []) if (p.name === i.name) { const v = (p.variants || []).find((x) => x.name === i.variant) || (p.variants || [])[0]; if (v) return Number(v.price) || 0; } return 0; };
+  cart = (w.items || []).slice(0, 40).map((i) => ({ name: i.name, variant: i.variant || '', price: price(i), qty: Math.max(1, Math.min(99, Number(i.qty) || 1)), note: i.note || '' }));
+  edit = { id: w.id, table: w.table, total: Number(w.total) || cart.reduce((s, c) => s + c.price * c.qty, 0) };
+  table = w.table; $('q').value = '';
+  tbarUi(); show('menu');
+}
+// يرسل الطلب للكاشير: على السيرفر (ينحفظ بالتلفون ويترفع من يرجع النت) + على الواي فاي مباشرة — الكاشير يطبّقه مرة وحدة
+async function sendReq(w, type, items) {
+  const r = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), type, atMs: Date.now() };
+  if (items) r.items = items;
+  reqPend.set(w.id, r); renderOrders();
+  const fsP = updateDoc(doc(db, 'webOrders', w.id), { req: r }).then(() => 'ok', (e) => e.code || 'err');
+  const lanP = lan.on() ? lan.actAll('req', { id: w.id, req: r }, 6000) : Promise.resolve(false);
+  const res = await new Promise((done) => {
+    let left = 2;
+    const miss = () => { if (--left === 0) done('queued'); };
+    fsP.then((x) => (x === 'ok' ? done('ok') : x === 'permission-denied' ? done('denied') : miss()));
+    lanP.then((ok) => (ok ? done('lan') : miss()));
+    setTimeout(() => done('queued'), 2500);
+  });
+  if (res === 'denied') { if (reqPend.get(w.id) === r) reqPend.delete(w.id); renderOrders(); toast('⛔ ما ينقبل — الطلب انقفل أو الخدمة موقوفة'); return false; }
+  const T = { edit: 'التعديل', cancel: 'طلب الإلغاء', served: '«تم التقديم»' }[type];
+  toast(res === 'queued' ? '📥 ' + T + ' انحفظ — يوصل للكاشير أول ما يرجع النت' : '📨 ' + T + ' وصل للكاشير');
+  fsP.then((x) => { if (x === 'permission-denied' && res !== 'denied' && reqPend.get(w.id) === r) { reqPend.delete(w.id); renderOrders(); toast('⛔ ' + T + ' لطاولة ' + w.table + ' ما انقبل'); } });
+  return true;
+}
 setInterval(() => { if (me && !$('vOrders').hidden) renderOrders(); }, 30000);
 
 function beep() {
