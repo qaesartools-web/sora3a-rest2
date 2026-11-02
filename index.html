@@ -411,7 +411,7 @@ html.store-mode .bnav .nb:not([data-tab="acc"]),html.store-mode .desktop-nav .dn
 html.store-mode .ac-ext{display:none!important}
 .store-note{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:rgba(176,122,74,.12);border:1px solid rgba(176,122,74,.35);color:#8a5a2b;font-size:13.5px;line-height:1.8}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=27">
+<link rel="stylesheet" href="pos-pro.css?v=28">
 <script src="device.js?v=2"></script>
 <script src="ask.js?v=2"></script>
 </head>
@@ -1219,7 +1219,10 @@ function startListeners2(){
   let migrated=false;
   unsubs.push(fb.onSnapshot(fb.doc(fb.db,'accounting',restData.id),snap=>{
     if(snap.exists()&&!snap.metadata.hasPendingWrites){
-      const _d=snap.data();acc=normAcc(_d.movesOmitted?Object.assign({},_d,{moves:acc.moves}):_d);
+      const _d=snap.data(),srv=normAcc(_d.movesOmitted?Object.assign({},_d,{moves:acc.moves}):_d);
+      // عندنا تعديلات ما ترفعت (بدون نت): ما نمسحها — تندمج ويا نسخة السيرفر
+      if(accDirty){if(!snap.metadata.fromCache)accSync();return;}
+      acc=srv;if(!snap.metadata.fromCache){accBase=accClone(srv);try{localStorage.setItem(accBaseKey(),JSON.stringify(accBase));}catch(e){}}
       // ترحيل المصروفات القديمة (داخل المستند) إلى سجلات منفصلة — يقوم به المالك مرة واحدة
       if(!migrated&&isOwnerPOS()&&acc.expenses.length&&!snap.metadata.fromCache){migrated=true;
         const list=acc.expenses.slice();
@@ -1758,7 +1761,11 @@ function normAcc(d){
   }
   return out;
 }
-function loadAcc(){try{const s=localStorage.getItem(accKey());acc=normAcc(s?JSON.parse(s):null);}catch(e){acc=normAcc(null);}}
+function loadAcc(){
+  try{const s=localStorage.getItem(accKey());acc=normAcc(s?JSON.parse(s):null);}catch(e){acc=normAcc(null);}
+  try{const b=localStorage.getItem(accBaseKey());accBase=b?JSON.parse(b):null;accDirty=localStorage.getItem(accDirtyKey())==='1';}catch(e){accBase=null;accDirty=false;}
+  if(accDirty)setTimeout(accSync,1500);   // تعديلات انحفظت بدون نت قبل ما ينسد البرنامج
+}
 function compactMoves(){
   const cutoff=Date.now()-60*86400000,keep=[],agg={};
   acc.moves.forEach(e=>{
@@ -1770,17 +1777,82 @@ function compactMoves(){
   Object.values(agg).forEach(a=>{a.cost=a.qty?r2(Math.abs(a.value/a.qty)):0;keep.push(a);});
   acc.moves=keep.sort((a,b)=>a.ts-b.ts);
 }
+// ── مزامنة المخزون بين الأجهزة (الكاشير وأمين المخزن) — بالنت وبدون نت ──
+//  كل تعديل ينحفظ بالجهاز أول (يشتغل بدون نت)، وأول ما يكون نت يندمج ويا نسخة السيرفر:
+//  الكمية = كمية السيرفر + اللي تغيّر بهذا الجهاز، والحركات تنضم، وباقي الحقول آخر تعديل — فما يضيع شي من جهاز ثاني
+//  accBase = آخر نسخة شفناها من السيرفر (حتى نعرف شنو تغيّر عندنا)
+let accBase=null,accDirty=false,accSyncT=0,accSyncing=false;
+const accClone=x=>JSON.parse(JSON.stringify(x||null));
+const accBaseKey=()=>accKey()+'_base',accDirtyKey=()=>accKey()+'_dirty';
+function accMerge(base,loc,rem){
+  base=normAcc(base);loc=normAcc(loc);rem=normAcc(rem);
+  const eq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  const byId=a=>{const m={};(a||[]).forEach(x=>{if(x&&x.id)m[x.id]=x;});return m;};
+  // قائمة بمعرّفات: المضاف بهذا الجهاز ينضاف، والمحذوف بأي جهاز ينحذف، والأرقام (الكمية/القيمة) تنجمع فروقها
+  const mergeList=(bl,ll,rl,nums)=>{
+    const B=byId(bl),L=byId(ll),R=byId(rl),out=[],seen={};
+    [rl,ll].forEach(arr=>(arr||[]).forEach(x=>{
+      if(!x||!x.id||seen[x.id])return;seen[x.id]=1;
+      const b=B[x.id],l=L[x.id],r=R[x.id];
+      if(b&&(!l||!r))return;            // انحذف بجهاز (أو انضغط بالملخص الشهري)
+      if(!r){out.push(l);return;}        // جديد بهذا الجهاز
+      if(!l){out.push(r);return;}        // جديد من جهاز ثاني
+      // بدون نسخة أساس (b): ناخذ رقم هذا الجهاز بدون ما يتضاعف
+      const m=Object.assign({},r);
+      Object.keys(l).forEach(k=>{if(nums.indexOf(k)<0&&(!b||!eq(l[k],b[k])))m[k]=l[k];});
+      nums.forEach(k=>{if(k in l||k in r){const bv=b?(Number(b[k])||0):(Number(r[k])||0);m[k]=Math.round(((Number(r[k])||0)+(Number(l[k])||0)-bv)*1000)/1000;}});
+      out.push(m);
+    }));
+    return out;
+  };
+  const mergeMap=(bm,lm,rm)=>{const o=Object.assign({},rm);
+    Object.keys(Object.assign({},bm,lm)).forEach(k=>{const inL=k in lm,inB=k in bm;
+      if(inL&&(!inB||!eq(lm[k],bm[k])))o[k]=lm[k];else if(!inL&&inB)delete o[k];});return o;};
+  const moves=mergeList(base.moves,loc.moves,rem.moves,['qty','value']).sort((a,b)=>(a.ts||0)-(b.ts||0));
+  return {materials:mergeList(base.materials,loc.materials,rem.materials,['qty']),recipes:mergeMap(base.recipes,loc.recipes,rem.recipes),
+    costs:mergeMap(base.costs,loc.costs,rem.costs),moves,expenses:mergeList(base.expenses,loc.expenses,rem.expenses,[])};
+}
+function accPayload(a){
+  const raw=JSON.stringify(a);
+  return raw.length<800000?Object.assign({},a,{updatedAt:Date.now()}):{materials:a.materials,recipes:a.recipes,costs:a.costs,expenses:a.expenses,movesOmitted:true,updatedAt:Date.now()};
+}
+function accPersist(){
+  try{localStorage.setItem(accKey(),JSON.stringify(acc));localStorage.setItem(accBaseKey(),JSON.stringify(accBase));localStorage.setItem(accDirtyKey(),accDirty?'1':'');}catch(e){}
+  if(window.storeNetUi)storeNetUi();
+}
+function accRerender(){updateAccBadge();const scr=document.getElementById('accScreen');if(scr&&scr.classList.contains('on')&&!document.getElementById('acOv').classList.contains('on'))renderAcc();}
+async function accSync(){
+  clearTimeout(accSyncT);
+  const fb=window._fb;
+  if(!accDirty||accSyncing||!restData||!fb||!fb.runTransaction)return;
+  if(navigator.onLine===false){accSyncT=setTimeout(accSync,15000);return;}
+  accSyncing=true;
+  const ref=fb.doc(fb.db,'accounting',restData.id),sent=accClone(acc);
+  try{
+    const merged=await fb.runTransaction(fb.db,async tx=>{
+      const s=await tx.get(ref),d=s.exists()?s.data():null;
+      const rem=d?(d.movesOmitted?Object.assign({},d,{moves:(accBase||sent).moves}):d):(accBase||{});
+      const m=accMerge(accBase||rem,sent,rem);
+      tx.set(ref,accPayload(m));
+      return m;
+    });
+    accBase=accClone(merged);
+    // تعديلات صارت بهذا الجهاز وقت المزامنة: تنضاف فوق النسخة المدموجة وتنرسل بالمرة الجاية
+    if(JSON.stringify(acc)===JSON.stringify(sent)){acc=normAcc(merged);accDirty=false;}
+    else{acc=accMerge(sent,acc,merged);accSyncT=setTimeout(accSync,300);}
+    accPersist();accRerender();
+  }catch(e){
+    console.warn('acc sync',e&&e.code);
+    accSyncT=setTimeout(accSync,navigator.onLine===false?15000:20000);   // بدون نت: يبقى محفوظ بالجهاز ويترفع بعدين
+  }finally{accSyncing=false;}
+}
+window.addEventListener('online',()=>{if(accDirty)accSync();});
 function saveAcc(){
   if(acc.moves.length>1200)compactMoves();
-  try{localStorage.setItem(accKey(),JSON.stringify(acc));}catch(e){toast('⚠️ الذاكرة ممتلئة — خذ نسخة احتياطية');}
-  const fb=window._fb;
-  if(restData&&fb&&fb.setDoc){
-    try{
-      const raw=JSON.stringify(acc);
-      const payload=raw.length<800000?Object.assign({},acc,{updatedAt:Date.now()}):{materials:acc.materials,recipes:acc.recipes,costs:acc.costs,expenses:acc.expenses,movesOmitted:true,updatedAt:Date.now()};
-      fb.setDoc(fb.doc(fb.db,'accounting',restData.id),payload).catch(()=>{});
-    }catch(e){}
-  }
+  accDirty=true;
+  try{localStorage.setItem(accKey(),JSON.stringify(acc));localStorage.setItem(accDirtyKey(),'1');}catch(e){toast('⚠️ الذاكرة ممتلئة — خذ نسخة احتياطية');}
+  if(window.storeNetUi)storeNetUi();
+  clearTimeout(accSyncT);accSyncT=setTimeout(accSync,600);
   updateAccBadge();
 }
 const matById=id=>acc.materials.find(m=>m.id===id);
@@ -2801,7 +2873,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=69"></script>
+<script src="pos-pro.js?v=70"></script>
 <script type="module">
 // «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
 if (window.STORE_MODE) {

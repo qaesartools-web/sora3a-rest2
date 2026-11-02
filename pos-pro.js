@@ -3187,6 +3187,7 @@ function enterAppCore(){
     loadAcc(); startListeners2(); ledInit(); listenMenu(); updateAccBadge();
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', restData.id), (s) => { if (s.exists()) { restData = Object.assign(restData, s.data()); } }, () => {}));
     acCur = 'mat'; goTab('acc');
+    window.storeNetUi();
     if (window.acKick) window.acKick();
     if (window.SB) {
       if (SB.health) SB.health((hid, hd) => fb().setDoc(fb().doc(fb().db, 'devHealth', hid), hd), { rid: restData.id, rest: restData.name || '', who: window.posUser.name });
@@ -3194,6 +3195,18 @@ function enterAppCore(){
     }
   };
   window.storeOut = () => { location.reload(); };
+  // أمين المخزن بدون نت: شريط صغير يبين إن التعديلات محفوظة بالجهاز وتترفع وحدها
+  window.storeNetUi = function () {
+    if (!window.STORE_MODE) return;
+    let el = $('storeNet');
+    if (!el) { el = document.createElement('div'); el.id = 'storeNet'; el.className = 'store-net'; document.body.appendChild(el); }
+    const off = navigator.onLine === false, dirty = (function () { try { return localStorage.getItem('pos_acc_' + ((restData && restData.id) || 'def') + '_dirty') === '1'; } catch (e) { return false; } })();
+    el.hidden = !off && !dirty;
+    el.className = 'store-net ' + (off ? 'off' : 'sync');
+    el.textContent = off ? '📶 ماكو نت — شغّال عادي، والتعديلات محفوظة بالجهاز وتترفع وحدها أول ما يرجع النت' : '⏳ جاري رفع تعديلات المخزن…';
+  };
+  window.addEventListener('online', () => window.storeNetUi());
+  window.addEventListener('offline', () => window.storeNetUi());
   window.storeSvcOn = () => featOn('store');
   window.enterApp = function () {
     disc = { type: 'amt', value: 0, reason: '' }; prodQuery = ''; shift = null; kdsSeen.clear(); kdsReady = false;
