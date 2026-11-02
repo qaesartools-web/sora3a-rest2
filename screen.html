@@ -316,7 +316,7 @@ let feats = {}, unsubRest = null, unsubKey = null;
 let cashiers = [], types = [], unsubMe = null;
 const svcOn = () => feats.screen !== false;
 const seenReady = new Set(), fresh = new Map();   // fresh: رقم ← وقت صار جاهز (للوميض)
-const READY_KEEP = 20 * 60000;
+const READY_KEEP = 10 * 60000;   // الافتراضي إذا الكاشير ما حدد (إعدادات ← شاشة «طلبك جاهز»)
 const TYPE = { takeaway: 'سفري', salon: 'صالة', delivery: 'دلفري' };
 
 // أي طلب يطلع على الشاشة؟ السفري والبيجر دائماً، والصالة بدون بيجر والدلفري حسب إعدادات المطعم
@@ -331,8 +331,8 @@ function where_(o) {
   if (t === 'salon' && !o.pager && !scr.salon) return null;
   if (o.servedAtMs || o.pagerDone || (o.held && o.status === 'delivered')) return null;
   if (o.kitchen === 'ready' || o.status === 'ready') {
-    const at = o.kitchenReadyAt || o.readyAt || 0;
-    return at && Date.now() - at > READY_KEEP ? null : 'ready';
+    const at = o.kitchenReadyAt || o.readyAt || 0, keep = +scr.keepMin > 0 ? Math.max(2, Math.min(60, +scr.keepMin)) * 60000 : READY_KEEP;   // من إعدادات الكاشير
+    return at && Date.now() - at > keep ? null : 'ready';
   }
   return o.kitchen === 'new' ? 'prep' : null;
 }
