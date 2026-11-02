@@ -177,16 +177,27 @@
   // ── صحة الجهاز (مرة كل 12 ساعة): فرق ساعة الجهاز، عمر المتصفح، ونتيجة فحص الحماية — تنحفظ بـ devHealth/{الجهاز}
   //    حتى برج سرعة يعرف يا جهاز يسبب رفض الطلبات (ساعة غلط أو متصفح قديم) قبل تفعيل الرفض. write(id, data) من التطبيق
   var devId = function () { try { var k = localStorage.getItem('sb_dev'); if (!k) { k = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('sb_dev', k); } return k; } catch (e) { return ''; } };
-  // اسم المتصفح ورقمه: تطبيقات الأندرويد (WebView) بيها «Version/4.0» قبل Chrome — نفحص Chrome أول حتى يطلع رقمه الحقيقي
+  // اسم المتصفح ورقمه: تطبيقات الأندرويد (WebView) بيها «Version/4.0 … Safari» — مو سفاري: نفحص Chrome أول حتى يطلع رقمه الحقيقي،
+  //  وإذا الـ WebView ما يذكر رقم Chrome (أجهزة تلفزيون قديمة) يطلع «WebView أندرويد» مو «Safari 4»
   var browserOf = function (ua) {
+    var wv = /; wv\)/.test(ua) || /Sora\w+App\//.test(ua), and = /Android (\d+(?:\.\d+)?)/.exec(ua);
     var L = [['Edge', /Edg\/(\d+)/], ['Opera', /OPR\/(\d+)/], ['Samsung', /SamsungBrowser\/(\d+)/], ['Chrome', /(?:Chrome|CriOS)\/(\d+)/], ['Firefox', /(?:Firefox|FxiOS)\/(\d+)/], ['Safari', /Version\/(\d+).*Safari/]];
-    for (var i = 0; i < L.length; i++) { var m = L[i][1].exec(ua); if (m) return L[i][0] + ' ' + m[1] + (/; wv\)/.test(ua) ? ' (تطبيق)' : ''); }
+    for (var i = 0; i < L.length; i++) { var m = L[i][1].exec(ua); if (m) { if (wv && L[i][0] === 'Safari') break; return L[i][0] + ' ' + m[1] + (wv ? ' (تطبيق)' : ''); } }
+    if (wv) return 'WebView' + (and ? ' أندرويد ' + and[1] : '') + ' (تطبيق)';
     return '?';
   };
   function health(write, info) {
     info = info || {};
     var id = devId(); if (!id || typeof write !== 'function') return;
-    try { if (!window.SB_HEALTH_TEST && Date.now() - (+localStorage.getItem('sb_health_at') || 0) < 12 * 3600000) return; } catch (e) {}
+    var last = 0, lastAc = '';
+    try { last = +localStorage.getItem('sb_health_at') || 0; lastAc = localStorage.getItem('sb_health_ac') || ''; } catch (e) {}
+    if (!window.SB_HEALTH_TEST && Date.now() - last < 12 * 3600000) {
+      // فحص الحماية تغيّر (مثلاً صلح بعد تحديث التطبيق): نبلّغ البرج من جديد بدون ما ننتظر ١٢ ساعة
+      setTimeout(function () { var ac = String(window.__acState || ''); if (ac && ac !== lastAc && Date.now() - last > 600000) report(); }, 20000);
+      return;
+    }
+    report();
+    function report() {
     var t0 = Date.now();
     var go = function (skew) {
       var tries = 0;
@@ -196,13 +207,14 @@
         var d = { app: curApp || '', page: (location.pathname.split('/').pop() || 'index.html').slice(0, 40), ua: ua.slice(0, 200), browser: browserOf(ua).slice(0, 40),
           skewSec: skew == null ? null : skew, ac: String(window.__acState || (/\.github\.io$/.test(location.hostname) ? 'pending' : 'off')).slice(0, 100),
           rid: String(info.rid || '').slice(0, 60), rest: String(info.rest || '').slice(0, 80), who: String(info.who || '').slice(0, 60), atMs: Date.now(), v: 1 };
-        Promise.resolve().then(function () { return write(id, d); }).then(function () { try { localStorage.setItem('sb_health_at', String(Date.now())); } catch (e) {} }).catch(function () {});
+        Promise.resolve().then(function () { return write(id, d); }).then(function () { try { localStorage.setItem('sb_health_at', String(Date.now())); localStorage.setItem('sb_health_ac', d.ac); } catch (e) {} }).catch(function () {});
       })();
     };
     fetch('brand.css', { method: 'HEAD', cache: 'no-store' }).then(function (r) {
       var t1 = Date.now(), srv = Date.parse(r.headers.get('date') || '');
       go(srv ? Math.round(((t0 + t1) / 2 - srv) / 1000) : null);   // بالثواني: موجب = الجهاز مقدّم
     }).catch(function () { go(null); });
+    }
   }
 
   window.SB = {
