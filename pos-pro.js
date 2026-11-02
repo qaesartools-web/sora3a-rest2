@@ -2766,7 +2766,7 @@ const ordCancelCore = id=>{
       phone: String(settings.receiptPhone || restData.phone || '').slice(0, 30), on: !!oc.on && feat('online'),
       // «عرض المنيو بس»: الزبون يتصفح والمتوفر يبين، بدون طلب (كل طرق الطلب مطفية)
       modes: oc.viewOnly ? { table: false, pickup: false, delivery: false } : { table: !!oc.table, pickup: !!oc.pickup, delivery: !!oc.delivery && feat('captain') },
-      fee: Number(settings.defaultFee) || 0, tables: Number(settings.tables) || 0, note: String(oc.note || '').slice(0, 300), autoTable: !!oc.autoTable, cats,
+      fee: Number(settings.defaultFee) || 0, tables: Number(settings.tables) || 0, note: String(oc.note || '').slice(0, 300), autoTable: false, cats,
       ...pubHours(),
     };
   }
@@ -2865,7 +2865,8 @@ const ordCancelCore = id=>{
   //   (الويتر وQR الطاولة ← الصالة؛ QR الاستلام (منها شاشة «طلبك جاهز») ← السفري)
   const webMine = (w) => (w.mode === 'delivery' ? myPerm('oDeliv') : w.mode === 'table' ? myPerm('oSalon') : myPerm('oHold') || myPerm('oTake'));
   const webVisible = () => [...webs.values()].filter(webMine);
-  const webAutoOk = (w) => webAutoDev() && w.source !== 'waiter' && w.mode === 'table' && onlineCfg().autoTable;
+  // كل طلبات الباركود (الطاولة وشاشة «طلبك جاهز») والويتر تمر على الكاشير أول — ما في طلب يدخل للمطبخ بدون قبوله
+  const webAutoOk = () => false;
   function listenWeb() {
     const f = fb();
     webs.clear(); renderWeb();
@@ -3114,7 +3115,6 @@ const ordCancelCore = id=>{
       <label class="set-check"><input type="checkbox" id="stOnTable" ${oc.table ? 'checked' : ''}> 🪑 الطلب من الطاولة (QR على كل طاولة)</label>
       <label class="set-check"><input type="checkbox" id="stOnPickup" ${oc.pickup ? 'checked' : ''}> 🛍️ يطلب ويستلم من المطعم</label>
       <label class="set-check"${dl ? '' : ' style="opacity:.55"'}><input type="checkbox" id="stOnDeliv" ${oc.delivery && dl ? 'checked' : ''} ${dl ? '' : 'disabled'}> 🏍️ توصيل للبيت ${dl ? '(ينرسل لكل الكباتن)' : '— يحتاج خدمة الكابتن'}</label>
-      <label class="set-check"><input type="checkbox" id="stOnAuto" ${oc.autoTable ? 'checked' : ''}> ⚡ طلبات الطاولات تدخل للمطبخ مباشرة بدون تأكيد</label>
       <label class="set-check"><input type="checkbox" id="stOnView" ${oc.viewOnly ? 'checked' : ''}> 📖 <b>عرض المنيو بس</b> — الزبون يشوف الأصناف والمتوفر بدون ما يطلب (يطلب من الكاشير أو الويتر)</label>
       <div class="flbl">ملاحظة تظهر للزبون (اختياري)</div><input class="finp" id="stOnNote" maxlength="300" value="${esc(oc.note || '')}" placeholder="مثال: التوصيل من ١٢ الظهر لحد ١٢ بالليل">
       <label class="set-check" style="margin-top:8px"><input type="checkbox" id="stOnDev" ${webAutoDev() ? 'checked' : ''}> 🖨️ هذا الجهاز يقبل الطلبات التلقائية ويطبعها (خليها على جهاز الكاشير بس)</label>
@@ -3126,7 +3126,7 @@ const ordCancelCore = id=>{
     if (!$('stOnOn')) return settings.online;
     if ($('stOnDev')) lsSet(webAutoKey(), $('stOnDev').checked);
     return { on: $('stOnOn').checked, viewOnly: $('stOnView').checked, table: $('stOnTable').checked, pickup: $('stOnPickup').checked, delivery: $('stOnDeliv').checked && feat('captain'),
-      autoTable: $('stOnAuto').checked, note: $('stOnNote').value.trim().slice(0, 300) };
+      autoTable: false, note: $('stOnNote').value.trim().slice(0, 300) };
   }
   window.copyMenuLink = (link) => {
     const u = link || menuLink();
