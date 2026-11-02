@@ -35,6 +35,21 @@
     quickNotes: ['بدون بصل', 'بدون صوص', 'حار', 'زيادة جبن', 'بدون مخلل'],
   };
   let settings = { ...DEFAULTS };
+  // ══════════ يوم العمل (الحسابات والتقارير) ══════════
+  //  من وقت فتح المطعم لوقت إغلاقه — حتى لو يعبر نص الليل (يفتح ١٢ الظهر ويسد ٢ بالليل: مبيعات ١ بالليل تنحسب على نفس اليوم)
+  //  اليوم الجديد يبدي بنص فترة الغلق. بدون أوقات (أو الدوام ما يعبر نص الليل) = نص الليل مثل قبل
+  //  الأوقات من إعدادات المطعم (bizHours)، وإذا ماكو: ساعات الدوام من برج سرعة. أرقام الطلبات تبقى تتصفر ١٢ بالليل
+  const okHM = (h) => !!h && [h.open, h.close].every((m) => Number.isInteger(m) && m >= 0 && m < 1440) && h.open !== h.close;
+  const bizHours = () => (okHM(settings.bizHours) ? settings.bizHours : restData && restData.hours && restData.hours.on && okHM(restData.hours) ? restData.hours : null);
+  window.posBizHours = bizHours;
+  window.posBizCut = () => { const h = bizHours(); return !h || h.close > h.open ? 0 : Math.round(h.close + (h.open - h.close) / 2); };
+  let bizWas = -1;
+  const bizSync = () => { const c = window.posBizCut(); if (c !== bizWas) { bizWas = c; if (window.posBizChanged) window.posBizChanged(); } };
+  const hmStr = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  const bizNote = (h) => (!okHM(h) ? 'بدون أوقات: اليوم من ١٢ بالليل لـ ١٢ بالليل' + (restData && restData.hours && restData.hours.on && okHM(restData.hours) ? ' (هسه ماشي على ساعات الدوام من برج سرعة)' : '')
+    : h.close > h.open ? 'اليوم من ' + hmStr(h.open) + ' لـ ' + hmStr(h.close) + ' — نفس اليوم'
+    : 'يعبر ١٢ بالليل: مبيعات لحد ' + hmStr(h.close) + ' بالليل تنحسب على اليوم اللي قبله (اليوم الجديد يبدي ' + hmStr(Math.round(h.close + (h.open - h.close) / 2)) + ')');
+  const hmVal = (v) => { const x = /^(\d{1,2}):(\d{2})$/.exec(String(v || '')); return x && +x[1] < 24 && +x[2] < 60 ? +x[1] * 60 + +x[2] : null; };
   const setKey = () => 'pos_settings_' + rid();
 
   // ══════════ حالة الكاشير ══════════
@@ -985,9 +1000,10 @@ function orderActionsCore(o){
       <div class="div"></div><div style="text-align:center;font-size:10px">طُبع ${esc(new Date().toLocaleString('ar-IQ-u-nu-latn'))}${window.posUser && window.posUser.name ? ' • ' + esc(window.posUser.name) : ''}</div></body></html>`;
   }
   // تقرير مبيعات يوم (اليوم، أو يوم سابق — طلباته القديمة تنجاب من السيرفر وقت الطلب)
+  //  يوم العمل: من وقت الفتح لوقت الإغلاق (حتى لو يعبر نص الليل)
   window.printDaily = (dayMs) => {
-    const d0 = new Date(dayMs || Date.now()); d0.setHours(0, 0, 0, 0);
-    const from = d0.getTime(), to = from + 86400000, today = from === new Date().setHours(0, 0, 0, 0);
+    const cut = window.posBizCut() * 60000, d0 = new Date(dayMs || Date.now() - cut); d0.setHours(0, 0, 0, 0);
+    const from = d0.getTime() + cut, to = from + 86400000, today = from <= Date.now() && Date.now() < to;
     const go = (list) => {
       printHTML(dailyReceipt(dailyCalc(from, to, list), '🧾 التقرير اليومي', esc(d0.toLocaleDateString('ar-IQ-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' }))));
       toast('🖨️ طباعة تقرير ' + (today ? 'اليوم' : 'يوم ' + d0.toLocaleDateString('ar-IQ-u-nu-latn')));
@@ -1219,6 +1235,12 @@ const showMTabCore = tab=>{
         <div class="set-row"><div><div class="flbl">عدد الطاولات (0 = بدون)</div><input class="finp" id="stTables" type="number" min="0" max="200" value="${s.tables || 0}"></div>
           <div><div class="flbl">📟 عدد أجهزة البيجر (0 = بدون)</div><input class="finp" id="stPagers" type="number" min="0" max="30" value="${s.pagers != null ? s.pagers : 10}"></div></div>
       </div>
+      <div class="sh-card"><div class="sh-title">🕐 يوم العمل (الحسابات)</div>
+        <div class="ac-sub" style="margin-bottom:8px;line-height:1.8">وقت فتح المطعم وإغلاقه: مبيعات اليوم والتقارير تنحسب من الفتح للإغلاق حتى لو يعبر ١٢ بالليل (مثلاً يسد ٢ بالليل). أرقام الطلبات تتصفر ١٢ بالليل.</div>
+        <div class="set-row"><div><div class="flbl">يفتح</div><input class="finp" id="stBizOpen" type="time" value="${okHM(s.bizHours) ? hmStr(s.bizHours.open) : ''}"></div>
+          <div><div class="flbl">يسد</div><input class="finp" id="stBizClose" type="time" value="${okHM(s.bizHours) ? hmStr(s.bizHours.close) : ''}"></div></div>
+        <div class="ac-sub" id="stBizNote" style="margin-top:6px">${bizNote(s.bizHours)}</div>
+      </div>
       <div class="sh-card"><div class="sh-title">⚡ السرعة</div>
         <label class="set-check"><input type="checkbox" id="stQuick" ${s.quickAdd ? 'checked' : ''}> إضافة سريعة: الصنف ذو السعر الواحد ينضاف بضغطة واحدة</label>
         <div class="flbl">ملاحظات سريعة للمطبخ (مفصولة بفاصلة)</div><input class="finp" id="stNotes" value="${esc(notesArr(s.quickNotes).join('، '))}">
@@ -1246,13 +1268,20 @@ const showMTabCore = tab=>{
       sections: secArr(settings.sections).map((x, i) => ({ id: x.id || 'sec' + (i + 1), emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
       catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
       quickAdd: $('stQuick').checked, quickNotes: list($('stNotes').value).slice(0, 10).map((x) => x.slice(0, 30)),
+      bizHours: settings.bizHours || null,
     };
+    if ($('stBizOpen')) {
+      const bo = hmVal($('stBizOpen').value), bc = hmVal($('stBizClose').value);
+      if ((bo == null) !== (bc == null) || (bo != null && bo === bc)) { toast('⚠️ يوم العمل: حدد وقت الفتح والإغلاق (مختلفين)، أو اتركهم فارغين'); return; }
+      next.bizHours = bo == null ? null : { open: bo, close: bc };
+    }
     const onBefore = JSON.stringify(onlineCfg()), online = readOnlineForm();
     if (online) next.online = online;
     next.screen = $('stScrSalon') ? { salon: $('stScrSalon').checked, delivery: $('stScrDel').checked, qr: $('stScrQr').checked, keepMin: Math.round(clamp($('stScrKeep') ? $('stScrKeep').value : 10, 2, 60)) } : scrCfg();
     if (online && online.on && !online.viewOnly && !online.table && !online.pickup && !online.delivery) { toast('⚠️ اختار طريقة طلب وحدة على الأقل، أو «عرض المنيو بس»'); return; }
     settings = { ...DEFAULTS, ...next };
     lsSet(setKey(), settings);
+    bizSync();
     // إعدادات الطابعات خاصة بهذا الجهاز (لا تُرفع للسحابة)
     if (window.SoraDesktop) dpSave();
     const qc = qzCfgGet();
@@ -1266,6 +1295,7 @@ const showMTabCore = tab=>{
   };
   function listenSettings() {
     settings = { ...DEFAULTS, ...lsGet(setKey(), {}) };
+    bizSync();
     // السيرفر واصل هسه؟ (إذا انشلع كيبل النت والواي فاي شغّال، المتصفح يبقى يحسب نفسه «متصل»)
     window.posFsLive = navigator.onLine !== false;
     unsubs.push(fb().onSnapshot(sub('settings', 'main'), { includeMetadataChanges: true }, (s) => {
@@ -1280,6 +1310,7 @@ const showMTabCore = tab=>{
       // أزرار الأجرة القديمة الافتراضية ← القائمة الجديدة (مجاني لحد 4000)
       if (JSON.stringify(settings.feePresets) === '[3000,5000,7000]') settings.feePresets = DEFAULTS.feePresets;
       lsSet(setKey(), settings);
+      bizSync();
       renderCart();
       lanSettingsPush();
     }, () => {}));
@@ -1909,6 +1940,7 @@ const ordCancelCore = id=>{
       restData.features = s.data().features || null;
       restData.svcOff = s.data().svcOff || null;
       restData.hours = s.data().hours || null;   // ساعات الدوام (من برج سرعة) — تنشر ويا المنيو الأونلاين
+      bizSync();
       if (before !== JSON.stringify([restData.features || {}, restData.svcOff || {}])) { applyFeatures(); pubSoon(); toast('🔄 تم تحديث خدمات المطعم'); }
       else if (beforeH !== JSON.stringify(restData.hours || null)) pubSoon();
     }, () => {}));
