@@ -3137,6 +3137,25 @@ function enterAppCore(){
   if (window.SB && window._fb) SB.health((hid, hd) => window._fb.setDoc(window._fb.doc(window._fb.db, 'devHealth', hid), hd), { rid: restData.id || '', rest: restData.name || '', who: (window.posUser && window.posUser.name) || '' });   // صحة الجهاز
   if (window.SB) SB.welcome({ app: 'cashier', name: (window.posUser && window.posUser.name) || '', rest: restData.name || '', role: window.posUser && window.posUser.role === 'owner' ? 'الكاشير — صاحب المطعم' : 'الكاشير' });
 }
+  // ── «إدارة المخزن»: الجهاز المربوط برمز يفتح المخزون والوصفات والموردين بس (نفس كود الكاشير وبياناته) ──
+  window.storeIn = function (u, F) {
+    window._fb = Object.assign({}, window._fb, { db: F.db, auth: F.auth });
+    restData = Object.assign({ id: u.rid }, u.rest || {});
+    window.posUser = { uid: u.uid, role: 'store', name: (u.screen && u.screen.name) || 'أمين المخزن', perms: { inventory: true } };
+    if (!featOn('store')) { toast('⛔ خدمة «إدارة المخزن» مطفية لهذا المطعم — المخزون بالكاشير'); }
+    $('loginPage').style.display = 'none'; $('appPage').className = 'show';
+    $('restName').textContent = (restData.name || 'المطعم') + ' — 📦 إدارة المخزن';
+    const lo = document.querySelector('.lout'); if (lo) { lo.textContent = '🔌 فصل الجهاز'; lo.onclick = () => { if (confirm('فصل جهاز المخزن؟ بعدها يحتاج رمز جديد من لوحة الإدارة')) window.storeUnlink(); }; }
+    loadAcc(); startListeners2(); ledInit(); listenMenu(); updateAccBadge();
+    unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', restData.id), (s) => { if (s.exists()) { restData = Object.assign(restData, s.data()); } }, () => {}));
+    acCur = 'mat'; goTab('acc');
+    if (window.SB) {
+      SB.health((hid, hd) => fb().setDoc(fb().doc(fb().db, 'devHealth', hid), hd), { rid: restData.id, rest: restData.name || '', who: window.posUser.name });
+      SB.welcome({ app: 'store', name: window.posUser.name, rest: restData.name || '' });
+    }
+  };
+  window.storeOut = () => { location.reload(); };
+  window.storeSvcOn = () => featOn('store');
   window.enterApp = function () {
     disc = { type: 'amt', value: 0, reason: '' }; prodQuery = ''; shift = null; kdsSeen.clear(); kdsReady = false;
     if ($('prodSearch')) $('prodSearch').value = '';

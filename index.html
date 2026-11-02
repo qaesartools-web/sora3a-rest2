@@ -10,6 +10,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="كاشير سرعة">
 <link rel="manifest" href="manifest.json">
+<script>
+// تطبيق «إدارة المخزن» (index.html?store=1): نفس برنامج الكاشير بس المخزون والوصفات والموردين، والجهاز ينربط برمز (بدون إيميل)
+window.STORE_MODE=/[?&]store=1(&|$)/.test(location.search);
+if(window.STORE_MODE){document.documentElement.classList.add('store-mode');document.querySelector('link[rel="manifest"]').href='store.webmanifest';document.title='سرعة — إدارة المخزن';}
+</script>
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>سرعة — كاشير</title>
@@ -400,6 +405,11 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:va
 /* TOAST */
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s,opacity .3s,visibility .3s;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;}
 .toast.on{transform:translateX(-50%) translateY(0);opacity:1;visibility:visible;}
+
+/* تطبيق «إدارة المخزن»: تبويب المخزون بس */
+html.store-mode .bnav .nb:not([data-tab="acc"]),html.store-mode .desktop-nav .dnb:not([data-tab="acc"]),html.store-mode #loginPage,html.store-mode #branchBtn{display:none!important}
+html.store-mode .ac-ext{display:none!important}
+.store-note{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:rgba(176,122,74,.12);border:1px solid rgba(176,122,74,.35);color:#8a5a2b;font-size:13.5px;line-height:1.8}
 </style>
 <link rel="stylesheet" href="pos-pro.css?v=26">
 <script src="device.js?v=2"></script>
@@ -419,7 +429,7 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:va
   </div>
 </div>
 <script src="brand.js"></script>
-<script>window.SB && SB.mount('cashier')</script>
+<script>window.SB && SB.mount(window.STORE_MODE ? 'store' : 'cashier')</script>
 
 
 <!-- THEME SWITCHER -->
@@ -951,6 +961,7 @@ window.addEventListener('fbReady',()=>{
   updateOnline();
 
   const fb=window._fb;
+  if(window.STORE_MODE){if(window.storeBoot)storeBoot();else window.addEventListener('storeReady',()=>storeBoot(),{once:true});return;}
   fb.onAuthStateChanged(fb.auth,async user=>{
     if(user){
       const sessKey='pos_session_'+user.uid;
@@ -1875,12 +1886,15 @@ function renderAcc(){
   const tabs=document.getElementById('acTabs');
   const CASHIER_TABS=['mat','exp','sup','cust'];
   ledInit();
-  if((!isOwnerPOS()&&!CASHIER_TABS.includes(acCur))||!AC_TABS.some(([k])=>k===acCur))acCur='mat';
-  if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+AC_TABS.filter(([k])=>isOwnerPOS()||CASHIER_TABS.includes(k)).map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('')
-    +(isOwnerPOS()?`<button class="mtab ac-ext" onclick="openAdminPanel()" title="تنفتح بلوحة الإدارة">💰 قائمة الدخل والحركات ↗</button>`:'');
+  // «إدارة المخزن»: بتطبيقه بس المخزون والوصفات والموردين؛ وإذا خدمته شغّالة ينشالن من الكاشير (والعكس)
+  const STK=['mat','rec','sup'],storeOn=!window.STORE_MODE&&window.storeSvcOn&&storeSvcOn();
+  const vis=AC_TABS.filter(([k])=>window.STORE_MODE?STK.includes(k):(isOwnerPOS()||CASHIER_TABS.includes(k))&&!(storeOn&&STK.includes(k)));
+  if(!vis.some(([k])=>k===acCur))acCur=(vis[0]||['exp'])[0];
+  if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+vis.map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('')
+    +(isOwnerPOS()&&!window.STORE_MODE?`<button class="mtab ac-ext" onclick="openAdminPanel()" title="تنفتح بلوحة الإدارة">💰 قائمة الدخل والحركات ↗</button>`:'');
   const body=document.getElementById('acBody');if(!body)return;
   const fn={mat:tabMat,mov:tabMov,rec:tabRec,exp:tabExp,sup:tabSup,cust:tabCust,fin:tabFin,tools:tabTools}[acCur]||tabMat;
-  body.innerHTML=fn();
+  body.innerHTML=(storeOn?'<div class="store-note">📦 المخزون والوصفات والموردين صاروا بتطبيق «إدارة المخزن» (جهاز أمين المخزن). إذا انطفت الخدمة يرجعون هنا وحدهم.</div>':'')+fn();
   if(acLoadingNow)body.insertAdjacentHTML('afterbegin','<div class="rep-loading">⏳ دا ينجاب طلبات الفترة القديمة من السيرفر…</div>');
   acLoadingNow=false;
   if(acCur==='mat')renderMatList();
@@ -2753,7 +2767,23 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=65"></script>
+<script src="pos-pro.js?v=66"></script>
+<script type="module">
+// «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
+if (window.STORE_MODE) {
+  window.storeBoot = async () => {
+    const S = await import('./staff.js');
+    const sp = document.getElementById('splash'); if (sp) { sp.classList.add('hide'); setTimeout(() => { sp.style.display = 'none'; }, 600); }
+    const st = document.createElement('style'); st.textContent = S.GATE_CSS + '#storeGate[hidden]{display:none!important}'; document.head.appendChild(st);
+    const gate = document.createElement('div'); gate.id = 'storeGate'; gate.className = 'gate'; document.body.appendChild(gate);
+    window.storeUnlink = () => S.unlinkScreen();
+    S.screenGate(gate, { title: 'إدارة المخزن', kind: 'store', label: 'إدارة المخزن',
+      onIn: (u) => window.storeIn(u, S.screenFb()),
+      onOut: () => { if (window.storeOut) window.storeOut(); } });
+  };
+  window.dispatchEvent(new Event('storeReady'));
+}
+</script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
