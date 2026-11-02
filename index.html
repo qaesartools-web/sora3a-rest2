@@ -2647,8 +2647,8 @@ async function orderUpdate(id,fields,text,status){
   await fb.updateDoc(fb.doc(fb.db,'orders',id),upd);
 }
 window.ordReady=async id=>{try{await orderUpdate(id,{status:'ready',readyAt:Date.now()},'الطلب جاهز للاستلام','ready');toast('✅ الطلب جاهز');}catch(e){toast('❌ '+e.message);}};
-function edVals(){
-  const s=edState,bm={},wm={},key=i=>i.name+'|'+i.variant;
+function edVals(st){
+  const s=st||edState,bm={},wm={},key=i=>i.name+'|'+i.variant;
   s.base.forEach(i=>{bm[key(i)]=(bm[key(i)]||0)+i.qty;});s.work.forEach(i=>{wm[key(i)]=(wm[key(i)]||0)+i.qty;});
   const added=[],removed=[];
   new Set([...Object.keys(bm),...Object.keys(wm)]).forEach(k=>{const d=(wm[k]||0)-(bm[k]||0),p=k.split('|');if(d>0)added.push({name:p[0],variant:p[1],qty:d});else if(d<0)removed.push({name:p[0],variant:p[1],qty:-d});});
@@ -2703,11 +2703,11 @@ window.edGrid=()=>{
 };
 window.edTap=(ci,pi)=>{const it=menu[ci]&&menu[ci].items[pi];if(!it||!edState)return;if((it.variants||[]).length>1){edState.open=edState.open===ci+'-'+pi?'':ci+'-'+pi;edGrid();return;}edQuick(ci,pi,0);};
 window.edQuick=(ci,pi,vi)=>{if(!edState)return;edState.pick={ci,pi,vi};edState.addQty=1;edState.open='';edAdd();};
-window.edSave=async()=>{
-  const s=edState;if(!s)return;
-  const v=edVals();
-  if(!s.work.length){toast('⚠️ لإلغاء الطلب كامل استخدم زر «إلغاء»');return;}
-  if(!v.added.length&&!v.removed.length){viewClose();return;}
+// حفظ التعديل (من نافذة الكاشير، أو طلب تعديل من الويتر يطبّقه الكاشير وحده) — by: منو طلب التعديل (يبين بالمطبخ)
+async function edCommit(s,by){
+  const v=edVals(s);
+  if(!s.work.length)return{empty:true};
+  if(!v.added.length&&!v.removed.length)return{none:true};
   const o=s.o,id=s.id;
   const merged={};s.work.forEach(i=>{const k=i.name+'|'+i.variant;if(merged[k])merged[k].qty+=i.qty;else merged[k]={...i};});
   const newItems=Object.values(merged);
@@ -2717,6 +2717,7 @@ window.edSave=async()=>{
   // شاشة المطبخ: شنو انضاف وشنو انشال (تبين للطباخ لحد ما يضغط «شفته»)
   const edLine=a=>({name:a.name,variant:a.variant||'',qty:a.qty,sec:(window.kSecOf&&window.kSecOf(a.name))||''});
   const kEdit={at:Date.now(),add:v.added.map(edLine),rem:v.removed.map(edLine)};
+  if(by)kEdit.by=String(by).slice(0,60);
   if(o.kitchen){
     upd.kEdits=[...(o.kEdits||[]),kEdit].slice(-10);
     // الصنف المضاف لازم ينطبخ: الطلب يرجع للمطبخ إذا بعده ما انسلّم، وقسمه يرجع «قيد التحضير»
@@ -2726,16 +2727,31 @@ window.edSave=async()=>{
     }
   }
   if(o.captainId&&getOrderType(o)==='delivery')upd.commission=Math.round(v.newValue*.1);
-  const txt='تعديل الطلب'+(v.added.length?' | أُضيف: '+v.added.map(a=>a.name+'×'+a.qty).join('، '):'')+(v.removed.length?' | نُقص: '+v.removed.map(a=>a.name+'×'+a.qty).join('، '):'');
-  try{await orderUpdate(id,upd,txt);}catch(e){toast('❌ '+e.message);return;}
+  const txt='تعديل الطلب'+(by?' (من '+by+')':'')+(v.added.length?' | أُضيف: '+v.added.map(a=>a.name+'×'+a.qty).join('، '):'')+(v.removed.length?' | نُقص: '+v.removed.map(a=>a.name+'×'+a.qty).join('، '):'');
+  await orderUpdate(id,upd,txt);
   if(o.inv){
     if(v.added.length)consumeItems(v.added,'sale',id,'إضافة للطلب');
     if(v.removed.length){if(s.restock==='return')consumeItems(v.removed,'sale_return',id,'تخفيض الطلب');else wasteItems(v.removed,id,'تخفيض الطلب — حُضّر');}
     saveAcc();saveMenu();renderMenu();
   }
-  if(v.added.length)printSlip('➕ إضافة على الطلب #'+id.substring(0,6).toUpperCase(),o,v.added.map(a=>({name:a.name,variant:a.variant,qty:a.qty,price:variantPrice(a.name,a.variant)})),v.newValue);
+  if(v.added.length)printSlip('➕ إضافة على الطلب #'+id.substring(0,6).toUpperCase()+(by?' — '+by:''),o,v.added.map(a=>({name:a.name,variant:a.variant,qty:a.qty,price:variantPrice(a.name,a.variant)})),v.newValue);
+  return{ok:true,v,value:v.newValue,items:newItems};
+}
+window.edSave=async()=>{
+  const s=edState;if(!s)return;
+  if(!s.work.length){toast('⚠️ لإلغاء الطلب كامل استخدم زر «إلغاء»');return;}
+  // منو عدّل: اسم الكاشير (يبين بالمطبخ والمجهز ويا شنو انضاف)
+  const pu=window.posUser||{},by=String(pu.name||(pu.role==='owner'?'صاحب المطعم':'الكاشير')).slice(0,60);
+  let r;try{r=await edCommit(s,by);}catch(e){toast('❌ '+e.message);return;}
+  if(r.none){viewClose();return;}
   toast('✅ تم تعديل الطلب');
   viewClose();
+};
+// طلب تعديل من الويتر: الكاشير يطبّقه وحده (نفس مسار نافذة التعديل: المطبخ يشوف شنو انضاف، المخزون، وتذكرة الإضافة)
+window.posApplyEdit=async(o,items,by)=>{
+  const s={o,id:o.id,base:orderItemsFull(o).map(x=>({...x})),restock:'return',
+    work:items.map(i=>({name:i.name,variant:i.variant,qty:i.qty,price:i.price,cost:unitCost(i.name,i.variant),...(i.note?{note:i.note}:{})}))};
+  return edCommit(s,by);
 };
 function printSlip(title,o,items,total,label,note){
   printHTML(`<html><head><meta charset="UTF-8"><style>body{font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:12px;width:300px;}
@@ -2873,7 +2889,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=70"></script>
+<script src="pos-pro.js?v=71"></script>
 <script type="module">
 // «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
 if (window.STORE_MODE) {

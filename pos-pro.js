@@ -1382,6 +1382,14 @@ const ordCancelCore = id=>{
   },'❌ تأكيد الإلغاء');
 };
   window.ordCancel = (id) => { if (!can('cancel')) { deny(); return; } ordCancelCore(id); };
+  // إلغاء طلب الويتر (بعده ما جهز): المواد ترجع للمخزن، ويبين منو ألغاه بالتفاصيل والمطبخ
+  async function cancelAuto(o, why, byName) {
+    const items = orderItemsFull(o);
+    await orderUpdate(o.id, { status: 'cancelled', cancelReason: why, cancelNote: '', cancelledBy: 'الويتر', cancelledByName: String(byName || 'الويتر').slice(0, 60), cancelledByEmail: '', cancelledByUid: '',
+      cancelledAt: Date.now(), cancelledFrom: o.status, cancelStock: o.inv ? 'return' : 'none', cancelNotice: { by: 'الويتر', name: String(byName || 'الويتر').slice(0, 60), time: nowT(), timestamp: Date.now(), seen: true } },
+      'أُلغي الطلب — ' + why + ' — بواسطة ' + (byName || 'الويتر'), 'cancelled');
+    if (o.inv) { consumeItems(items, 'sale_return', o.id, 'إلغاء طلب (الويتر)'); saveAcc(); saveMenu(); renderMenu(); }
+  }
 
   // ══════════ الصلاحيات (واجهة) ══════════
   function applyPerms() {
@@ -2440,7 +2448,8 @@ const ordCancelCore = id=>{
   let lanFw = null, lanFwT = 0, lanFwHide = false;   // جدار حماية ويندوز (برنامج الكاشير)
   const lanSeen = new Set();
   const LAN_F = ['orderType', 'ticketNo', 'salonNum', 'holdNum', 'pager', 'tableNo', 'createdAt', 'createdAtMs', 'day', 'status', 'kitchen', 'kitchenReadyAt',
-    'readyAt', 'kSec', 'kitchenSecDoneAt', 'note', 'captainId', 'servedAtMs', 'pagerDone', 'held', 'restaurantId'];
+    'readyAt', 'kSec', 'kitchenSecDoneAt', 'note', 'captainId', 'servedAtMs', 'pagerDone', 'held', 'restaurantId',
+    'kEdits', 'cancelReason', 'cancelledAt'];   // المطبخ بدون نت: يشوف الطلب المعدّل (شنو انضاف ومنو عدّله) والملغي وسببه
   const lanOrder = (o) => {
     const x = { id: o.id };
     LAN_F.forEach((k) => { if (o[k] !== undefined && o[k] !== null) x[k] = o[k]; });
@@ -2520,12 +2529,16 @@ const ordCancelCore = id=>{
     const m = wMine(), out = new Map(), day = Date.now() - 16 * 3600000;
     Object.entries(m).forEach(([id, x]) => {
       if (!x.gone) out.set(id, { id, ...x, lan: undefined, acc: undefined, rej: undefined, ...(x.rej ? { status: 'rejected', reason: x.rej } : x.acc ? { status: 'accepted', stage: 'preparing' } : {}) });
+      // نتيجة آخر طلب (تعديل/إلغاء/تم التقديم) للتلفون
     });
     orders.forEach((o) => {
       if (!o.webId || o.source !== 'waiter' || (o.createdAtMs || 0) < day) return;
       const x = out.get(o.webId) || { id: o.webId, source: 'waiter', mode: 'table', table: o.tableNo || '', waiter: o.waiter || '', waiterUid: o.waiterUid || '', day: o.day,
         createdAtMs: o.createdAtMs, total: o.total || o.value || 0, items: (o.items || []).map((i) => ({ name: i.name, variant: i.variant, qty: i.qty, note: i.note })) };
-      out.set(o.webId, { ...x, status: 'accepted', stage: webStageOf(o), ticket: String(kNum(o)).slice(0, 10), reason: undefined });
+      const mm = m[o.webId] || {};
+      out.set(o.webId, { ...x, status: 'accepted', stage: webStageOf(o), ticket: String(kNum(o)).slice(0, 10), reason: undefined,
+        items: (o.items || []).map((i) => ({ name: i.name, variant: i.variant, qty: i.qty, price: i.price, ...(i.note ? { note: i.note } : {}) })), total: o.value || o.total || 0,
+        ...(mm.reqDone ? { reqDone: mm.reqDone, reqRes: mm.reqRes || '', reqReason: mm.reqReason || '' } : {}) });
     });
     return [...out.values()].map((w) => JSON.parse(JSON.stringify(w)));
   }
@@ -2547,8 +2560,30 @@ const ordCancelCore = id=>{
     if (msg.orders || msg.menu) wSend(msg);
   }
   // طلب من تلفون الويتر على الواي فاي
+  // طلب الويتر على طلبه (تعديل/إلغاء/تم التقديم) على الواي فاي — حتى بدون نت
+  async function wReq(ev) {
+    const d = ev.d, L = lanApi(), reply = (ok, err) => { if (L) L.send(ev.id, { t: 'ack', rq: d.rq, ok, err }); };
+    const id = String(d.id || ''), r = d.req && typeof d.req === 'object' ? d.req : null;
+    if (!/^[A-Za-z0-9]{15,40}$/.test(id) || !r || typeof r.id !== 'string' || !['edit', 'cancel', 'served'].includes(r.type)) return reply(false);
+    const mm = wMine()[id];
+    if (mm && mm.reqDone === r.id) return reply(true);
+    const o = orders.find((x) => x.webId === id);
+    const w = webs.get(id) || (mm ? { id, ...mm, status: mm.acc ? 'accepted' : mm.rej ? 'rejected' : 'new' } : null) || (o ? { id, waiter: o.waiter || '', status: 'accepted' } : null);
+    if (!w) return reply(false);
+    if (o && o.device && o.device !== deviceId) return reply(false);   // الطلب المقبول يطبّقه الكاشير اللي سجّله
+    const k = id + ':' + r.id; if (reqBusy.has(k)) return reply(true);
+    reqBusy.add(k);
+    try {
+      let out; try { out = await wReqApply(w, r); } catch (e) { console.warn('waiter req (wifi)', e); out = { res: 'rejected', reason: 'تعذّر — راجع الكاشير' }; }
+      const f = fb(), res = wReqResult(w, r, out);
+      (f.rawUpdateDoc || f.updateDoc)(f.doc(f.db, 'webOrders', id), { req: { id: r.id, type: r.type, atMs: Number(r.atMs) || Date.now(), ...(r.items ? { items: r.items } : {}) }, reqBy: deviceId, reqByAt: Date.now(), ...res }).catch(() => {});
+      reply(true);
+      if (out.res === 'ok') toast(r.type === 'edit' ? '✏️ ' + (w.waiter || 'الويتر') + ' عدّل طلب ' + webWhere(w) : r.type === 'cancel' ? '❌ ' + (w.waiter || 'الويتر') + ' ألغى طلب ' + webWhere(w) : '✅ ' + webWhere(w) + ' — انقدّم');
+    } finally { reqBusy.delete(k); }
+  }
   function wOrder(ev) {
     const d = ev.d, L = lanApi(), reply = (ok, err) => { if (L) L.send(ev.id, { t: 'ack', rq: d.rq, ok, err }); };
+    if (d.op === 'req') { wReq(ev); return; }
     const w = d.w && typeof d.w === 'object' ? d.w : null, id = w && String(w.id || '');
     if (d.op !== 'order' || !w || !/^[A-Za-z0-9]{15,40}$/.test(id)) return reply(false);
     if (webs.has(id) || webGone.has(id) || wMine()[id]) return reply(true);   // وصل من قبل (من كاشير ثاني أو إعادة إرسال)
@@ -2766,7 +2801,7 @@ const ordCancelCore = id=>{
       phone: String(settings.receiptPhone || restData.phone || '').slice(0, 30), on: !!oc.on && feat('online'),
       // «عرض المنيو بس»: الزبون يتصفح والمتوفر يبين، بدون طلب (كل طرق الطلب مطفية)
       modes: oc.viewOnly ? { table: false, pickup: false, delivery: false } : { table: !!oc.table, pickup: !!oc.pickup, delivery: !!oc.delivery && feat('captain') },
-      fee: Number(settings.defaultFee) || 0, tables: Number(settings.tables) || 0, note: String(oc.note || '').slice(0, 300), autoTable: !!oc.autoTable, cats,
+      fee: Number(settings.defaultFee) || 0, tables: Number(settings.tables) || 0, note: String(oc.note || '').slice(0, 300), autoTable: false, cats,
       ...pubHours(),
     };
   }
@@ -2865,7 +2900,8 @@ const ordCancelCore = id=>{
   //   (الويتر وQR الطاولة ← الصالة؛ QR الاستلام (منها شاشة «طلبك جاهز») ← السفري)
   const webMine = (w) => (w.mode === 'delivery' ? myPerm('oDeliv') : w.mode === 'table' ? myPerm('oSalon') : myPerm('oHold') || myPerm('oTake'));
   const webVisible = () => [...webs.values()].filter(webMine);
-  const webAutoOk = (w) => webAutoDev() && w.source !== 'waiter' && w.mode === 'table' && onlineCfg().autoTable;
+  // كل طلبات الباركود (الطاولة وشاشة «طلبك جاهز») والويتر تمر على الكاشير أول — ما في طلب يدخل للمطبخ بدون قبوله
+  const webAutoOk = () => false;
   function listenWeb() {
     const f = fb();
     webs.clear(); renderWeb();
@@ -3022,6 +3058,87 @@ const ordCancelCore = id=>{
       } catch (e) { toast('❌ تعذّر الرفض — يمكن انقبل من جهاز ثاني'); }
     }, '✕ رفض الطلب');
   };
+  // ══════════ طلبات الويتر على طلبه: تعديل / إلغاء / تم التقديم ══════════
+  //  الويتر يكتب req = {id, type, items?} على طلبه (webOrders)، والكاشير يطبّقه وحده ويكتب النتيجة (reqDone/reqRes/reqReason)
+  //  — بالنت (هنا) أو على الواي فاي بدون نت (wReq). الطلب المقبول يطبّقه الجهاز اللي سجّله (أو أي كاشير صالة بعد دقيقة)
+  const reqKey = (w) => w && w.req && w.req.id ? w.req.id : '';
+  async function wReqApply(w, r) {
+    const by = (w.waiter || 'الويتر') + ' (ويتر)', rej = (reason) => ({ res: 'rejected', reason });
+    const o = orders.find((x) => x.webId === w.id && x.status !== 'cancelled');
+    if (!o && (w.status === 'new' || webs.has(w.id))) {
+      if (r.type === 'edit') {
+        const items = webItems({ items: r.items }); if (!items.length) return rej('الأصناف مو موجودة بالمنيو');
+        const raw = (r.items || []).slice(0, 40), total = items.reduce((a, i) => a + i.price * i.qty, 0);
+        const cur = webs.get(w.id); if (cur) { cur.items = raw; cur.total = total; renderWeb(); }
+        return { res: 'ok', items: raw, total };
+      }
+      if (r.type === 'cancel') { webs.delete(w.id); webGone.add(w.id); renderWeb(); if (!webs.size) clearInterval(webRingT); return { res: 'ok', status: 'rejected', reason: 'ألغاه الويتر' }; }
+      return rej('الطلب بعده ما تجهز');
+    }
+    if (!o) return rej('ما لگينا الطلب — راجع الكاشير');
+    const done = o.servedAtMs || ['delivered', 'done', 'cancelled'].includes(o.status) || (o.payment && o.payment.method && o.payment.method !== 'later');
+    if (r.type === 'edit') {
+      if (done) return rej('الطلب انسلّم أو انحسب — اطلب طلب جديد للطاولة');
+      const items = webItems({ items: r.items }); if (!items.length) return rej('الأصناف مو موجودة بالمنيو');
+      if (!window.posApplyEdit) return rej('حدّث الكاشير');
+      const x = await window.posApplyEdit(o, items, by);
+      if (x && x.empty) return rej('الطلب صار فارغ — استخدم «إلغاء»');
+      return { res: 'ok', items: (r.items || []).slice(0, 40), total: x && x.value != null ? x.value : (o.value || 0) };
+    }
+    if (r.type === 'cancel') {
+      if (o.kitchen === 'ready' || o.status === 'ready' || done) return rej('الطلب جاهز — راجع الكاشير حتى يلغيه');
+      await cancelAuto(o, 'ألغاه الويتر', w.waiter || 'الويتر');
+      return { res: 'ok' };
+    }
+    if (r.type === 'served') {
+      if (!(o.kitchen === 'ready' || o.status === 'ready')) return rej('الطلب بعده يتحضر');
+      const f = { servedAtMs: Date.now(), kitchen: 'ready' }; if (!o.kitchenReadyAt) f.kitchenReadyAt = Date.now(); if (o.pager) f.pagerDone = true;
+      await fb().updateDoc(fb().doc(fb().db, 'orders', o.id), f);
+      return { res: 'ok' };
+    }
+    return rej('طلب مو معروف');
+  }
+  // نتيجة الطلب على مستند الويتر (والتلفون يشوفها)
+  function wReqResult(w, r, out) {
+    const f = { reqDone: r.id, reqRes: out.res };
+    if (out.reason) f.reqReason = String(out.reason).slice(0, 120);
+    if (out.items) f.items = out.items;
+    if (out.total != null) f.total = Math.round(out.total);
+    if (out.status === 'rejected' && w.status === 'new') { f.status = 'rejected'; f.reason = out.reason || 'ألغاه الويتر'; }
+    wMark(w.id, { reqDone: r.id, reqRes: out.res, reqReason: f.reqReason || '', ...(out.items ? { items: out.items, total: f.total } : {}), ...(f.status === 'rejected' ? { rej: f.reason } : {}) });
+    return f;
+  }
+  const reqBusy = new Set();
+  // بالنت: نراقب طلبات الويتر اللي عليها طلب ما انطبّق
+  function listenWaiterReqs() {
+    const f = fb();
+    unsubs.push(f.onSnapshot(f.query(f.collection(f.db, 'webOrders'), f.where('restaurantId', '==', rid()), f.where('source', '==', 'waiter'), f.where('day', 'in', [bagDay(), bagDay(Date.now() - 86400000)])), (snap) => {
+      snap.docs.forEach((d) => { const w = { id: d.id, ...d.data() }; if (reqKey(w) && w.reqDone !== w.req.id) setTimeout(() => wReqOnline(w), 0); });
+    }, (e) => console.warn('waiter reqs', e.code)));
+  }
+  async function wReqOnline(w) {
+    const r = w.req, k = w.id + ':' + r.id;
+    if (reqBusy.has(k) || !netOk() || Date.now() - (r.atMs || 0) > 6 * 3600000) return;
+    const o = orders.find((x) => x.webId === w.id);
+    const mineOrd = o ? (o.device === deviceId || Date.now() - (r.atMs || 0) > 60000) : (webMine(w) || Date.now() - (r.atMs || 0) > 60000);
+    if (!mineOrd || !myPerm('oSalon')) { if (Date.now() - (r.atMs || 0) <= 60000) setTimeout(() => wReqOnline(w), 61000 - (Date.now() - (r.atMs || 0))); return; }
+    reqBusy.add(k);
+    const f = fb(), ref = f.doc(f.db, 'webOrders', w.id);
+    try {
+      // نحجز الطلب (جهاز واحد يطبّقه حتى لو أكثر من كاشير شافه)
+      const claimed = await f.runTransaction(f.db, async (tx) => {
+        const s = await tx.get(ref); const d = s.exists() ? s.data() : null;
+        if (!d || !d.req || d.req.id !== r.id || d.reqDone === r.id || (d.reqBy && d.reqBy !== deviceId && Date.now() - (d.reqByAt || 0) < 30000)) return false;
+        tx.update(ref, { reqBy: deviceId, reqByAt: Date.now() });
+        return true;
+      });
+      if (!claimed) return;
+      let out; try { out = await wReqApply(w, r); } catch (e) { console.warn('waiter req', e); out = { res: 'rejected', reason: 'تعذّر — راجع الكاشير' }; }
+      await f.updateDoc(ref, wReqResult(w, r, out));
+      if (out.res === 'ok') toast(r.type === 'edit' ? '✏️ ' + (w.waiter || 'الويتر') + ' عدّل طلب ' + webWhere(w) : r.type === 'cancel' ? '❌ ' + (w.waiter || 'الويتر') + ' ألغى طلب ' + webWhere(w) : '✅ ' + webWhere(w) + ' — انقدّم');
+    } catch (e) { console.warn('waiter req claim', e.code || e); }
+    finally { reqBusy.delete(k); }
+  }
   // ربط الطلب الأونلاين بطلب الكاشير: رقم التذكرة ورابط التتبع يوصلون للزبون
   function webLink(o, orderId) {
     const f = fb(), upd = { orderId, ticket: String(kNum(o)).slice(0, 10) };
@@ -3114,7 +3231,6 @@ const ordCancelCore = id=>{
       <label class="set-check"><input type="checkbox" id="stOnTable" ${oc.table ? 'checked' : ''}> 🪑 الطلب من الطاولة (QR على كل طاولة)</label>
       <label class="set-check"><input type="checkbox" id="stOnPickup" ${oc.pickup ? 'checked' : ''}> 🛍️ يطلب ويستلم من المطعم</label>
       <label class="set-check"${dl ? '' : ' style="opacity:.55"'}><input type="checkbox" id="stOnDeliv" ${oc.delivery && dl ? 'checked' : ''} ${dl ? '' : 'disabled'}> 🏍️ توصيل للبيت ${dl ? '(ينرسل لكل الكباتن)' : '— يحتاج خدمة الكابتن'}</label>
-      <label class="set-check"><input type="checkbox" id="stOnAuto" ${oc.autoTable ? 'checked' : ''}> ⚡ طلبات الطاولات تدخل للمطبخ مباشرة بدون تأكيد</label>
       <label class="set-check"><input type="checkbox" id="stOnView" ${oc.viewOnly ? 'checked' : ''}> 📖 <b>عرض المنيو بس</b> — الزبون يشوف الأصناف والمتوفر بدون ما يطلب (يطلب من الكاشير أو الويتر)</label>
       <div class="flbl">ملاحظة تظهر للزبون (اختياري)</div><input class="finp" id="stOnNote" maxlength="300" value="${esc(oc.note || '')}" placeholder="مثال: التوصيل من ١٢ الظهر لحد ١٢ بالليل">
       <label class="set-check" style="margin-top:8px"><input type="checkbox" id="stOnDev" ${webAutoDev() ? 'checked' : ''}> 🖨️ هذا الجهاز يقبل الطلبات التلقائية ويطبعها (خليها على جهاز الكاشير بس)</label>
@@ -3126,7 +3242,7 @@ const ordCancelCore = id=>{
     if (!$('stOnOn')) return settings.online;
     if ($('stOnDev')) lsSet(webAutoKey(), $('stOnDev').checked);
     return { on: $('stOnOn').checked, viewOnly: $('stOnView').checked, table: $('stOnTable').checked, pickup: $('stOnPickup').checked, delivery: $('stOnDeliv').checked && feat('captain'),
-      autoTable: $('stOnAuto').checked, note: $('stOnNote').value.trim().slice(0, 300) };
+      autoTable: false, note: $('stOnNote').value.trim().slice(0, 300) };
   }
   window.copyMenuLink = (link) => {
     const u = link || menuLink();
@@ -3222,7 +3338,7 @@ function enterAppCore(){
     tkRefill();          // نحجز أرقام الطلبات من أول ما يفتح الكاشير
     listenCalls();
     lanStart();
-    webSt = null; listenWeb(); wRestore();
+    webSt = null; listenWeb(); listenWaiterReqs(); wRestore();
     listenCapPay();
     listenMe();
     listenRest();

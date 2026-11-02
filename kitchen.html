@@ -141,7 +141,9 @@ button{cursor:pointer}
 .canc-why{padding:0 14px 10px;color:#ffb4a6;font-size:14px}
 .ack-b{border:0;background:#fff;color:#8a1a0a;font-weight:800;font-size:17px;padding:14px;margin:0}
 /* الطلب المعدّل: شريط أزرق + شنو انضاف (أخضر) وشنو انشال (مشطوب) */
-.card.edited{border-color:#5aa9ff;border-top-color:#5aa9ff}
+.card.edited{border-color:#5aa9ff;border-top-color:#5aa9ff;animation:edPulse 1.6s ease-in-out infinite}
+@keyframes edPulse{0%,100%{box-shadow:0 0 0 0 rgba(90,169,255,.0)}50%{box-shadow:0 0 0 6px rgba(90,169,255,.45)}}
+.edit-h .ed-by{font-weight:700;font-size:14px;opacity:.92}
 .edit-h{display:flex;align-items:center;justify-content:space-between;background:#1d4f91;color:#fff;font-weight:800;font-size:16px;padding:8px 12px}
 .edit-h button{border:0;border-radius:10px;background:#fff;color:#1d4f91;font-weight:800;font-size:14px;padding:7px 12px;margin-right:8px}
 .ed{padding:8px 14px 2px;font-size:15.5px;line-height:1.6}
@@ -526,7 +528,9 @@ function editBanner(o, ed) {
   let add = [], rem = [];
   ed.forEach((e) => { add = add.concat(relevant(e.add)); rem = rem.concat(relevant(e.rem)); });
   const ln = (a, c, s) => `<div class="${c}">${s} ${toA(a.qty || 1)}× ${esc(a.name)}${a.variant && a.variant !== 'وحدة' ? ' (' + esc(a.variant) + ')' : ''}</div>`;
-  return `<div class="edit-h"><span>✏️ انعدل الطلب</span><button type="button" data-ack-e="${esc(o.id)}|${ed[ed.length - 1].at}">👌 شفته</button></div>
+  // منو عدّله (الويتر أو الكاشير) — يبين للطباخ والمجهز
+  const by = [...new Set(ed.map((e) => e.by).filter(Boolean))].join('، ');
+  return `<div class="edit-h"><span>✏️ انعدل الطلب${by ? ` <small class="ed-by">— ${esc(by)}</small>` : ''}</span><button type="button" data-ack-e="${esc(o.id)}|${ed[ed.length - 1].at}">👌 شفته</button></div>
     <div class="ed">${add.map((a) => ln(a, 'add', '+ انضاف')).join('')}${rem.map((a) => ln(a, 'rem', '− انشال')).join('')}</div>`;
 }
 // صوت مختلف: الملغي نازل وطويل ويتكرر كل 20 ثانية لحد «شفته»، والمعدّل نغمتين
