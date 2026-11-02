@@ -72,24 +72,34 @@ html .sb-splash.sb-gone{opacity:0}
 .sb-sp-ft bdi{direction:ltr;unicode-bidi:isolate;font-weight:700}
 @keyframes sbIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.sb-sp-m{animation:none}html .sb-splash{transition:none}}
-/* شاشة الترحيب عند كل دخول */
+/* شاشة الترحيب «النفق» عند كل دخول — الألوان من brand.js (بلون كل تطبيق)
+   متوافقة مع المتصفحات القديمة: بدون gap ولا clamp ولا متغيرات داخل الأحجام */
 .sb-welcome{position:fixed;top:0;right:0;bottom:0;left:0;z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:20px;background:linear-gradient(160deg,var(--sbG1),var(--sbG2));color:var(--sbOn,#fff);font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;direction:rtl;
-  text-align:center;cursor:pointer;transition:opacity .4s}
+  overflow:hidden;background:#030507;color:#fff;font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;direction:rtl;text-align:center;cursor:pointer;transition:opacity .45s}
 .sb-welcome.sb-gone{opacity:0;pointer-events:none}
-.sb-w-in{display:flex;flex-direction:column;align-items:center}
-.sb-w-in>*+*{margin-top:10px}
-.sb-w-m{width:84px;height:84px;width:12vmin;height:12vmin;display:block;animation:sbIn .6s ease-out both}
-.sb-w-m svg{width:100%;height:100%;display:block}
-.sb-w-g{font-size:30px;font-size:5vmin;font-weight:800;line-height:1.3}
-.sb-w-r{font-size:20px;font-size:3vmin;font-weight:700;opacity:.95}
-.sb-w-a{display:inline-block;font-size:15px;font-size:2.2vmin;font-weight:600;padding:5px 16px;border-radius:999px;background:rgba(255,255,255,.18)}
-.sb-w-ft{position:absolute;left:0;right:0;bottom:6vh;font-size:14px;font-size:2vmin;opacity:.85}
-.sb-w-ft .sb-wm{font-size:1.3em;margin-left:6px}
-@media (max-width:600px){.sb-w-m{width:76px;height:76px}.sb-w-g{font-size:26px}.sb-w-r{font-size:18px}.sb-w-a{font-size:14px}.sb-w-ft{font-size:13px}}
-@media (min-width:1600px){.sb-w-g{font-size:64px}.sb-w-r{font-size:38px}.sb-w-a{font-size:26px}}
+.sb-w-cv{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;display:block}
+.sb-w-fl{position:absolute;left:50%;top:45%;width:80vmin;height:80vmin;margin:-40vmin 0 0 -40vmin;border-radius:50%;opacity:0;z-index:2;animation:sbWFlash 1s .85s ease-out both}
+.sb-w-in{position:relative;z-index:3;display:flex;flex-direction:row;align-items:center;justify-content:center;padding:0 6vw}
+.sb-w-t{flex:none;display:flex;align-items:center;justify-content:center;width:24vmin;height:24vmin;border-radius:27%;margin-left:4vmin;animation:sbWZoom .8s .75s cubic-bezier(.15,.9,.25,1.15) both}
+.sb-w-t svg{width:70%;height:70%;display:block}
+.sb-w-x{display:flex;flex-direction:column;align-items:flex-start;text-align:right}
+.sb-w-ar{font-family:'Reem Kufi','IBM Plex Sans Arabic',Tahoma,sans-serif;font-weight:700;font-size:15vmin;line-height:1.05;overflow:hidden;padding:0 1vmin}
+.sb-w-ar span{display:inline-block;animation:sbWSlide .7s 1.05s cubic-bezier(.2,.8,.2,1) both}
+.sb-w-en{direction:ltr;font-family:'Unbounded','Segoe UI',Arial,sans-serif;font-weight:700;font-size:3.2vmin;letter-spacing:.55em;margin:1.2vmin -.55em 0 0;line-height:1;animation:sbWTrack .8s 1.2s cubic-bezier(.2,.8,.2,1) both}
+.sb-w-a{display:inline-block;margin-top:2vmin;padding:1vmin 3vmin;border-radius:999px;font-size:3.2vmin;font-weight:700;line-height:1.3;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);animation:sbWUp .6s 1.4s cubic-bezier(.2,.8,.2,1) both}
+.sb-w-a i{font-style:normal;direction:ltr;display:inline-block;margin-right:1.4vmin;font-family:'Segoe UI',Arial,sans-serif;font-weight:600;font-size:.62em;letter-spacing:.18em;opacity:.75}
+.sb-w-pb{position:absolute;left:30%;right:30%;bottom:7vh;height:4px;border-radius:9px;background:rgba(255,255,255,.14);overflow:hidden;z-index:3}
+.sb-w-pb i{position:absolute;top:0;left:0;width:100%;height:100%;-webkit-transform-origin:100% 50%;transform-origin:100% 50%;animation:sbWFill 2.4s .2s cubic-bezier(.4,0,.2,1) both}
+/* تلفون (عمودي): الشعار فوق والاسم تحته */
+@media (max-aspect-ratio:1/1){.sb-w-in{flex-direction:column}.sb-w-t{margin:0 0 4vmin 0}.sb-w-x{align-items:center;text-align:center}.sb-w-ar{font-size:17vmin}.sb-w-en{font-size:3.8vmin;margin-right:0;padding-left:.55em}.sb-w-a{font-size:3.8vmin}}
+@keyframes sbWFlash{0%{opacity:0;transform:scale(.2)}25%{opacity:1}100%{opacity:0;transform:scale(1.6)}}
+@keyframes sbWZoom{0%{opacity:0;transform:scale(.15) rotate(-20deg)}100%{opacity:1;transform:none}}
+@keyframes sbWSlide{0%{opacity:0;transform:translateX(-8vw)}100%{opacity:1;transform:none}}
+@keyframes sbWTrack{0%{opacity:0;letter-spacing:1.5em}100%{opacity:1}}
+@keyframes sbWUp{0%{opacity:0;transform:translateY(2.5vmin)}100%{opacity:1;transform:none}}
+@keyframes sbWFill{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
 @keyframes sbWIn{from{opacity:0}to{opacity:1}}
-@media (prefers-reduced-motion:reduce){.sb-welcome,.sb-w-m{animation:none}}
+@media (prefers-reduced-motion:reduce){.sb-welcome *{animation:none!important}}
 @media print{.sb-bar,.sb-foot,.sb-splash,.sb-welcome{display:none!important}}
 /* نموذج الدخول/الربط المشترك (staff.js): يبدي تحت الشريط، وشعاره بلون التطبيق */
 html.sb-on .gate{top:var(--sbH);bottom:var(--sbF)}

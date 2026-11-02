@@ -52,26 +52,72 @@
   // شاشة الترحيب: تطلع عند كل دخول (بعد تسجيل الدخول أو ربط الشاشة) — لون التطبيق، تحية حسب الوقت، الاسم والمطعم.
   // تختفي وحدها بعد ثانيتين تقريباً أو بضغطة. o: { app, name, rest, role, ms }
   var curApp = '';
+  // شاشة الترحيب «النفق» عند كل دخول: نجوم تنسحب بسرعة الضوء بلون التطبيق، والشعار يطلع من نص النفق بومضة،
+  //  ويمه «سرعة» و«SORA3A» واسم التطبيق بالعربي والإنكليزي. ضغطة تخفيها، وتختفي وحدها بعد ثانيتين ونص
+  var EN = { cashier: 'CASHIER', admin: 'ADMIN', kitchen: 'KITCHEN', prep: 'EXPEDITOR', waiter: 'WAITER', captain: 'CAPTAIN',
+    screen: 'ORDER READY', line: 'PHONE LINE', store: 'WAREHOUSE', menu: 'MENU', tracking: 'TRACKING' };
+  var rgbA = function (h, a) { h = String(h).replace('#', ''); return 'rgba(' + parseInt(h.substr(0, 2), 16) + ',' + parseInt(h.substr(2, 2), 16) + ',' + parseInt(h.substr(4, 2), 16) + ',' + a + ')'; };
+  // النجوم على canvas — الأجهزة الضعيفة عدد أقل، والقديمة اللي ما بيها canvas تطلع بدونها
+  function warp(cv, col) {
+    var ctx = cv && cv.getContext && cv.getContext('2d');
+    if (!ctx) return function () {};
+    var rq = window.requestAnimationFrame || function (f) { return setTimeout(function () { f(+new Date()); }, 33); };
+    var cq = window.cancelAnimationFrame || clearTimeout;
+    var dpr = Math.min(1.5, window.devicePixelRatio || 1), weak = (navigator.hardwareConcurrency || 4) <= 2;
+    var W = cv.width = Math.max(1, Math.round((cv.offsetWidth || innerWidth) * dpr)), H = cv.height = Math.max(1, Math.round((cv.offsetHeight || innerHeight) * dpr));
+    var R = Math.sqrt(W * W + H * H) * 0.62, cx = W / 2, cy = H * 0.45, t0 = 0, raf = 0, live = true, stars = [], i;
+    var star = function (any) { return { a: Math.random() * 6.2832, d: any ? Math.random() * 0.9 : 0.01 + Math.random() * 0.05, s: 0.35 + Math.random() * 0.75, c: Math.random() < 0.45 }; };
+    for (i = 0; i < (weak ? 70 : 150); i++) stars.push(star(true));
+    function frame(now) {
+      if (!live) return;
+      if (!t0) t0 = now;
+      var el = (now - t0) / 1000, sp = el < 1 ? 1 : Math.max(0.05, 1 - (el - 1) / 0.9);
+      ctx.clearRect(0, 0, W, H);
+      for (var j = 0; j < stars.length; j++) {
+        var st = stars[j], d0 = st.d;
+        st.d += sp * st.s * 0.035 * (0.25 + st.d * 2.6);
+        if (st.d > 1.05) { stars[j] = star(false); continue; }
+        var ca = Math.cos(st.a), sa = Math.sin(st.a), bk = Math.max(d0 - sp * 0.05, 0);
+        ctx.strokeStyle = st.c ? col : 'rgba(255,255,255,0.9)';
+        ctx.globalAlpha = Math.min(1, st.d * 1.8);
+        ctx.lineWidth = Math.max(1, st.d * 2.6 * dpr);
+        ctx.beginPath(); ctx.moveTo(cx + ca * bk * R, cy + sa * bk * R); ctx.lineTo(cx + ca * st.d * R, cy + sa * st.d * R); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      raf = rq(frame);
+    }
+    raf = rq(frame);
+    return function () { live = false; cq(raf); };
+  }
   function welcome(o) {
     o = o || {};
     var app = o.app || curApp, a = APPS[app], B = document.body;
     if (!a || !B || welcome.done || (window.SB_NO_WELCOME && !window.SB_WELCOME_TEST)) return;
     welcome.done = true;
-    var h = new Date().getHours(), greet = h >= 5 && h < 12 ? 'صباح الخير' : h >= 12 && h < 17 ? 'هلا بيك' : 'مساء الخير';
-    var w = el('sb-welcome', '<div class="sb-w-in"><span class="sb-w-m">' + mark('currentColor') + '</span>' +
-      '<div class="sb-w-g">' + greet + (o.name ? '، <bdi>' + esc(o.name) + '</bdi>' : '') + ' 👋</div>' +
-      (o.rest ? '<div class="sb-w-r"><bdi>' + esc(o.rest) + '</bdi></div>' : '') +
-      '<div class="sb-w-a">' + esc(o.role || a[0]) + '</div></div>' +
-      '<div class="sb-w-ft"><b class="sb-wm">سرعة</b> نتمنالك يوم موفق</div>');
-    w.setAttribute('role', 'status');
-    w.style.setProperty('--sbG1', a[1]); w.style.setProperty('--sbG2', a[2]); w.style.setProperty('--sbOn', a[3] || '#fff');
-    var gone = false, hide = function () { if (gone) return; gone = true; w.classList.add('sb-gone'); setTimeout(function () { if (w.parentNode) w.parentNode.removeChild(w); }, 450); };
+    var g1 = a[1], g2 = a[2];
+    var w = el('sb-welcome', '<canvas class="sb-w-cv" aria-hidden="true"></canvas><i class="sb-w-fl"></i>' +
+      '<div class="sb-w-in"><span class="sb-w-t">' + mark('#fff') + '</span><div class="sb-w-x">' +
+      '<div class="sb-w-ar"><span>سرعة</span></div><div class="sb-w-en">SORA3A</div>' +
+      '<div class="sb-w-a"><b>' + esc(o.role || a[0]) + '</b>' + (EN[app] ? '<i>' + EN[app] + '</i>' : '') + '</div></div></div>' +
+      '<div class="sb-w-pb"><i></i></div>');
+    w.setAttribute('role', 'status'); w.setAttribute('aria-label', 'سرعة — ' + (o.role || a[0]));
+    // لون التطبيق (بدون متغيرات CSS حتى يشتغل بالمتصفحات القديمة)
+    w.style.background = 'radial-gradient(ellipse at 50% 45%,' + rgbA(g2, 0.55) + ' 0%,#030507 70%)';
+    w.querySelector('.sb-w-t').style.background = 'linear-gradient(145deg,' + g1 + ',' + g2 + ')';
+    w.querySelector('.sb-w-t').style.boxShadow = 'inset 0 0 0 3px rgba(255,255,255,.18),0 18px 60px ' + rgbA(g1, 0.5);
+    w.querySelector('.sb-w-fl').style.background = 'radial-gradient(circle,rgba(255,255,255,.95) 0,' + rgbA(g1, 0.55) + ' 22%,rgba(0,0,0,0) 60%)';
+    w.querySelector('.sb-w-en').style.color = g1;
+    w.querySelector('.sb-w-pb i').style.background = g1;
+    var stop = function () {};
+    var gone = false, hide = function () { if (gone) return; gone = true; w.className += ' sb-gone'; setTimeout(function () { stop(); if (w.parentNode) w.parentNode.removeChild(w); }, 450); };
     w.addEventListener('click', hide);
     document.addEventListener('keydown', function k() { document.removeEventListener('keydown', k); hide(); });
     // شاشة الفتح تختفي حتى ما يتداخلن
     var sp = document.querySelectorAll('.sb-splash'); for (var i = 0; i < sp.length; i++) sp[i].style.visibility = 'hidden';
     B.appendChild(w);
-    setTimeout(hide, o.ms || 1900);
+    var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!still) { try { stop = warp(w.querySelector('.sb-w-cv'), g1); } catch (e) {} }
+    setTimeout(hide, o.ms || 2600);
   }
 
   // opts: { bar:false } بدون شريط (منيو المطعم)، { foot:false } بدون سطر تحت (الصفحة تحط الحقوق بمكانها بـ SB.fill)، { splash:false }
