@@ -389,8 +389,11 @@ async function qrUi() {
   fit($('prep'));   // الباركود ياخذ مكان ← الأرقام تصغر حتى تبقى كلها فوقه
   if (!show) return;
   const view = !['table', 'pickup', 'delivery'].some((k) => (pm.modes || {})[k]);
-  $('qrT').innerHTML = '<span>📱 امسح الكود</span><span>' + (view ? 'وشوف المنيو' : 'واطلب من تلفونك') + '</span>';
-  $('qrS').textContent = view ? 'الأصناف المتوفرة هسه، بكاميرا التلفون' : 'بدون تطبيق، وتابع طلبك هنا';
+  const tx = (v, max) => String(v || '').trim().slice(0, max), q = qrCfg || {};
+  const esc_ = (v) => v.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  $('qrT').innerHTML = '<span>' + esc_(tx(q.t1, 40) || '📱 امسح الكود') + '</span><span>' + esc_(tx(q.t2, 40) || (view ? 'وشوف المنيو' : 'واطلب من تلفونك')) + '</span>';
+  $('qrS').textContent = tx(q.sub, 80) || (view ? 'الأصناف المتوفرة هسه، بكاميرا التلفون' : 'بدون تطبيق، وتابع طلبك هنا');
+  qrStyle();
   const url = new URL('menu.html?r=' + encodeURIComponent(rid), location.href.split(/[?#]/)[0]).href;
   if (url === qrUrl) return;
   try {
@@ -552,7 +555,17 @@ const rgbOf = (c) => [1, 3, 5].map((i) => parseInt(c.substr(i, 2), 16));
 const mixC = (a, b, t) => { const x = rgbOf(a), y = rgbOf(b); return '#' + x.map((v, i) => Math.round(v * (1 - t) + y[i] * t).toString(16).padStart(2, '0')).join(''); };
 const lumC = (c) => { const [r, g, b] = rgbOf(c).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
 const onC = (c) => (lumC(c) > 0.45 ? '#1A1206' : '#FFFFFF');
-let thKey = '', logoUrl = '', unsubLogo = null, wmCfg = null;
+let thKey = '', logoUrl = '', unsubLogo = null, wmCfg = null, qrCfg = {};
+// مربع الباركود (يم الكود): البرج يختار لونه ولون كتابته وكتابته — screenTheme.qr = {bg, fg, t1, t2, sub}. الكود نفسه ما يتغير
+function qrStyle() {
+  const q = qrCfg || {}, box = $('qrBox'); if (!box) return;
+  const bg = hexOk(q.bg) ? q.bg : '', fg = hexOk(q.fg) ? q.fg : '';
+  box.style.background = bg ? 'linear-gradient(135deg,' + mixC(bg, '#FFFFFF', 0.22) + ',' + bg + ')' : '';
+  box.style.border = bg ? '0' : '';
+  const t = box.querySelector('.qrt'), spans = t ? t.querySelectorAll('b, b span, small') : [];
+  for (let i = 0; i < spans.length; i++) spans[i].style.color = fg || '';
+  const sm = box.querySelector('small'); if (sm) sm.style.opacity = fg ? '.85' : '';
+}
 // شعار المطعم بخلفية «جاهز»: screenTheme.wm = {on, op (0.03–1), size: s|m|l} — يحتاج شعار مرفوع من البرج
 function wmUi() {
   const w = wmCfg || {}, box = $('wm'), on = !!(w.on && logoUrl);
@@ -569,6 +582,8 @@ function wmUi() {
 function applyTheme(th) {
   th = th || {};
   wmCfg = th.wm || null; wmUi();
+  const q = th.qr || {}, qk = JSON.stringify(q);
+  if (qk !== JSON.stringify(qrCfg)) { qrCfg = q; qrUi(); }
   const design = TH[th.design] ? th.design : 'classic', diff = (c, d) => hexOk(c) && c.toLowerCase() !== d.toLowerCase();
   const custom = diff(th.c1, TH[design][0]) || diff(th.c2, TH[design][1]);   // ألوان التصميم نفسها = مو ألوان خاصة
   const x = th.x || {}, xk = XS.map((k) => (hexOk(x[k]) ? x[k] : '')).join(',');
