@@ -816,18 +816,23 @@ const app = initializeApp({
 // App Check (reCAPTCHA Enterprise / Fraud Defense): السيرفر يعرف إن الطلب جاي من تطبيقاتنا الحقيقية (بدون ما يحس المستخدم) — على الموقع بس، مو بالتجارب المحلية
 const APPCHECK_KEY = '6LdWa_0tAAAAAEWXuLi8yrdnPjQmx-r-ayyoZ07h';
 // داخل تطبيقات الأندرويد فحص كوكل (reCAPTCHA) ما يشتغل: رمز الحماية ياخذه الجهاز المربوط أو الحساب المسجّل من سيرفرنا
+//  ⚠️ ما ننتظر الدخول هنا: الدخول نفسه يطلب رمز الحماية — إذا انتظرنا يعلكون ببعض و«تعذّر الدخول». بدون دخول نرجع خطأ فوراً
+//  (الطلب يكمل بدون رمز، والرفض بعده مو مفعّل)، وبعد الدخول acKick يطلب الرمز من جديد
 const srvAppCheck = (getAuth) => async () => {
-  let u = null;
-  for (let i = 0; i < 120 && !u; i++) { const au = getAuth(); u = au && au.currentUser; if (!u) await new Promise((r) => setTimeout(r, 500)); }
-  if (!u) { window.__acState = 'err:srv لسه ما مسجّل'; throw new Error('not signed in'); }
-  const r = await fetch('https://sora3a-push.qaesartools.workers.dev/appcheck', { method: 'POST', headers: { authorization: 'Bearer ' + await u.getIdToken(), 'content-type': 'application/json' }, body: '{}' });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.token) { window.__acState = 'err:srv ' + r.status + ' ' + String(j.error || '').slice(0, 40); throw new Error('srv ' + r.status); }
-  window.__acState = 'ok (سيرفر)';
-  return { token: j.token, expireTimeMillis: Date.now() + Math.max(120000, (j.ttlMillis || 3600000) - 600000) };
+  const au = getAuth(), u = au && au.currentUser;
+  if (!u) throw new Error('not signed in');
+  if (Date.now() - (window.__acFailAt || 0) < 60000) throw new Error('srv retry later');
+  try {
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 12000);
+    const r = await fetch('https://sora3a-push.qaesartools.workers.dev/appcheck', { method: 'POST', signal: ctl.signal, headers: { authorization: 'Bearer ' + await u.getIdToken(), 'content-type': 'application/json' }, body: '{}' }).finally(() => clearTimeout(tm));
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.token) { window.__acState = 'err:srv ' + r.status + ' ' + String(j.error || '').slice(0, 40); throw new Error('srv ' + r.status); }
+    window.__acState = 'ok (سيرفر)';
+    return { token: j.token, expireTimeMillis: Date.now() + Math.max(120000, (j.ttlMillis || 3600000) - 600000) };
+  } catch (e) { window.__acFailAt = Date.now(); if (!/^err/.test(window.__acState || '')) window.__acState = 'err:srv ' + String(e && e.message || e).slice(0, 60); throw e; }
 };
 // بعد الدخول أو الربط: نطلب الرمز من جديد (قبلها السيرفر يرفض لأن الجهاز بعده ما مربوط)
-window.acKick = () => { if (!window.__acKick || !/; wv\)/.test(navigator.userAgent)) return; window.__acState = ''; window.__acKick.forEach((k) => { try { k().catch(() => {}); } catch (e) {} }); };
+window.acKick = () => { if (!window.__acKick || !/; wv\)/.test(navigator.userAgent)) return; window.__acState = ''; window.__acFailAt = 0; window.__acKick.forEach((k) => { try { k().catch(() => {}); } catch (e) {} }); };
 const appCheck = (a, getAuth) => { if (!/\.github\.io$/.test(location.hostname)) return; if (!document.getElementById('acHide')) document.head.insertAdjacentHTML('beforeend', '<style id="acHide">.grecaptcha-badge{visibility:hidden}</style>');
   import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => { const ac = m.initializeAppCheck(a, { provider: (getAuth && /; wv\)/.test(navigator.userAgent)) ? new m.CustomProvider({ getToken: srvAppCheck(getAuth) }) : new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); if (getAuth) (window.__acKick = window.__acKick || []).push(() => m.getToken(ac, true)); m.getToken(ac).then(() => { window.__acState = window.__acState || 'ok'; }, (e) => { window.__acState = 'err:' + String((e && ((e.code || '') + ' ' + (e.message || ''))) || e).replace(/\s+/g, ' ').slice(0, 95); }); }).catch(() => {}); };
 appCheck(app, () => auth);
