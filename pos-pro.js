@@ -402,7 +402,7 @@ function openDelivModalCore(){
       orderType: type, items, notes: items.map((c) => `${c.name}(${c.variant})×${c.qty}${c.note ? ' [' + c.note + ']' : ''}`).join(', ').slice(0, 4900),
       subtotal: t.sub, discount: t.disc, service: t.service, tax: t.tax, value: t.total,
       inv: true, kitchen: 'new', createdAt: now, createdAtMs: Date.now(), shiftId: shift ? shift.id : null, device: deviceId,
-      byUid: (window.posUser && window.posUser.uid) || '',   // الكاشير اللي سجّله (شاشة «طلبك جاهز» بكل طابق تعرض طلبات كاشيريتها)
+      byUid: (window.posUser && window.posUser.uid) || '', byName: String((window.posUser && window.posUser.name) || '').slice(0, 60),   // الكاشير اللي سجّله (شاشة «طلبك جاهز» بكل طابق تعرض طلبات كاشيريتها)
       day: bagDay(),             // يوم الطلب بتوقيت بغداد (لشاشة «طلبك جاهز» بدون فهارس إضافية)
     };
     if (t.disc) { o.discountInfo = { type: disc.type, value: disc.value, reason: disc.reason || '' }; if (disc.loyalty) o.discountInfo.loyalty = true; }
