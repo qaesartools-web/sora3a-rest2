@@ -102,7 +102,7 @@
       '<div class="sb-w-pb"><i></i></div>');
     w.setAttribute('role', 'status'); w.setAttribute('aria-label', 'سرعة — ' + (o.role || a[0]));
     // لون التطبيق (بدون متغيرات CSS حتى يشتغل بالمتصفحات القديمة)
-    w.style.background = 'radial-gradient(ellipse at 50% 45%,' + rgbA(g2, 0.55) + ' 0%,#030507 70%)';
+    w.style.background = 'radial-gradient(ellipse at 50% 45%,' + rgbA(g2, 0.55) + ' 0%,rgba(3,5,7,0) 70%),#030507';   // تحتها لون غامق ثابت (الصفحة ما تبين)
     w.querySelector('.sb-w-t').style.background = 'linear-gradient(145deg,' + g1 + ',' + g2 + ')';
     w.querySelector('.sb-w-t').style.boxShadow = 'inset 0 0 0 3px rgba(255,255,255,.18),0 18px 60px ' + rgbA(g1, 0.5);
     w.querySelector('.sb-w-fl').style.background = 'radial-gradient(circle,rgba(255,255,255,.95) 0,' + rgbA(g1, 0.55) + ' 22%,rgba(0,0,0,0) 60%)';
