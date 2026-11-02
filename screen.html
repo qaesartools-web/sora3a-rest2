@@ -313,7 +313,7 @@ let scr = { salon: true, delivery: false, qr: true }, unsubSet = null, pm = null
 // خدمات المطعم (يشغّلها أو يوقفها المدير الأعلى): الشاشة نفسها، والباركود (كود المنيو بالزاوية)
 let feats = {}, unsubRest = null, unsubKey = null;
 // كاشيرية هذي الشاشة (فارغة = كل الكاشيرية)
-let cashiers = [], unsubMe = null;
+let cashiers = [], types = [], unsubMe = null;
 const svcOn = () => feats.screen !== false;
 const seenReady = new Set(), fresh = new Map();   // fresh: رقم ← وقت صار جاهز (للوميض)
 const READY_KEEP = 20 * 60000;
@@ -325,6 +325,8 @@ function where_(o) {
   // شاشة طابق: طلبات كاشيريتها بس (الطلبات القديمة بدون اسم كاشير تطلع بكل الشاشات)
   if (cashiers.length && o.byUid && !cashiers.includes(o.byUid)) return null;
   const t = o.orderType || 'delivery';
+  // كل شاشة تختار شنو تعرض (سفري/صالة/دلفري) من لوحة الإدارة — فارغ = الكل
+  if (types.length && !types.includes(t)) return null;
   if (t === 'delivery' && (!scr.delivery || ['pickup', 'delivering', 'delivered'].includes(o.status))) return null;   // استلمه الكابتن
   if (t === 'salon' && !o.pager && !scr.salon) return null;
   if (o.servedAtMs || o.pagerDone || (o.held && o.status === 'delivered')) return null;
@@ -584,9 +586,9 @@ screenGate($('gate'), {
   onIn: async (u) => {
     rid = u.rid; first = true; seenReady.clear();
     // هذي الشاشة: أي كاشيرية تطلع طلباتهم (مطعم بيه أكثر من صالة) — يحددها صاحب المطعم من لوحة الإدارة ويتطبق فوراً
-    cashiers = (u.screen && u.screen.cashiers) || [];
+    cashiers = (u.screen && u.screen.cashiers) || []; types = (u.screen && u.screen.types) || [];
     if (unsubMe) unsubMe();
-    unsubMe = onSnapshot(doc(db, 'screens', u.uid), (s) => { if (!s.exists()) return; const c = s.data().cashiers || []; if (c.join() !== cashiers.join()) { cashiers = c; render(); } }, () => {});
+    unsubMe = onSnapshot(doc(db, 'screens', u.uid), (s) => { if (!s.exists()) return; const c = s.data().cashiers || [], ty = s.data().types || []; if (c.join() !== cashiers.join() || ty.join() !== types.join()) { cashiers = c; types = ty; render(); } }, () => {});
     const name0 = u.rest.name || '';
     setName(name0);
     // الإعدادات مباشرة: أي تغيير من الكاشير ينطبق على الشاشة فوراً
@@ -615,7 +617,7 @@ screenGate($('gate'), {
     svcUi(); clock(); keepOn(); listen();
   },
   onOut: () => {
-    if (unsub) { unsub(); unsub = null; } if (unsubMe) { unsubMe(); unsubMe = null; } cashiers = []; if (unsubLogo) { unsubLogo(); unsubLogo = null; } setLogo(''); applyTheme(null); if (unsubSet) { unsubSet(); unsubSet = null; } if (unsubPm) { unsubPm(); unsubPm = null; } if (unsubRest) { unsubRest(); unsubRest = null; } if (unsubKey) { unsubKey(); unsubKey = null; }
+    if (unsub) { unsub(); unsub = null; } if (unsubMe) { unsubMe(); unsubMe = null; } cashiers = []; types = []; if (unsubLogo) { unsubLogo(); unsubLogo = null; } setLogo(''); applyTheme(null); if (unsubSet) { unsubSet(); unsubSet = null; } if (unsubPm) { unsubPm(); unsubPm = null; } if (unsubRest) { unsubRest(); unsubRest = null; } if (unsubKey) { unsubKey(); unsubKey = null; }
     feats = {}; $('off').hidden = true;
     pm = null; qrUrl = ''; $('qrBox').hidden = true;
     rid = ''; orders = []; fsOrders = []; fsLive = false; setFromFs = false; $('scr').hidden = true; $('hint').hidden = true; menu.hidden = true;

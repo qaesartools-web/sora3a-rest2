@@ -1124,7 +1124,7 @@ function renderOrdersCore(){
         ${window.ordWaiting&&ordWaiting(o)&&o.status==='delivered'&&o.kitchen==='ready'?'<span class="bdg bd">🔔 جاهز — ينتظر الزبون</span>':`<span class="bdg ${stBadge[o.status]||'bp'}">${stLabel[o.status]||esc(o.status)}</span>`}
         <span style="font-size:11px;color:var(--muted)">${esc(o.captainName||'')}</span>
       </div>
-      ${o.status==='cancelled'?`<div class="oinfo" style="color:#e11d48">❌ ${esc(o.cancelReason||'')}${o.cancelNote?' — '+esc(o.cancelNote):''}</div>`:''}
+      ${o.status==='cancelled'?`<div class="oinfo" style="color:#e11d48">❌ ${esc(o.cancelReason||'')}${o.cancelNote?' — '+esc(o.cancelNote):''}${o.cancelledByName?`<br>👤 ألغاه: ${esc(o.cancelledByName)}${o.cancelledByEmail?' — <bdi>'+esc(o.cancelledByEmail)+'</bdi>':''}`:''}</div>`:''}
       ${o.modifiedAt&&o.status!=='cancelled'?`<div class="ac-sub">✏️ عُدّل الطلب بعد إنشائه</div>`:''}
       ${orderActions(o)}
     </div>`;}).join(''):'<div style="text-align:center;color:var(--muted);padding:24px">لا توجد طلبات</div>';
@@ -1365,8 +1365,11 @@ const ordCancelCore = id=>{
   fields.push({id:'note',label:'ملاحظة (اختياري)'});
   acDialog('❌ إلغاء الطلب #'+o.id.substring(0,6).toUpperCase(),o.status==='delivered'?'⚠️ الطلب مُسلَّم — يُسجَّل كمردود مبيعات':(o.status==='delivering'?'⚠️ الكابتن بالطريق':'المبلغ '+fmt(o.value)+' د.ع'),fields,v=>{
     const items=orderItemsFull(o);
-    orderUpdate(id,{status:'cancelled',cancelReason:v.why,cancelNote:(v.note||'').trim(),cancelledBy:'المطعم',cancelledAt:Date.now(),cancelledFrom:o.status,cancelStock:o.inv?v.stock:'none',...(o.capSettled===false?{capSettled:null}:{}),
-      cancelNotice:{by:'المطعم',time:nowT(),timestamp:Date.now(),seen:true}},'أُلغي الطلب — '+v.why,'cancelled').then(()=>{
+    // منو ألغى الطلب: اسم الكاشير وإيميله (يبين بتفاصيل الطلب ومراحله، بالكاشير ولوحة الإدارة والبرج)
+    const pu=window.posUser||{},cu=(window._fb&&window._fb.auth&&window._fb.auth.currentUser)||{};
+    const byName=String(pu.name||(pu.role==='owner'?'صاحب المطعم':'الكاشير')).slice(0,60),byEmail=String(cu.email||'').slice(0,120);
+    orderUpdate(id,{status:'cancelled',cancelReason:v.why,cancelNote:(v.note||'').trim(),cancelledBy:'المطعم',cancelledByName:byName,cancelledByEmail:byEmail,cancelledByUid:cu.uid||'',cancelledAt:Date.now(),cancelledFrom:o.status,cancelStock:o.inv?v.stock:'none',...(o.capSettled===false?{capSettled:null}:{}),
+      cancelNotice:{by:'المطعم',name:byName,time:nowT(),timestamp:Date.now(),seen:true}},'أُلغي الطلب — '+v.why+' — بواسطة '+byName+(byEmail?' ('+byEmail+')':''),'cancelled').then(()=>{
         if(getOrderType(o)==='delivery')syncTracking(id,{status:'cancelled',value:o.value,fee:o.fee});
         if(o.payment&&o.payment.method==='credit'&&window.creditVoid)creditVoid(o,v.why);
         if(o.inv){if(v.stock==='return')consumeItems(items,'sale_return',id,'إلغاء طلب');else wasteItems(items,id,'إلغاء بعد التحضير');saveAcc();saveMenu();renderMenu();}
