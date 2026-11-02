@@ -43,14 +43,14 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
   background:#fff;color:var(--o3);display:flex;align-items:center;justify-content:center;
   font-family:var(--kufi);font-weight:700;font-size:2.2vw;font-size:clamp(20px,2.2vw,36px);box-shadow:0 10px 30px rgba(120,40,0,.25)}
 .nmw{flex:1;min-width:0}
-.nm{color:#fff;font-family:var(--kufi);font-size:2.6vw;font-size:clamp(20px,2.6vw,42px);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.live{display:inline-flex;align-items:center;font-size:1vw;font-size:clamp(11px,1vw,16px);color:rgba(255,255,255,.9);font-weight:600}
+.nm{color:var(--c1fg,#fff);font-family:var(--kufi);font-size:2.6vw;font-size:clamp(20px,2.6vw,42px);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live{display:inline-flex;align-items:center;font-size:1vw;font-size:clamp(11px,1vw,16px);color:var(--c1fg,rgba(255,255,255,.9));font-weight:600}
 .live i{width:9px;height:9px;border-radius:50%;background:#fff;margin-left:7px;box-shadow:0 0 0 0 rgba(255,255,255,.7);animation:dot 2s ease-out infinite}
 @keyframes dot{70%{box-shadow:0 0 0 9px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
 .when{text-align:left;flex:none}
-.clk{color:#fff;font-family:var(--num);font-weight:800;font-size:3vw;font-size:clamp(22px,3vw,52px);line-height:1;letter-spacing:.5px}
+.clk{color:var(--c1fg,#fff);font-family:var(--num);font-weight:800;font-size:3vw;font-size:clamp(22px,3vw,52px);line-height:1;letter-spacing:.5px}
 .clk small{font-size:.5em;font-weight:700;opacity:.8;letter-spacing:0}
-.dt{font-size:1vw;font-size:clamp(11px,1vw,17px);color:rgba(255,255,255,.9);margin-top:4px}
+.dt{font-size:1vw;font-size:clamp(11px,1vw,17px);color:var(--c1fg,rgba(255,255,255,.9));margin-top:4px}
 .mb{flex:none;width:48px;height:48px;border-radius:14px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.25);font-size:20px;display:flex;align-items:center;justify-content:center;position:relative}
 .mb small{position:absolute;bottom:-4px;left:-4px;font-size:13px}
 .mb.upd::after{content:'⬆️';position:absolute;top:-8px;right:-8px;font-size:15px}
@@ -111,10 +111,101 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 .empty b{font-size:5vw;font-size:clamp(36px,5vw,84px);margin-bottom:10px;opacity:.85}
 
 /* ── الأسفل ── */
-.foot{display:flex;align-items:center;justify-content:space-between;padding:1.2vw 2.4vw;padding:clamp(10px,1.2vw,18px) clamp(16px,2.4vw,40px);color:rgba(255,255,255,.92);font-size:1.15vw;font-size:clamp(11px,1.15vw,19px)}
-.foot b{color:#fff}
+.foot{display:flex;align-items:center;justify-content:space-between;padding:1.2vw 2.4vw;padding:clamp(10px,1.2vw,18px) clamp(16px,2.4vw,40px);color:var(--c1fg,rgba(255,255,255,.92));font-size:1.15vw;font-size:clamp(11px,1.15vw,19px)}
+.foot b{color:var(--c1fg,#fff)}
 .foot .tip{display:flex;align-items:center}
 .foot .tip i{font-style:normal;width:30px;height:30px;border-radius:10px;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);display:inline-flex;align-items:center;justify-content:center;margin-left:10px}
+
+/* ══ شكل الشاشة لكل مطعم (يختاره برج سرعة): th-classic الحالي (يتلوّن)، th-board لوحة المطار، th-tickets جدار التذاكر، th-whiteboard السبورة ══
+   --c1 اللون الأساسي و --c2 اللون الثاني (من البرج)، و --c1fg/--c2fg لون الكتابة فوقهم */
+.mk img{width:100%;height:100%;object-fit:contain;border-radius:inherit;display:block}
+.mk.logo{background:#fff;padding:3px}
+
+html.th-board body{background:var(--c1)}
+html.th-board .scr::before{display:none}
+html.th-board .nm,html.th-board .dt,html.th-board .live,html.th-board .foot{color:#EDE6D6}
+html.th-board .nm,html.th-board .clk{font-family:'Space Mono',var(--num)}
+html.th-board .clk{color:var(--c2)}
+html.th-board .mk{background:var(--c2);color:var(--c2fg);box-shadow:none}
+html.th-board .mb{border-color:#3A3224;background:#1E1A13}
+html.th-board .col{background:#1E1A13;border:1px solid #2E281D;box-shadow:none;border-radius:14px}
+html.th-board .hd h2{font-family:'Space Mono',var(--num);letter-spacing:.02em}
+html.th-board .ready .hd h2{color:var(--c2)}
+html.th-board .prep .hd h2{color:#EDE6D6}
+html.th-board .badge,html.th-board .prep .badge{background:transparent;border:1px solid #3A3224;color:var(--c2);box-shadow:none}
+html.th-board .cnt,html.th-board .ready .cnt,html.th-board .prep .cnt{background:#14110C;border-color:#3A3224;color:var(--c2)}
+html.th-board .n{font-family:'Space Mono',var(--num);border-radius:8px}
+html.th-board .ready .n{background:linear-gradient(#27221A 0 49.4%,#0A0806 49.4% 50.6%,#1D1913 50.6%);color:var(--c2);border:1px solid #3A3224;box-shadow:0 3px 0 #000}
+html.th-board .ready .n[data-t]::after{background:rgba(255,255,255,.08);color:#EDE6D6}
+html.th-board .ready .n.feat::before{color:#EDE6D6;opacity:.8}
+html.th-board .ready .n.new{animation:flap .5s steps(2) 6}
+@keyframes flap{50%{filter:brightness(1.6)}}
+html.th-board .prep .n{background:linear-gradient(#211D16 0 49.4%,#0A0806 49.4% 50.6%,#1A1712 50.6%);border:1px solid #2E281D;color:#CFC6B2}
+html.th-board .prep .n::before{background:linear-gradient(90deg,transparent,var(--c2),transparent)}
+html.th-board .prep .n[data-t]::after{background:#2E281D;color:#EDE6D6}
+html.th-board .qrbox{background:#14110C;border:1px solid #3A3224}
+html.th-board .qrt b,html.th-board .qrt b span+span{color:var(--c2)}
+html.th-board .empty{color:#8C8370}
+
+html.th-tickets body{background:var(--c1);background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px);background-size:7px 7px}
+html.th-tickets .scr::before{display:none}
+html.th-tickets .nm,html.th-tickets .clk,html.th-tickets .dt,html.th-tickets .live,html.th-tickets .foot{color:var(--c1fg)}
+html.th-tickets .nm,html.th-tickets .hd h2{font-family:'Lalezar',var(--kufi);font-weight:400}
+html.th-tickets .col{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);box-shadow:none}
+html.th-tickets .ready .hd h2,html.th-tickets .prep .hd h2{color:var(--c1fg)}
+html.th-tickets .badge,html.th-tickets .prep .badge{background:var(--c2);color:var(--c2fg);border:0;box-shadow:none}
+html.th-tickets .cnt,html.th-tickets .ready .cnt,html.th-tickets .prep .cnt{background:rgba(0,0,0,.18);border-color:rgba(255,255,255,.2);color:var(--c1fg)}
+html.th-tickets .n{border-radius:6px;outline:2px dashed rgba(0,0,0,.2);outline-offset:-9px}
+html.th-tickets .nums .n:nth-child(odd){transform:rotate(-1.6deg)}
+html.th-tickets .nums .n:nth-child(even){transform:rotate(1.3deg)}
+html.th-tickets .ready .n{background:var(--c2);color:var(--c2fg);box-shadow:0 10px 18px -8px rgba(0,0,0,.45)}
+html.th-tickets .ready .n.feat{transform:rotate(-.6deg)}
+html.th-tickets .ready .n[data-t]::after{background:rgba(0,0,0,.12);color:var(--c2fg)}
+html.th-tickets .prep .n{background:#FFFDF6;border:0;color:#4A4033;box-shadow:0 8px 14px -8px rgba(0,0,0,.4)}
+html.th-tickets .prep .n::before{display:none}
+html.th-tickets .qrbox{background:rgba(0,0,0,.22)}
+html.th-tickets .empty{color:var(--c1fg);opacity:.75}
+
+html.th-whiteboard body{background:#9AA3AB}
+html.th-whiteboard .scr{background:var(--c1);box-shadow:inset 0 0 0 clamp(8px,1vw,16px) #C9CFD4,inset 0 0 0 calc(clamp(8px,1vw,16px) + 2px) #E5E9EC}
+html.th-whiteboard .scr::before{display:none}
+html.th-whiteboard .nm,html.th-whiteboard .clk,html.th-whiteboard .dt,html.th-whiteboard .live,html.th-whiteboard .foot,html.th-whiteboard .foot b{color:#1F2A44}
+html.th-whiteboard .live i{background:var(--c2)}
+html.th-whiteboard .nm,html.th-whiteboard .hd h2{font-family:'Marhey',var(--kufi)}
+html.th-whiteboard .mk{background:var(--c2);color:var(--c2fg);border-radius:50%;box-shadow:inset -4px -5px 0 rgba(0,0,0,.18),0 4px 6px rgba(0,0,0,.2)}
+html.th-whiteboard .mb{border-color:#C9CFD4;background:#fff}
+html.th-whiteboard .col{background:transparent;box-shadow:none;border-radius:0}
+html.th-whiteboard .prep{border-right:4px solid #1F2A44;border-radius:0}
+html.th-whiteboard .ready .hd h2{color:var(--c2)}
+html.th-whiteboard .prep .hd h2{color:#1F2A44}
+html.th-whiteboard .badge,html.th-whiteboard .prep .badge{background:transparent;border:3px solid currentColor;color:var(--c2);box-shadow:none}
+html.th-whiteboard .cnt,html.th-whiteboard .ready .cnt,html.th-whiteboard .prep .cnt{background:transparent;border:2px solid #1F2A44;color:#1F2A44}
+html.th-whiteboard .n{font-family:'Caveat',var(--num);font-weight:700;background:transparent}
+html.th-whiteboard .ready .n{background:transparent;color:var(--c2);border:4px solid var(--c2);border-radius:46% 54% 50% 50%/60% 48% 52% 40%;box-shadow:none}
+html.th-whiteboard .ready .n[data-t]::after{background:transparent;color:#5B6680}
+html.th-whiteboard .ready .n.feat::before{color:#5B6680;opacity:1}
+html.th-whiteboard .prep .n{background:transparent;border:0;color:#1F2A44}
+html.th-whiteboard .prep .n::before{display:none}
+html.th-whiteboard .prep .n[data-t]::after{background:transparent;color:#5B6680;border:1px solid #C9CFD4}
+html.th-whiteboard .qrbox{background:#fff;border:3px solid #1F2A44}
+html.th-whiteboard .qrt b,html.th-whiteboard .qrt b span+span,html.th-whiteboard .qrt small{color:#1F2A44}
+html.th-whiteboard .empty{color:#5B6680}
+html.th-whiteboard .foot .tip i{background:#fff;border-color:#C9CFD4}
+/* ══ ألوان كل جزء بروحه (يختارها برج سرعة لكل مطعم) — تتقدم على التصميم، والفارغ يبقى على التصميم ══ */
+html.xs-bg body{background:var(--x-bg)!important;background-image:none!important}
+html.xs-bg.th-whiteboard .scr{background:var(--x-bg)!important}
+html.xs-colBg .col{background:var(--x-colBg)!important}
+html.xs-nameFg .nm,html.xs-nameFg .live{color:var(--x-nameFg)!important}
+html.xs-clockFg .clk,html.xs-clockFg .dt,html.xs-clockFg .clk small{color:var(--x-clockFg)!important}
+html.xs-readyFg .ready .hd h2{color:var(--x-readyFg)!important}
+html.xs-readyNumBg .ready .n{background:var(--x-readyNumBg)!important}
+html.xs-readyNumFg .ready .n{color:var(--x-readyNumFg)!important}
+html.xs-prepFg .prep .hd h2{color:var(--x-prepFg)!important}
+html.xs-prepNumBg .prep .n{background:var(--x-prepNumBg)!important}
+html.xs-prepNumFg .prep .n{color:var(--x-prepNumFg)!important}
+html.xs-footFg .foot,html.xs-footFg .foot b,html.xs-footFg .foot .tip{color:var(--x-footFg)!important}
+html.xs-emptyBg .empty{background:var(--x-emptyBg)!important;border-radius:20px}
+html.xs-emptyFg .empty{color:var(--x-emptyFg)!important;opacity:1!important}
 
 /* ── قائمة الإعدادات (تشتغل بالريموت) ── */
 .menu{position:fixed;top:84px;left:24px;z-index:30;width:300px;max-height:calc(100% - 100px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
@@ -181,7 +272,7 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
   <button type="button" id="mDiag" hidden>🩺 فحص التشغيل التلقائي</button>
   <button type="button" id="mReload">🔄 تحديث الشاشة</button>
   <button type="button" id="fsBtn">⛶ ملء الشاشة</button>
-  <button type="button" id="mOut">🚪 تسجيل خروج</button>
+  <button type="button" id="mOut">🔌 فصل الشاشة</button>
   <button type="button" id="mClose">✕ رجوع</button>
   <div class="hintk">بالريموت: ⬆️⬇️ للتنقل و OK للاختيار</div>
 </div>
@@ -192,7 +283,9 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('screen-sw.js', { scope: './screen' }).catch(function () {});
 </script>
 <script type="module">
-import { db, staffGate, logout, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc } from './staff.js';
+import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc } from './staff.js';
+// الشاشة تنربط برمز ويعتمدها البرج (بدون إيميل ولا كلمة سر) — جلستها «مجهولة» بتطبيق Firebase منفصل
+const db = screenFb().db;
 import { lanLink } from './lanlink.js?v=1';
 document.getElementById('gateCss').textContent = GATE_CSS;
 window.__scrOk = true;   // تطبيق «سرعة — الشاشة» يتأكد إن الصفحة اشتغلت (وإلا يطلب تحديث محرك الإنترنت)
@@ -219,6 +312,8 @@ function view() {
 let scr = { salon: true, delivery: false, qr: true }, unsubSet = null, pm = null, unsubPm = null, qrUrl = '';
 // خدمات المطعم (يشغّلها أو يوقفها المدير الأعلى): الشاشة نفسها، والباركود (كود المنيو بالزاوية)
 let feats = {}, unsubRest = null, unsubKey = null;
+// كاشيرية هذي الشاشة (فارغة = كل الكاشيرية)
+let cashiers = [], types = [], unsubMe = null;
 const svcOn = () => feats.screen !== false;
 const seenReady = new Set(), fresh = new Map();   // fresh: رقم ← وقت صار جاهز (للوميض)
 const READY_KEEP = 20 * 60000;
@@ -227,7 +322,11 @@ const TYPE = { takeaway: 'سفري', salon: 'صالة', delivery: 'دلفري' }
 // أي طلب يطلع على الشاشة؟ السفري والبيجر دائماً، والصالة بدون بيجر والدلفري حسب إعدادات المطعم
 function where_(o) {
   if (o.status === 'cancelled' || Date.now() - (o.createdAtMs || 0) > 12 * 3600000) return null;
+  // شاشة طابق: طلبات كاشيريتها بس (الطلبات القديمة بدون اسم كاشير تطلع بكل الشاشات)
+  if (cashiers.length && o.byUid && !cashiers.includes(o.byUid)) return null;
   const t = o.orderType || 'delivery';
+  // كل شاشة تختار شنو تعرض (سفري/صالة/دلفري) من لوحة الإدارة — فارغ = الكل
+  if (types.length && !types.includes(t)) return null;
   if (t === 'delivery' && (!scr.delivery || ['pickup', 'delivering', 'delivered'].includes(o.status))) return null;   // استلمه الكابتن
   if (t === 'salon' && !o.pager && !scr.salon) return null;
   if (o.servedAtMs || o.pagerDone || (o.held && o.status === 'delivered')) return null;
@@ -348,7 +447,7 @@ if (typeof window.__adbOn === 'boolean') window.__setAdb(window.__adbOn);
 function menuUi() {
   soundUi();
   if (autoOn !== null) $('mAuto').textContent = autoOn ? '🚀 يفتح وحده مع التلفزيون: يشتغل' : '🚀 يفتح وحده مع التلفزيون: مطفي';
-  $('mOut').textContent = outArmed ? '⚠️ متأكد؟ اضغط مرة ثانية للخروج' : '🚪 تسجيل خروج';
+  $('mOut').textContent = outArmed ? '⚠️ متأكد؟ اضغط مرة ثانية للفصل' : '🔌 فصل الشاشة';
   $('mOut').classList.toggle('warn', outArmed);
 }
 function openMenu() { outArmed = false; menuUi(); menu.hidden = false; $($('mUpd').hidden ? 'mSnd' : 'mUpd').focus(); armClose(); }
@@ -366,7 +465,7 @@ $('mReload').onclick = () => location.reload();
 $('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else if (d.documentElement.requestFullscreen) d.documentElement.requestFullscreen().catch(() => {}); closeMenu(); };
 $('mOut').onclick = () => {
   if (!outArmed) { outArmed = true; menuUi(); armClose(); return; }
-  closeMenu(); logout();
+  closeMenu(); unlinkScreen();
 };
 $('mClose').onclick = closeMenu;
 document.addEventListener('keydown', (e) => {
@@ -431,17 +530,65 @@ function svcUi() {
   else soundUi();
   qrUi();
 }
-$('offOut').onclick = () => logout();
+$('offOut').onclick = () => unlinkScreen();
+// ── شكل الشاشة لكل مطعم (يختاره برج سرعة بصفحة المطعم): التصميم واللونين وشعار المطعم ──
+//  restaurants/{rid}.screenTheme = {design, c1, c2}، والشعار restaurants/{rid}/theme/logo = {data}
+const TH = { classic: ['#F5891F', '#16A34A'], board: ['#16130E', '#FFC94A'], tickets: ['#1F5B57', '#FCE7A2'], whiteboard: ['#F6F8F8', '#2B59C3'] };
+const TH_FONT = { board: 'Space+Mono:wght@700', tickets: 'Lalezar', whiteboard: 'Marhey:wght@600;700&family=Caveat:wght@700' };
+const hexOk = (c) => /^#[0-9a-fA-F]{6}$/.test(c || '');
+// أجزاء الشاشة اللي البرج يلوّنها كل وحدة بروحها (نفس القائمة بالبرج)
+const XS = ['bg', 'colBg', 'nameFg', 'clockFg', 'readyFg', 'readyNumBg', 'readyNumFg', 'prepFg', 'prepNumBg', 'prepNumFg', 'footFg', 'emptyBg', 'emptyFg'];
+const rgbOf = (c) => [1, 3, 5].map((i) => parseInt(c.substr(i, 2), 16));
+const mixC = (a, b, t) => { const x = rgbOf(a), y = rgbOf(b); return '#' + x.map((v, i) => Math.round(v * (1 - t) + y[i] * t).toString(16).padStart(2, '0')).join(''); };
+const lumC = (c) => { const [r, g, b] = rgbOf(c).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const onC = (c) => (lumC(c) > 0.45 ? '#1A1206' : '#FFFFFF');
+let thKey = '', logoUrl = '', unsubLogo = null;
+function applyTheme(th) {
+  th = th || {};
+  const design = TH[th.design] ? th.design : 'classic', diff = (c, d) => hexOk(c) && c.toLowerCase() !== d.toLowerCase();
+  const custom = diff(th.c1, TH[design][0]) || diff(th.c2, TH[design][1]);   // ألوان التصميم نفسها = مو ألوان خاصة
+  const x = th.x || {}, xk = XS.map((k) => (hexOk(x[k]) ? x[k] : '')).join(',');
+  const c1 = hexOk(th.c1) ? th.c1 : TH[design][0], c2 = hexOk(th.c2) ? th.c2 : TH[design][1], key = design + c1 + c2 + custom + xk;
+  if (key === thKey) return;
+  thKey = key;
+  const H = document.documentElement, set = (k, v) => H.style.setProperty(k, v);
+  H.classList.remove('th-classic', 'th-board', 'th-tickets', 'th-whiteboard'); H.classList.add('th-' + design);
+  XS.forEach((k) => { const v = hexOk(x[k]) ? x[k] : ''; H.classList.toggle('xs-' + k, !!v); if (v) set('--x-' + k, v); else H.style.removeProperty('--x-' + k); });
+  ['--c1', '--c2', '--c1fg', '--c2fg', '--o1', '--o2', '--o3', '--odk', '--t1', '--t2', '--tfg', '--neon', '--neon-rgb', '--t-rgb'].forEach((k) => H.style.removeProperty(k));
+  // التصميم الحالي بدون ألوان من البرج: يبقى مثل ما هو بالضبط
+  if (design !== 'classic' || custom) { set('--c1', c1); set('--c2', c2); set('--c1fg', onC(c1)); set('--c2fg', onC(c2)); }
+  if (design === 'classic' && custom) {
+    set('--o1', mixC(c1, '#FFFFFF', 0.3)); set('--o2', c1); set('--o3', mixC(c1, '#000000', 0.22)); set('--odk', mixC(c1, '#000000', 0.3));
+    set('--t1', mixC(c2, '#FFFFFF', 0.18)); set('--t2', c2); set('--tfg', onC(c2)); set('--neon', c2);
+    set('--neon-rgb', rgbOf(c2).join(',')); set('--t-rgb', rgbOf(mixC(c2, '#000000', 0.2)).join(','));
+  }
+  // خط التصميم (من جوجل — بدون نت يرجع للخط العادي)
+  const f = TH_FONT[design], old = document.getElementById('thFont');
+  if (old && old.dataset.f !== (f || '')) old.remove();
+  if (f && !document.getElementById('thFont')) { const l = document.createElement('link'); l.id = 'thFont'; l.rel = 'stylesheet'; l.dataset.f = f; l.href = 'https://fonts.googleapis.com/css2?family=' + f + '&display=swap'; document.head.appendChild(l); }
+}
+function setLogo(url) {
+  logoUrl = /^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(url || '') ? url : '';
+  const mk = $('mk');
+  mk.classList.toggle('logo', !!logoUrl);
+  if (logoUrl) { mk.innerHTML = ''; const im = document.createElement('img'); im.src = logoUrl; im.alt = ''; mk.appendChild(im); }
+  else setName($('nm').textContent || '');
+}
 function setName(name) {
   $('nm').textContent = name; document.title = 'طلبك جاهز — ' + name;
   // حرف الشعار: أول حرف من الاسم بدون «مطعم/كافيه…» وبدون «ال»
+  if (logoUrl) return;   // شعار المطعم (من البرج) بدل الحرف
   const w = String(name).trim().replace(/^(مطعم|مطاعم|كافيه|كافي|مشويات|مقهى)\s+/, '').split(/\s+/)[0].replace(/^ال(?=..)/, '');
   $('mk').textContent = w[0] || 'س';
 }
-staffGate($('gate'), {
-  title: 'شاشة «طلبك جاهز»', remember: true, sub: 'افتحها على تلفزيون أو تابلت قدام الزبائن — سجّل دخول بحساب المطعم',
+screenGate($('gate'), {
+  title: 'شاشة «طلبك جاهز»', kind: 'ready', label: 'شاشة طلبك جاهز',
   onIn: async (u) => {
     rid = u.rid; first = true; seenReady.clear();
+    // هذي الشاشة: أي كاشيرية تطلع طلباتهم (مطعم بيه أكثر من صالة) — يحددها صاحب المطعم من لوحة الإدارة ويتطبق فوراً
+    cashiers = (u.screen && u.screen.cashiers) || []; types = (u.screen && u.screen.types) || [];
+    if (unsubMe) unsubMe();
+    unsubMe = onSnapshot(doc(db, 'screens', u.uid), (s) => { if (!s.exists()) return; const c = s.data().cashiers || [], ty = s.data().types || []; if (c.join() !== cashiers.join() || ty.join() !== types.join()) { cashiers = c; types = ty; render(); } }, () => {});
     const name0 = u.rest.name || '';
     setName(name0);
     // الإعدادات مباشرة: أي تغيير من الكاشير ينطبق على الشاشة فوراً
@@ -458,8 +605,11 @@ staffGate($('gate'), {
     if (unsubPm) unsubPm();
     unsubPm = onSnapshot(doc(db, 'publicMenus', rid), (s) => { pm = s.exists() ? s.data() : null; qrUi(); }, () => { pm = null; qrUi(); });
     feats = (u.rest && u.rest.features) || {};
+    applyTheme(u.rest && u.rest.screenTheme);
     if (unsubRest) unsubRest();
-    unsubRest = onSnapshot(doc(db, 'restaurants', rid), (s) => { if (!s.exists() && s.metadata.fromCache) return; feats = (s.exists() && s.data().features) || {}; svcUi(); }, () => {});
+    unsubRest = onSnapshot(doc(db, 'restaurants', rid), (s) => { if (!s.exists() && s.metadata.fromCache) return; const r = s.exists() ? s.data() : {}; feats = r.features || {}; applyTheme(r.screenTheme); svcUi(); }, () => {});
+    if (unsubLogo) unsubLogo();
+    unsubLogo = onSnapshot(doc(db, 'restaurants', rid, 'theme', 'logo'), (s) => { if (!s.exists() && s.metadata.fromCache) return; setLogo(s.exists() ? s.data().data : ''); }, () => {});
     // الرمز السري لشبكة المطعم (ينحفظ بالتطبيق — بعدها يتصل بالكاشير حتى بدون نت)
     let lanKey = '';
     if (unsubKey) unsubKey();
@@ -467,7 +617,7 @@ staffGate($('gate'), {
     svcUi(); clock(); keepOn(); listen();
   },
   onOut: () => {
-    if (unsub) { unsub(); unsub = null; } if (unsubSet) { unsubSet(); unsubSet = null; } if (unsubPm) { unsubPm(); unsubPm = null; } if (unsubRest) { unsubRest(); unsubRest = null; } if (unsubKey) { unsubKey(); unsubKey = null; }
+    if (unsub) { unsub(); unsub = null; } if (unsubMe) { unsubMe(); unsubMe = null; } cashiers = []; types = []; if (unsubLogo) { unsubLogo(); unsubLogo = null; } setLogo(''); applyTheme(null); if (unsubSet) { unsubSet(); unsubSet = null; } if (unsubPm) { unsubPm(); unsubPm = null; } if (unsubRest) { unsubRest(); unsubRest = null; } if (unsubKey) { unsubKey(); unsubKey = null; }
     feats = {}; $('off').hidden = true;
     pm = null; qrUrl = ''; $('qrBox').hidden = true;
     rid = ''; orders = []; fsOrders = []; fsLive = false; setFromFs = false; $('scr').hidden = true; $('hint').hidden = true; menu.hidden = true;

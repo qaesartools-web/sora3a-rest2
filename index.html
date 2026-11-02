@@ -10,6 +10,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="كاشير سرعة">
 <link rel="manifest" href="manifest.json">
+<script>
+// تطبيق «إدارة المخزن» (index.html?store=1): نفس برنامج الكاشير بس المخزون والوصفات والموردين، والجهاز ينربط برمز (بدون إيميل)
+window.STORE_MODE=/[?&]store=1(&|$)/.test(location.search);
+if(window.STORE_MODE){document.documentElement.classList.add('store-mode');document.querySelector('link[rel="manifest"]').href='store.webmanifest';document.title='سرعة — إدارة المخزن';}
+</script>
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>سرعة — كاشير</title>
@@ -400,6 +405,11 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:va
 /* TOAST */
 .toast{position:fixed;bottom:62px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:700;z-index:999;transition:transform .3s,opacity .3s,visibility .3s;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;}
 .toast.on{transform:translateX(-50%) translateY(0);opacity:1;visibility:visible;}
+
+/* تطبيق «إدارة المخزن»: تبويب المخزون بس */
+html.store-mode .bnav .nb:not([data-tab="acc"]),html.store-mode .desktop-nav .dnb:not([data-tab="acc"]),html.store-mode #loginPage,html.store-mode #branchBtn{display:none!important}
+html.store-mode .ac-ext{display:none!important}
+.store-note{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:rgba(176,122,74,.12);border:1px solid rgba(176,122,74,.35);color:#8a5a2b;font-size:13.5px;line-height:1.8}
 </style>
 <link rel="stylesheet" href="pos-pro.css?v=26">
 <script src="device.js?v=2"></script>
@@ -419,7 +429,7 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:va
   </div>
 </div>
 <script src="brand.js"></script>
-<script>window.SB && SB.mount('cashier')</script>
+<script>window.SB && SB.mount(window.STORE_MODE ? 'store' : 'cashier')</script>
 
 
 <!-- THEME SWITCHER -->
@@ -517,7 +527,7 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:va
     <div class="screen" id="kitchenScreen">
       <div class="kds-head">
         <div><b>👨‍🍳 شاشة المطبخ</b><span class="kds-sub" id="kdsSub"></span></div>
-        <div class="kds-acts"><a class="cact-b" id="readyScrBtn" href="screen.html" target="_blank" rel="noopener" title="افتحها على تلفزيون أو تابلت قدام الزبائن">📺 شاشة «طلبك جاهز»</a>
+        <div class="kds-acts"><a class="cact-b" id="readyScrBtn" href="screen.html?from=pos" target="_blank" rel="noopener" title="افتحها على تلفزيون أو تابلت قدام الزبائن">📺 شاشة «طلبك جاهز»</a>
         <a class="cact-b" id="screenApkBtn" href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/screen-android/sora3a-screen.apk" title="للتيفي بوكس أو تلفزيون أندرويد: تفتح وحدها مع تشغيل الجهاز">📲 تطبيق التيفي</a>
         <button class="cact-b" id="kdsSoundBtn" onclick="kdsToggleSound()">🔔 الصوت: يعمل</button></div>
       </div>
@@ -806,7 +816,7 @@ const app = initializeApp({
 // App Check (reCAPTCHA Enterprise / Fraud Defense): السيرفر يعرف إن الطلب جاي من تطبيقاتنا الحقيقية (بدون ما يحس المستخدم) — على الموقع بس، مو بالتجارب المحلية
 const APPCHECK_KEY = '6LdWa_0tAAAAAEWXuLi8yrdnPjQmx-r-ayyoZ07h';
 const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; if (!document.getElementById('acHide')) document.head.insertAdjacentHTML('beforeend', '<style id="acHide">.grecaptcha-badge{visibility:hidden}</style>');
-  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true })).catch(() => {}); };
+  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => { const ac = m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); m.getToken(ac).then(() => { window.__acState = window.__acState || 'ok'; }, (e) => { window.__acState = 'err:' + String((e && (e.code || e.message)) || e).slice(0, 80); }); }).catch(() => {}); };
 appCheck(app);
 
 const auth = initializeAuth(app, {persistence:[indexedDBLocalPersistence,browserLocalPersistence]});
@@ -951,6 +961,7 @@ window.addEventListener('fbReady',()=>{
   updateOnline();
 
   const fb=window._fb;
+  if(window.STORE_MODE){if(window.storeBoot)storeBoot();else window.addEventListener('storeReady',()=>storeBoot(),{once:true});return;}
   fb.onAuthStateChanged(fb.auth,async user=>{
     if(user){
       const sessKey='pos_session_'+user.uid;
@@ -1875,12 +1886,15 @@ function renderAcc(){
   const tabs=document.getElementById('acTabs');
   const CASHIER_TABS=['mat','exp','sup','cust'];
   ledInit();
-  if((!isOwnerPOS()&&!CASHIER_TABS.includes(acCur))||!AC_TABS.some(([k])=>k===acCur))acCur='mat';
-  if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+AC_TABS.filter(([k])=>isOwnerPOS()||CASHIER_TABS.includes(k)).map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('')
-    +(isOwnerPOS()?`<button class="mtab ac-ext" onclick="openAdminPanel()" title="تنفتح بلوحة الإدارة">💰 قائمة الدخل والحركات ↗</button>`:'');
+  // «إدارة المخزن»: بتطبيقه بس المخزون والوصفات والموردين؛ وإذا خدمته شغّالة ينشالن من الكاشير (والعكس)
+  const STK=['mat','rec','sup'],storeOn=!window.STORE_MODE&&window.storeSvcOn&&storeSvcOn();
+  const vis=AC_TABS.filter(([k])=>window.STORE_MODE?STK.includes(k):(isOwnerPOS()||CASHIER_TABS.includes(k))&&!(storeOn&&STK.includes(k)));
+  if(!vis.some(([k])=>k===acCur))acCur=(vis[0]||['exp'])[0];
+  if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+vis.map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('')
+    +(isOwnerPOS()&&!window.STORE_MODE?`<button class="mtab ac-ext" onclick="openAdminPanel()" title="تنفتح بلوحة الإدارة">💰 قائمة الدخل والحركات ↗</button>`:'');
   const body=document.getElementById('acBody');if(!body)return;
   const fn={mat:tabMat,mov:tabMov,rec:tabRec,exp:tabExp,sup:tabSup,cust:tabCust,fin:tabFin,tools:tabTools}[acCur]||tabMat;
-  body.innerHTML=fn();
+  body.innerHTML=(storeOn?'<div class="store-note">📦 المخزون والوصفات والموردين صاروا بتطبيق «إدارة المخزن» (جهاز أمين المخزن). إذا انطفت الخدمة يرجعون هنا وحدهم.</div>':'')+fn();
   if(acLoadingNow)body.insertAdjacentHTML('afterbegin','<div class="rep-loading">⏳ دا ينجاب طلبات الفترة القديمة من السيرفر…</div>');
   acLoadingNow=false;
   if(acCur==='mat')renderMatList();
@@ -2591,7 +2605,20 @@ window.edSave=async()=>{
   const o=s.o,id=s.id;
   const merged={};s.work.forEach(i=>{const k=i.name+'|'+i.variant;if(merged[k])merged[k].qty+=i.qty;else merged[k]={...i};});
   const newItems=Object.values(merged);
+  // كل صنف ياخذ قسمه بالمطبخ (حتى الصنف الجديد)
+  if(window.kSecOf)newItems.forEach(i=>{if(!i.sec){const sc=window.kSecOf(i.name);if(sc)i.sec=sc;}});
   const upd={items:newItems,notes:notesOf(newItems),value:v.newValue,modifiedAt:Date.now()};
+  // شاشة المطبخ: شنو انضاف وشنو انشال (تبين للطباخ لحد ما يضغط «شفته»)
+  const edLine=a=>({name:a.name,variant:a.variant||'',qty:a.qty,sec:(window.kSecOf&&window.kSecOf(a.name))||''});
+  const kEdit={at:Date.now(),add:v.added.map(edLine),rem:v.removed.map(edLine)};
+  if(o.kitchen){
+    upd.kEdits=[...(o.kEdits||[]),kEdit].slice(-10);
+    // الصنف المضاف لازم ينطبخ: الطلب يرجع للمطبخ إذا بعده ما انسلّم، وقسمه يرجع «قيد التحضير»
+    if(kEdit.add.length&&!['delivered','done','cancelled'].includes(o.status)&&!o.servedAtMs){
+      upd.kitchen='new';if(o.status==='ready')upd.status='preparing';
+      if(o.kSec){const ks=JSON.parse(JSON.stringify(o.kSec));kEdit.add.forEach(a=>{if(!a.sec)return;const x=ks[a.sec]||(ks[a.sec]={n:0,readyAt:0});x.n=(+x.n||0)+(+a.qty||1);x.readyAt=0;});upd.kSec=ks;}
+    }
+  }
   if(o.captainId&&getOrderType(o)==='delivery')upd.commission=Math.round(v.newValue*.1);
   const txt='تعديل الطلب'+(v.added.length?' | أُضيف: '+v.added.map(a=>a.name+'×'+a.qty).join('، '):'')+(v.removed.length?' | نُقص: '+v.removed.map(a=>a.name+'×'+a.qty).join('، '):'');
   try{await orderUpdate(id,upd,txt);}catch(e){toast('❌ '+e.message);return;}
@@ -2740,7 +2767,23 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=64"></script>
+<script src="pos-pro.js?v=66"></script>
+<script type="module">
+// «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
+if (window.STORE_MODE) {
+  window.storeBoot = async () => {
+    const S = await import('./staff.js');
+    const sp = document.getElementById('splash'); if (sp) { sp.classList.add('hide'); setTimeout(() => { sp.style.display = 'none'; }, 600); }
+    const st = document.createElement('style'); st.textContent = S.GATE_CSS + '#storeGate[hidden]{display:none!important}'; document.head.appendChild(st);
+    const gate = document.createElement('div'); gate.id = 'storeGate'; gate.className = 'gate'; document.body.appendChild(gate);
+    window.storeUnlink = () => S.unlinkScreen();
+    S.screenGate(gate, { title: 'إدارة المخزن', kind: 'store', label: 'إدارة المخزن',
+      onIn: (u) => window.storeIn(u, S.screenFb()),
+      onOut: () => { if (window.storeOut) window.storeOut(); } });
+  };
+  window.dispatchEvent(new Event('storeReady'));
+}
+</script>
 <script>
 // البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){

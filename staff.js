@@ -18,7 +18,7 @@ export const app = initializeApp(CFG, "pos-v2");
 // App Check (reCAPTCHA Enterprise / Fraud Defense): السيرفر يعرف إن الطلب جاي من تطبيقاتنا الحقيقية (بدون ما يحس المستخدم) — على الموقع بس، مو بالتجارب المحلية
 const APPCHECK_KEY = '6LdWa_0tAAAAAEWXuLi8yrdnPjQmx-r-ayyoZ07h';
 const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; if (!document.getElementById('acHide')) document.head.insertAdjacentHTML('beforeend', '<style id="acHide">.grecaptcha-badge{visibility:hidden}</style>');
-  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true })).catch(() => {}); };
+  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => { const ac = m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); m.getToken(ac).then(() => { window.__acState = window.__acState || 'ok'; }, (e) => { window.__acState = 'err:' + String((e && (e.code || e.message)) || e).slice(0, 80); }); }).catch(() => {}); };
 appCheck(app);
 export const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
 // كاش محلي دائم: الشاشة تفتح بآخر بياناتها حتى لو انقطع النت (وتكمل ويا الكاشير على نفس الواي فاي — lanlink.js)
@@ -147,6 +147,8 @@ export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
       el.hidden = true; el.innerHTML = '';
       brandSync(db);
       watchClock();
+      if (window.SB) SB.welcome({ name: d.name || '', rest: (rest && rest.name) || '' });   // شاشة الترحيب
+      if (window.SB) SB.health((hid, hd) => setDoc(doc(db, 'devHealth', hid), hd), { rid, rest: (rest && rest.name) || '', who: d.name || '' });   // صحة الجهاز
       onIn({ uid: user.uid, role: d.role, name: d.name || '', rid, rest });
     } catch (e) {
       if (e.code === 'permission-denied') deny('⛔ الحساب موقوف أو خارج وقت الدوام', true);
@@ -187,11 +189,32 @@ const PAIR_CSS = `.pair-code{font-family:ui-monospace,Consolas,monospace;font-si
 .pair-qr{width:170px;height:170px;margin:4px auto 10px;background:#fff;border-radius:12px;padding:8px}.pair-qr svg{width:100%;height:100%;display:block}
 .pair-steps{text-align:right;font-size:13.5px;line-height:1.9;color:var(--muted);margin:0 0 10px;padding-inline-start:20px}.pair-steps b{color:var(--text)}
 .pair-st{font-size:14px;font-weight:700;color:#3DF08B;margin-top:4px}.pair-st.warn{color:#FFB020}.pair-st.bad{color:#FF4D2E}`;
-// kind: 'kitchen' | 'kitchenSec' | 'waiter' — onIn({uid, rid, rest, screen}) / onOut()
+// شاشة «طلبك جاهز» جانت داخلة بإيميل المطعم (قبل الربط بالرمز): تنربط وحدها بنفس المطعم (بجلسة صاحب المطعم اللي عليها)
+// بدل ما تطلع رمز وتوكف، وبعدين تطلع جلسة صاحب المطعم. إذا «الأجهزة المعتمدة» شغّالة تنتظر اعتماد البرج مثل أي جهاز.
+async function adoptOwnerScreen(uid, code, platform) {
+  if (lsx.get('sora3a_scr_v1')) return false;
+  try {
+    await auth.authStateReady();
+    const o = auth.currentUser;
+    if (!o) return false;
+    const u = await getDoc(doc(db, 'users', o.uid)), d = u.exists() ? u.data() : null;
+    if (!d || d.role !== 'restaurant' || !d.restaurantId) return false;
+    const r = await getDoc(doc(db, 'restaurants', d.restaurantId)), max = +((r.exists() && r.data().screenMax) || 0);
+    // عدد شاشات «طلبك جاهز» يحدده البرج: إذا وصل الحد الشاشة تبقى على الرمز (ولوحة الإدارة تكول وصلت الحد)
+    if (max > 0) {
+      const n = (await getDocs(query(collection(db, 'screens'), where('restaurantId', '==', d.restaurantId)))).docs.filter((x) => x.data().kind === 'ready').length;
+      if (n >= max) return false;
+    }
+    await setDoc(doc(db, 'screens', uid), { restaurantId: d.restaurantId, restName: String((r.exists() && r.data().name) || '').slice(0, 80), kind: 'ready',
+      name: 'شاشة طلبك جاهز', code, platform, pairedBy: 'owner', approved: false, atMs: Date.now() });
+    return true;
+  } catch (e) { return false; }
+}
+// kind: 'kitchen' | 'kitchenSec' | 'waiter' | 'ready' — onIn({uid, rid, rest, screen}) / onOut()
 export function screenGate(el, { title, kind, label, onIn, onOut }) {
   const F = screenFb();
   if (!document.getElementById('pairCss')) { const st = document.createElement('style'); st.id = 'pairCss'; st.textContent = PAIR_CSS; document.head.appendChild(st); }
-  let unsub = null, retryT = 0, inUid = '', cur = null, busy = false;
+  let unsub = null, retryT = 0, inUid = '', cur = null, busy = false, adopted = false;
   const platform = (osName() + ' • ' + (label || title)).slice(0, 80);
   const box = (html) => { el.hidden = false; el.innerHTML = `<div class="gate-f"><div class="gate-logo">س</div><h1>${esc(title)}</h1>${html}</div>`; };
   const leave = () => { if (inUid) { inUid = ''; onOut && onOut(); } };
@@ -203,7 +226,8 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
       retryT = setTimeout(anon, 20000);
     }
   }
-  dropOwnerLogin().finally(() => onAuthStateChanged(F.auth, (user) => {
+  // شاشة «طلبك جاهز»: نخلي جلسة صاحب المطعم لحد ما نجرب نربطها بيها (adoptOwnerScreen)، وبعدين نطلّعها
+  (kind === 'ready' ? Promise.resolve() : dropOwnerLogin()).finally(() => onAuthStateChanged(F.auth, (user) => {
     stop(); cur = user;
     if (!user) { leave(); box('<div class="gate-w gate-spin">⏳</div>'); anon(); return; }
     unsub = onSnapshot(doc(F.db, 'screens', user.uid), (s) => { if (s.exists()) linked(user, s.data()); else pairUi(user); }, () => pairUi(user));
@@ -222,6 +246,8 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
     busy = false;
     if (user !== cur) return;
     lsx.set(key, code);
+    // مفتوحة من زر الكاشير (شاشة ثانية على نفس الكمبيوتر): نخلي جلسة الكاشير، وإلا (تلفزيون) نطلّع جلسة صاحب المطعم منها
+    if (ok && kind === 'ready' && !adopted) { adopted = true; await adoptOwnerScreen(user.uid, code, platform); if (!/[?&]from=pos\b/.test(location.search)) await dropOwnerLogin(); if (user !== cur) return; }
     const link = new URL('../sora3a-admin/?pair=' + code, location.href).href;
     box(`<p>اربط ${kind === 'waiter' ? 'هذا التلفون' : 'هذي الشاشة'} بالمطعم — بدون إيميل وبدون رمز سري</p>
       <div class="pair-code" id="pairCode" dir="ltr">${esc(code)}</div><div class="pair-qr" id="pairQr"></div>
@@ -240,6 +266,8 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
       inUid = user.uid; el.hidden = true; el.innerHTML = '';
       brandSync(F.db);
       watchClock();
+      if (window.SB) SB.welcome({ name: kind === 'waiter' ? (d.name || '') : '', rest: (r.exists() && r.data().name) || '', role: kind === 'waiter' ? '' : (d.name || '') });   // شاشة الترحيب
+      if (window.SB) SB.health((hid, hd) => setDoc(doc(F.db, 'devHealth', hid), hd), { rid: d.restaurantId, rest: (r.exists() && r.data().name) || '', who: d.name || '' });   // صحة الجهاز
       onIn({ uid: user.uid, rid: d.restaurantId, rest: r.exists() ? r.data() : {}, screen: d });
     } catch (e) {
       if (user !== cur) return;

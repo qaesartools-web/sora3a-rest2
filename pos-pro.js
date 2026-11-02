@@ -402,6 +402,7 @@ function openDelivModalCore(){
       orderType: type, items, notes: items.map((c) => `${c.name}(${c.variant})×${c.qty}${c.note ? ' [' + c.note + ']' : ''}`).join(', ').slice(0, 4900),
       subtotal: t.sub, discount: t.disc, service: t.service, tax: t.tax, value: t.total,
       inv: true, kitchen: 'new', createdAt: now, createdAtMs: Date.now(), shiftId: shift ? shift.id : null, device: deviceId,
+      byUid: (window.posUser && window.posUser.uid) || '', byName: String((window.posUser && window.posUser.name) || '').slice(0, 60),   // الكاشير اللي سجّله (شاشة «طلبك جاهز» بكل طابق تعرض طلبات كاشيريتها)
       day: bagDay(),             // يوم الطلب بتوقيت بغداد (لشاشة «طلبك جاهز» بدون فهارس إضافية)
     };
     if (t.disc) { o.discountInfo = { type: disc.type, value: disc.value, reason: disc.reason || '' }; if (disc.loyalty) o.discountInfo.loyalty = true; }
@@ -1123,7 +1124,7 @@ function renderOrdersCore(){
         ${window.ordWaiting&&ordWaiting(o)&&o.status==='delivered'&&o.kitchen==='ready'?'<span class="bdg bd">🔔 جاهز — ينتظر الزبون</span>':`<span class="bdg ${stBadge[o.status]||'bp'}">${stLabel[o.status]||esc(o.status)}</span>`}
         <span style="font-size:11px;color:var(--muted)">${esc(o.captainName||'')}</span>
       </div>
-      ${o.status==='cancelled'?`<div class="oinfo" style="color:#e11d48">❌ ${esc(o.cancelReason||'')}${o.cancelNote?' — '+esc(o.cancelNote):''}</div>`:''}
+      ${o.status==='cancelled'?`<div class="oinfo" style="color:#e11d48">❌ ${esc(o.cancelReason||'')}${o.cancelNote?' — '+esc(o.cancelNote):''}${o.cancelledByName?`<br>👤 ألغاه: ${esc(o.cancelledByName)}${o.cancelledByEmail?' — <bdi>'+esc(o.cancelledByEmail)+'</bdi>':''}`:''}</div>`:''}
       ${o.modifiedAt&&o.status!=='cancelled'?`<div class="ac-sub">✏️ عُدّل الطلب بعد إنشائه</div>`:''}
       ${orderActions(o)}
     </div>`;}).join(''):'<div style="text-align:center;color:var(--muted);padding:24px">لا توجد طلبات</div>';
@@ -1186,6 +1187,8 @@ const showMTabCore = tab=>{
       </div>
       <div class="sh-card"><div class="sh-title">👨‍🍳 أقسام المطبخ والطابعات</div>
         <label class="set-check"><input type="checkbox" id="stSecOn" ${s.kSecOn ? 'checked' : ''}> تقسيم الطلب على أقسام المطبخ — كل قسم يطبع أصنافه فقط، ورقم الطلب يوحّدها</label>
+        <div class="flbl">⏱️ شاشة المطبخ: الطلب يصير أصفر بعد كم دقيقة، وأحمر (متأخر) بعد كم دقيقة</div>
+        <div class="set-row"><div><input class="finp" id="stKWarn" type="number" min="1" max="120" value="${esc(s.kWarn || 10)}" placeholder="أصفر"></div><div><input class="finp" id="stKLate" type="number" min="2" max="240" value="${esc(s.kLate || 20)}" placeholder="أحمر"></div></div>
         <div class="flbl">الأقسام (اترك الاسم فارغاً لإلغاء القسم)</div>
         ${part(() => secArr(s.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join(''))}
         <div class="flbl" style="margin-top:10px">كل فئة بالمنيو تابعة لأي قسم؟</div>
@@ -1235,6 +1238,7 @@ const showMTabCore = tab=>{
       defaultFee: settings.defaultFee ?? DEFAULTS.defaultFee, feePresets: settings.feePresets || DEFAULTS.feePresets, taxPct: settings.taxPct || 0, servicePct: settings.servicePct || 0,
       tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
       kSecOn: $('stSecOn').checked,
+      kWarn: Math.round(clamp($('stKWarn').value || 10, 1, 120)), kLate: Math.max(Math.round(clamp($('stKWarn').value || 10, 1, 120)) + 1, Math.round(clamp($('stKLate').value || 20, 2, 240))),
       sections: secArr(settings.sections).map((x, i) => ({ id: x.id || 'sec' + (i + 1), emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
       catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
       quickAdd: $('stQuick').checked, quickNotes: list($('stNotes').value).slice(0, 10).map((x) => x.slice(0, 30)),
@@ -1361,8 +1365,11 @@ const ordCancelCore = id=>{
   fields.push({id:'note',label:'ملاحظة (اختياري)'});
   acDialog('❌ إلغاء الطلب #'+o.id.substring(0,6).toUpperCase(),o.status==='delivered'?'⚠️ الطلب مُسلَّم — يُسجَّل كمردود مبيعات':(o.status==='delivering'?'⚠️ الكابتن بالطريق':'المبلغ '+fmt(o.value)+' د.ع'),fields,v=>{
     const items=orderItemsFull(o);
-    orderUpdate(id,{status:'cancelled',cancelReason:v.why,cancelNote:(v.note||'').trim(),cancelledBy:'المطعم',cancelledAt:Date.now(),cancelledFrom:o.status,cancelStock:o.inv?v.stock:'none',...(o.capSettled===false?{capSettled:null}:{}),
-      cancelNotice:{by:'المطعم',time:nowT(),timestamp:Date.now(),seen:true}},'أُلغي الطلب — '+v.why,'cancelled').then(()=>{
+    // منو ألغى الطلب: اسم الكاشير وإيميله (يبين بتفاصيل الطلب ومراحله، بالكاشير ولوحة الإدارة والبرج)
+    const pu=window.posUser||{},cu=(window._fb&&window._fb.auth&&window._fb.auth.currentUser)||{};
+    const byName=String(pu.name||(pu.role==='owner'?'صاحب المطعم':'الكاشير')).slice(0,60),byEmail=String(cu.email||'').slice(0,120);
+    orderUpdate(id,{status:'cancelled',cancelReason:v.why,cancelNote:(v.note||'').trim(),cancelledBy:'المطعم',cancelledByName:byName,cancelledByEmail:byEmail,cancelledByUid:cu.uid||'',cancelledAt:Date.now(),cancelledFrom:o.status,cancelStock:o.inv?v.stock:'none',...(o.capSettled===false?{capSettled:null}:{}),
+      cancelNotice:{by:'المطعم',name:byName,time:nowT(),timestamp:Date.now(),seen:true}},'أُلغي الطلب — '+v.why+' — بواسطة '+byName+(byEmail?' ('+byEmail+')':''),'cancelled').then(()=>{
         if(getOrderType(o)==='delivery')syncTracking(id,{status:'cancelled',value:o.value,fee:o.fee});
         if(o.payment&&o.payment.method==='credit'&&window.creditVoid)creditVoid(o,v.why);
         if(o.inv){if(v.stock==='return')consumeItems(items,'sale_return',id,'إلغاء طلب');else wasteItems(items,id,'إلغاء بعد التحضير');saveAcc();saveMenu();renderMenu();}
@@ -1484,6 +1491,7 @@ const ordCancelCore = id=>{
   }
   const kNum = (o) => o.ticketNo || o.salonNum || o.holdNum || String(o.id || '').slice(0, 4).toUpperCase();
   window.kNum = kNum;
+  window.kSecOf = (name) => (secOn() ? secOfItem(name) : '');
   function applySections(o) {
     o.ticketNo = nextTicket();
     if (!secOn()) return;
@@ -2405,7 +2413,7 @@ const ordCancelCore = id=>{
     return x;
   };
   const lanList = () => orders.filter((o) => Date.now() - (o.createdAtMs || 0) < 36 * 3600000).map(lanOrder);
-  const lanSettings = () => ({ sections: settings.sections || [], kSecOn: !!settings.kSecOn, receiptTitle: settings.receiptTitle || '', screen: settings.screen || null });
+  const lanSettings = () => ({ sections: settings.sections || [], kSecOn: !!settings.kSecOn, kWarn: settings.kWarn || 10, kLate: settings.kLate || 20, receiptTitle: settings.receiptTitle || '', screen: settings.screen || null });
   const lanRest = () => ({ name: (restData && restData.name) || '', features: (restData && restData.features) || {}, svcOff: (restData && restData.svcOff) || {} });
   const lanName = () => String((window.posUser && window.posUser.name) || 'الكاشير').slice(0, 40);
   const toScreens = (m) => { const L = lanApi(); if (L && lanOn) { L.send('role:kitchen', m); L.send('role:screen', m); } if (m.settings) wSend({ t: 'state', settings: wSettings() }); };
@@ -3125,7 +3133,29 @@ function enterAppCore(){
   document.getElementById('restName').textContent=restData.name||'المطعم';
   loadAcc();renderMenu();renderCart();startListeners();initMenuManage();updateAccBadge();shrinkOldImages();renderHold();
   showThemeSwitcher();
+  // شاشة الترحيب عند كل دخول
+  if (window.SB && window._fb) SB.health((hid, hd) => window._fb.setDoc(window._fb.doc(window._fb.db, 'devHealth', hid), hd), { rid: restData.id || '', rest: restData.name || '', who: (window.posUser && window.posUser.name) || '' });   // صحة الجهاز
+  if (window.SB) SB.welcome({ app: 'cashier', name: (window.posUser && window.posUser.name) || '', rest: restData.name || '', role: window.posUser && window.posUser.role === 'owner' ? 'الكاشير — صاحب المطعم' : 'الكاشير' });
 }
+  // ── «إدارة المخزن»: الجهاز المربوط برمز يفتح المخزون والوصفات والموردين بس (نفس كود الكاشير وبياناته) ──
+  window.storeIn = function (u, F) {
+    window._fb = Object.assign({}, window._fb, { db: F.db, auth: F.auth });
+    restData = Object.assign({ id: u.rid }, u.rest || {});
+    window.posUser = { uid: u.uid, role: 'store', name: (u.screen && u.screen.name) || 'أمين المخزن', perms: { inventory: true } };
+    if (!featOn('store')) { toast('⛔ خدمة «إدارة المخزن» مطفية لهذا المطعم — المخزون بالكاشير'); }
+    $('loginPage').style.display = 'none'; $('appPage').className = 'show';
+    $('restName').textContent = (restData.name || 'المطعم') + ' — 📦 إدارة المخزن';
+    const lo = document.querySelector('.lout'); if (lo) { lo.textContent = '🔌 فصل الجهاز'; lo.onclick = () => { if (confirm('فصل جهاز المخزن؟ بعدها يحتاج رمز جديد من لوحة الإدارة')) window.storeUnlink(); }; }
+    loadAcc(); startListeners2(); ledInit(); listenMenu(); updateAccBadge();
+    unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', restData.id), (s) => { if (s.exists()) { restData = Object.assign(restData, s.data()); } }, () => {}));
+    acCur = 'mat'; goTab('acc');
+    if (window.SB) {
+      SB.health((hid, hd) => fb().setDoc(fb().doc(fb().db, 'devHealth', hid), hd), { rid: restData.id, rest: restData.name || '', who: window.posUser.name });
+      SB.welcome({ app: 'store', name: window.posUser.name, rest: restData.name || '' });
+    }
+  };
+  window.storeOut = () => { location.reload(); };
+  window.storeSvcOn = () => featOn('store');
   window.enterApp = function () {
     disc = { type: 'amt', value: 0, reason: '' }; prodQuery = ''; shift = null; kdsSeen.clear(); kdsReady = false;
     if ($('prodSearch')) $('prodSearch').value = '';

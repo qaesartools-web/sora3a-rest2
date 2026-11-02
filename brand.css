@@ -72,7 +72,25 @@ html .sb-splash.sb-gone{opacity:0}
 .sb-sp-ft bdi{direction:ltr;unicode-bidi:isolate;font-weight:700}
 @keyframes sbIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.sb-sp-m{animation:none}html .sb-splash{transition:none}}
-@media print{.sb-bar,.sb-foot,.sb-splash{display:none!important}}
+/* شاشة الترحيب عند كل دخول */
+.sb-welcome{position:fixed;top:0;right:0;bottom:0;left:0;z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:20px;background:linear-gradient(160deg,var(--sbG1),var(--sbG2));color:var(--sbOn,#fff);font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;direction:rtl;
+  text-align:center;cursor:pointer;transition:opacity .4s}
+.sb-welcome.sb-gone{opacity:0;pointer-events:none}
+.sb-w-in{display:flex;flex-direction:column;align-items:center}
+.sb-w-in>*+*{margin-top:10px}
+.sb-w-m{width:84px;height:84px;width:12vmin;height:12vmin;display:block;animation:sbIn .6s ease-out both}
+.sb-w-m svg{width:100%;height:100%;display:block}
+.sb-w-g{font-size:30px;font-size:5vmin;font-weight:800;line-height:1.3}
+.sb-w-r{font-size:20px;font-size:3vmin;font-weight:700;opacity:.95}
+.sb-w-a{display:inline-block;font-size:15px;font-size:2.2vmin;font-weight:600;padding:5px 16px;border-radius:999px;background:rgba(255,255,255,.18)}
+.sb-w-ft{position:absolute;left:0;right:0;bottom:6vh;font-size:14px;font-size:2vmin;opacity:.85}
+.sb-w-ft .sb-wm{font-size:1.3em;margin-left:6px}
+@media (max-width:600px){.sb-w-m{width:76px;height:76px}.sb-w-g{font-size:26px}.sb-w-r{font-size:18px}.sb-w-a{font-size:14px}.sb-w-ft{font-size:13px}}
+@media (min-width:1600px){.sb-w-g{font-size:64px}.sb-w-r{font-size:38px}.sb-w-a{font-size:26px}}
+@keyframes sbWIn{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.sb-welcome,.sb-w-m{animation:none}}
+@media print{.sb-bar,.sb-foot,.sb-splash,.sb-welcome{display:none!important}}
 /* نموذج الدخول/الربط المشترك (staff.js): يبدي تحت الشريط، وشعاره بلون التطبيق */
 html.sb-on .gate{top:var(--sbH);bottom:var(--sbF)}
 html.sb-on .gate-logo{background:linear-gradient(135deg,var(--sbG1),var(--sbG2))!important;color:var(--sbOn,#fff)!important}
