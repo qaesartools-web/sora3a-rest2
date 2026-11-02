@@ -147,8 +147,8 @@ export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
       el.hidden = true; el.innerHTML = '';
       brandSync(db);
       watchClock();
-      if (window.SB) SB.welcome({ name: d.name || '', rest: (rest && rest.name) || '' });   // شاشة الترحيب
-      if (window.SB) SB.health((hid, hd) => setDoc(doc(db, 'devHealth', hid), hd), { rid, rest: (rest && rest.name) || '', who: d.name || '' });   // صحة الجهاز
+      if (window.SB && SB.welcome) SB.welcome({ name: d.name || '', rest: (rest && rest.name) || '' });   // شاشة الترحيب
+      if (window.SB && SB.health) SB.health((hid, hd) => setDoc(doc(db, 'devHealth', hid), hd), { rid, rest: (rest && rest.name) || '', who: d.name || '' });   // صحة الجهاز
       onIn({ uid: user.uid, role: d.role, name: d.name || '', rid, rest });
     } catch (e) {
       if (e.code === 'permission-denied') deny('⛔ الحساب موقوف أو خارج وقت الدوام', true);
@@ -266,8 +266,8 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
       inUid = user.uid; el.hidden = true; el.innerHTML = '';
       brandSync(F.db);
       watchClock();
-      if (window.SB) SB.welcome({ name: kind === 'waiter' ? (d.name || '') : '', rest: (r.exists() && r.data().name) || '', role: kind === 'waiter' ? '' : (d.name || '') });   // شاشة الترحيب
-      if (window.SB) SB.health((hid, hd) => setDoc(doc(F.db, 'devHealth', hid), hd), { rid: d.restaurantId, rest: (r.exists() && r.data().name) || '', who: d.name || '' });   // صحة الجهاز
+      if (window.SB && SB.welcome) SB.welcome({ name: kind === 'waiter' ? (d.name || '') : '', rest: (r.exists() && r.data().name) || '', role: kind === 'waiter' ? '' : (d.name || '') });   // شاشة الترحيب
+      if (window.SB && SB.health) SB.health((hid, hd) => setDoc(doc(F.db, 'devHealth', hid), hd), { rid: d.restaurantId, rest: (r.exists() && r.data().name) || '', who: d.name || '' });   // صحة الجهاز
       onIn({ uid: user.uid, rid: d.restaurantId, rest: r.exists() ? r.data() : {}, screen: d });
     } catch (e) {
       if (user !== cur) return;
