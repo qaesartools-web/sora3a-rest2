@@ -17,9 +17,22 @@ const CFG = {
 export const app = initializeApp(CFG, "pos-v2");
 // App Check (reCAPTCHA Enterprise / Fraud Defense): السيرفر يعرف إن الطلب جاي من تطبيقاتنا الحقيقية (بدون ما يحس المستخدم) — على الموقع بس، مو بالتجارب المحلية
 const APPCHECK_KEY = '6LdWa_0tAAAAAEWXuLi8yrdnPjQmx-r-ayyoZ07h';
-const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; if (!document.getElementById('acHide')) document.head.insertAdjacentHTML('beforeend', '<style id="acHide">.grecaptcha-badge{visibility:hidden}</style>');
-  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => { const ac = m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); m.getToken(ac).then(() => { window.__acState = window.__acState || 'ok'; }, (e) => { window.__acState = 'err:' + String((e && ((e.code || '') + ' ' + (e.message || ''))) || e).replace(/\s+/g, ' ').slice(0, 95); }); }).catch(() => {}); };
-appCheck(app);
+// داخل تطبيقات الأندرويد فحص كوكل (reCAPTCHA) ما يشتغل: رمز الحماية ياخذه الجهاز المربوط أو الحساب المسجّل من سيرفرنا
+const srvAppCheck = (getAuth) => async () => {
+  let u = null;
+  for (let i = 0; i < 120 && !u; i++) { const au = getAuth(); u = au && au.currentUser; if (!u) await new Promise((r) => setTimeout(r, 500)); }
+  if (!u) { window.__acState = 'err:srv لسه ما مسجّل'; throw new Error('not signed in'); }
+  const r = await fetch('https://sora3a-push.qaesartools.workers.dev/appcheck', { method: 'POST', headers: { authorization: 'Bearer ' + await u.getIdToken(), 'content-type': 'application/json' }, body: '{}' });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.token) { window.__acState = 'err:srv ' + r.status + ' ' + String(j.error || '').slice(0, 40); throw new Error('srv ' + r.status); }
+  window.__acState = 'ok (سيرفر)';
+  return { token: j.token, expireTimeMillis: Date.now() + Math.max(120000, (j.ttlMillis || 3600000) - 600000) };
+};
+// بعد الدخول أو الربط: نطلب الرمز من جديد (قبلها السيرفر يرفض لأن الجهاز بعده ما مربوط)
+window.acKick = () => { if (!window.__acKick || !/; wv\)/.test(navigator.userAgent)) return; window.__acState = ''; window.__acKick.forEach((k) => { try { k().catch(() => {}); } catch (e) {} }); };
+const appCheck = (a, getAuth) => { if (!/\.github\.io$/.test(location.hostname)) return; if (!document.getElementById('acHide')) document.head.insertAdjacentHTML('beforeend', '<style id="acHide">.grecaptcha-badge{visibility:hidden}</style>');
+  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => { const ac = m.initializeAppCheck(a, { provider: (getAuth && /; wv\)/.test(navigator.userAgent)) ? new m.CustomProvider({ getToken: srvAppCheck(getAuth) }) : new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); if (getAuth) (window.__acKick = window.__acKick || []).push(() => m.getToken(ac, true)); m.getToken(ac).then(() => { window.__acState = window.__acState || 'ok'; }, (e) => { window.__acState = 'err:' + String((e && ((e.code || '') + ' ' + (e.message || ''))) || e).replace(/\s+/g, ' ').slice(0, 95); }); }).catch(() => {}); };
+appCheck(app, () => auth);
 export const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
 // كاش محلي دائم: الشاشة تفتح بآخر بياناتها حتى لو انقطع النت (وتكمل ويا الكاشير على نفس الواي فاي — lanlink.js)
 const mkDb = (a) => { try { return initializeFirestore(a, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); } catch (e) { return getFirestore(a); } };
@@ -148,6 +161,7 @@ export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
       brandSync(db);
       watchClock();
       if (window.SB && SB.welcome) SB.welcome({ name: d.name || '', rest: (rest && rest.name) || '' });   // شاشة الترحيب
+      if (window.acKick) window.acKick();
       if (window.SB && SB.health) SB.health((hid, hd) => setDoc(doc(db, 'devHealth', hid), hd), { rid, rest: (rest && rest.name) || '', who: d.name || '' });   // صحة الجهاز
       onIn({ uid: user.uid, role: d.role, name: d.name || '', rid, rest });
     } catch (e) {
@@ -166,7 +180,7 @@ let scrFb = null;
 export function screenFb() {
   if (!scrFb) {
     const a = initializeApp(CFG, 'sora3a-screen');
-    appCheck(a);
+    appCheck(a, () => scrFb && scrFb.auth);
     scrFb = { app: a, auth: initializeAuth(a, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] }), db: mkDb(a) };
   }
   return scrFb;
@@ -267,6 +281,7 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
       brandSync(F.db);
       watchClock();
       if (window.SB && SB.welcome) SB.welcome({ name: kind === 'waiter' ? (d.name || '') : '', rest: (r.exists() && r.data().name) || '', role: kind === 'waiter' ? '' : (d.name || '') });   // شاشة الترحيب
+      if (window.acKick) window.acKick();
       if (window.SB && SB.health) SB.health((hid, hd) => setDoc(doc(F.db, 'devHealth', hid), hd), { rid: d.restaurantId, rest: (r.exists() && r.data().name) || '', who: d.name || '' });   // صحة الجهاز
       onIn({ uid: user.uid, rid: d.restaurantId, rest: r.exists() ? r.data() : {}, screen: d });
     } catch (e) {

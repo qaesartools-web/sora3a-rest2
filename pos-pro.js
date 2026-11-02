@@ -3134,6 +3134,7 @@ function enterAppCore(){
   loadAcc();renderMenu();renderCart();startListeners();initMenuManage();updateAccBadge();shrinkOldImages();renderHold();
   showThemeSwitcher();
   // شاشة الترحيب عند كل دخول
+  if (window.acKick) window.acKick();
   if (window.SB && SB.health && window._fb) SB.health((hid, hd) => window._fb.setDoc(window._fb.doc(window._fb.db, 'devHealth', hid), hd), { rid: restData.id || '', rest: restData.name || '', who: (window.posUser && window.posUser.name) || '' });   // صحة الجهاز
   if (window.SB && SB.welcome) SB.welcome({ app: 'cashier', name: (window.posUser && window.posUser.name) || '', rest: restData.name || '', role: window.posUser && window.posUser.role === 'owner' ? 'الكاشير — صاحب المطعم' : 'الكاشير' });
 }
@@ -3149,6 +3150,7 @@ function enterAppCore(){
     loadAcc(); startListeners2(); ledInit(); listenMenu(); updateAccBadge();
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', restData.id), (s) => { if (s.exists()) { restData = Object.assign(restData, s.data()); } }, () => {}));
     acCur = 'mat'; goTab('acc');
+    if (window.acKick) window.acKick();
     if (window.SB) {
       if (SB.health) SB.health((hid, hd) => fb().setDoc(fb().doc(fb().db, 'devHealth', hid), hd), { rid: restData.id, rest: restData.name || '', who: window.posUser.name });
       if (SB.welcome) SB.welcome({ app: 'store', name: window.posUser.name, rest: restData.name || '' });
