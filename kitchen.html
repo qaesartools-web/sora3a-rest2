@@ -325,7 +325,7 @@ button{cursor:pointer}
 
 <script src="vendor/qrcode.js"></script>
 <script type="module">
-import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, updateDoc, arrayUnion, deleteField, collection, query, where, onSnapshot } from './staff.js';
+import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, doc, updateDoc, arrayUnion, deleteField, collection, query, where, onSnapshot, liveGuard } from './staff.js';
 import { lanLink, score } from './lanlink.js?v=2';
 // الشاشة تنربط بالمطعم برمز (بدون إيميل ولا كلمة سر) — جلستها بتطبيق Firebase خاص بالشاشات
 const db = screenFb().db;
@@ -390,7 +390,8 @@ const needPick = () => SECMODE && (!SEC || (sections.length && !sections.some((x
 
 screenGate($('gate'), {
   title: SECMODE ? 'سرعة — شاشة المطبخ' : 'سرعة — شاشة المجهز', kind: FEAT, label: SECMODE ? 'شاشة المطبخ' : 'شاشة المجهز',
-  onIn: (u) => { me = u; start(); },
+  // حارس الاتصال: إذا الطلبات وقفت تتحدث بدون خطأ (المكتبة علكت) يعيد الاتصال، وإذا بقت ← يحمّل الصفحة من جديد
+  onIn: (u) => { me = u; start(); liveGuard(db, () => (me ? doc(db, 'screens', me.uid) : null)); },
   onOut: () => { unsubs.forEach((f) => f()); unsubs = []; me = null; orders = []; seen.clear(); $('app').hidden = true; $('off').hidden = true; $('pick').hidden = true; },
 });
 let offArmed = false;
@@ -725,7 +726,9 @@ $('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exit
 $('mOut').onclick = () => { if (!outArmed) { outArmed = true; $('mOut').textContent = '⚠️ متأكد؟ اضغط مرة ثانية'; return; } $('menu').hidden = true; unlinkScreen(); };
 
 // الوقت على البطاقات يمشي، والشاشة ما تطفي
-setInterval(() => { if (!$('app').hidden) { lanUi(); render(); } }, 30000);
+// __scrBeat: نبض الصفحة — تطبيق المطبخ يعيد تحميلها إذا وقف (الصفحة جمدت)
+window.__scrBeat = Date.now();
+setInterval(() => { window.__scrBeat = Date.now(); if (!$('app').hidden) { lanUi(); render(); } }, 30000);
 let lock = null;
 async function keepOn() { try { if ('wakeLock' in navigator && !document.hidden) lock = await navigator.wakeLock.request('screen'); } catch (e) {} }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) keepOn(); });

@@ -166,12 +166,20 @@ public class MainActivity extends Activity {
                 if (BuildConfig.SCREEN) { checkPageWorks(); pushAuto(); }
             }
             @Override public void doUpdateVisitedHistory(WebView v, String url, boolean reload) { pageUrl = url == null ? "" : url; }
+            // محرك الصفحة انهار (ذاكرة التلفزيون خلصت): بدل ما يطفي التطبيق أو تبقى الشاشة سودة، نفتحه من جديد
+            @Override public boolean onRenderProcessGone(WebView v, android.webkit.RenderProcessGoneDetail detail) {
+                if (!BuildConfig.SCREEN && !BuildConfig.KITCHEN) return false;
+                dropWeb();
+                recreate();
+                return true;
+            }
             @Override public void onReceivedError(WebView v, WebResourceRequest req, WebResourceError err) {
                 if (req.isForMainFrame()) v.loadDataWithBaseURL(null, OFFLINE, "text/html", "utf-8", null);
             }
         });
         if (state != null) web.restoreState(state); else web.loadUrl(START_URL);
         web.postDelayed(updTick, 10_000);
+        if (BuildConfig.SCREEN || BuildConfig.KITCHEN) web.postDelayed(beatTick, BEAT_STEP);
         if (BuildConfig.SCREEN) {
             logHome(getIntent());
             checkKilled();   // قبل ScreenWatch.sync اللي يرجّع المنبّه
@@ -347,7 +355,7 @@ public class MainActivity extends Activity {
     private void notifyPage() {
         if (web != null && pageOriginOk()) web.evaluateJavascript("window.dispatchEvent(new Event('sora:resume'))", null);
     }
-    @Override protected void onResume() { super.onResume(); leaving = false; notifyPage(); if (BuildConfig.SCREEN) pushAuto(); }
+    @Override protected void onResume() { super.onResume(); leaving = false; beatFg = true; beatReplyAt = SystemClock.elapsedRealtime(); notifyPage(); if (BuildConfig.SCREEN) pushAuto(); }
     @Override protected void onDestroy() { Lan.get(this).detach(web); super.onDestroy(); }
     // الشاشة: المطعم نفسه طالع منها (إعدادات، رابط، تحديث...) ← لا ترجع وحدها فوق اللي فتحه
     private boolean leaving;
@@ -362,11 +370,57 @@ public class MainActivity extends Activity {
             + ";window.__adbOn=" + LocalAdb.ready(this) + ";window.__setAdb&&window.__setAdb(" + LocalAdb.ready(this) + ")", null);
     }
 
+    // ── حارس الصفحة (الشاشة والمطبخ): تبقى شغّالة أيام — إذا الصفحة جمدت (ما تجاوب) أو نبضها (__scrBeat) وقف، نحمّلها من جديد ──
+    //  الصفحة تحدّث نبضها كل 30 ثانية. كل دقيقة نسألها: إذا ما جاوبت 3 دقايق، أو نبضها أقدم من 3 دقايق ← تحميل من جديد
+    //  (مرة كل 5 دقايق بالأكثر حتى ما تدخل بحلقة)
+    private static final long BEAT_STEP = 60_000, BEAT_DEAD = 180_000, BEAT_GAP = 300_000;
+    private long beatReplyAt = SystemClock.elapsedRealtime(), beatReloadAt = 0;
+    private boolean beatFg = true;   // التطبيق قدام (مو بالخلفية) — بالخلفية ما نحكم على الصفحة
+    private final Runnable beatTick = new Runnable() {
+        @Override public void run() {
+            if (isFinishing() || isDestroyed() || webDropped || web == null) return;
+            final long now = SystemClock.elapsedRealtime();
+            if (beatFg && pageUrl.startsWith(START_URL)) {
+                if (now - beatReplyAt > BEAT_DEAD) beatReload("الصفحة ما تجاوب", true);
+                else web.evaluateJavascript("String(window.__scrBeat||0)", (r) -> {
+                    beatReplyAt = SystemClock.elapsedRealtime();
+                    long b = 0; try { b = Long.parseLong(r == null ? "0" : r.replace("\"", "")); } catch (Exception e) {}
+                    if (b > 0 && System.currentTimeMillis() - b > BEAT_DEAD) beatReload("نبض الصفحة وقف", false);
+                });
+            } else beatReplyAt = now;   // بالخلفية، أو صفحة ثانية (ماكو نت، أو تحديث): مو جامدة
+            if (web != null) web.postDelayed(this, BEAT_STEP);
+        }
+    };
+    //  hard: الصفحة نفسها ما تجاوب (محركها عالق) ← نسوي متصفح جديد (التحميل العادي ممكن يعلك وياها)
+    private void beatReload(String why, boolean hard) {
+        final long now = SystemClock.elapsedRealtime();
+        if (web == null || (beatReloadAt > 0 && now - beatReloadAt < BEAT_GAP)) return;
+        beatReloadAt = now; beatReplyAt = now;
+        android.util.Log.w("SoraBeat", "reload: " + why);
+        if (!hard) { web.loadUrl(START_URL); return; }
+        // محرك الصفحة عالق: نطفيه (يجي onRenderProcessGone ← متصفح جديد). الأجهزة القديمة اللي ما تدعمه: متصفح جديد مباشرة
+        try {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.GET_WEB_VIEW_RENDERER)) {
+                androidx.webkit.WebViewRenderProcess rp = WebViewCompat.getWebViewRenderProcess(web);
+                if (rp != null && rp.terminate()) return;
+            }
+        } catch (Exception e) {}
+        dropWeb();
+        recreate();
+    }
+    // نشيل المتصفح القديم (المكالمات عليه بعدها ما تسوي شي — ما نخليه null حتى ما ينهار شي ينتظر عليه)
+    private boolean webDropped;
+    private void dropWeb() {
+        if (webDropped || web == null) return;
+        webDropped = true;
+        try { android.view.ViewParent par = web.getParent(); if (par instanceof android.view.ViewGroup) ((android.view.ViewGroup) par).removeView(web); web.destroy(); } catch (Exception e) {}
+    }
+
     // ── التحديث من داخل التطبيق (Updater): نفحص بعد التشغيل بشوية وكل 6 ساعات ──
     private Updater.Info update;
     private AlertDialog updDlg;
     private final Runnable updTick = new Runnable() {
-        @Override public void run() { if (isFinishing()) return; checkUpdate(false); web.postDelayed(this, 6 * 3600_000L); }
+        @Override public void run() { if (isFinishing() || isDestroyed() || webDropped) return; checkUpdate(false); web.postDelayed(this, 6 * 3600_000L); }
     };
     private void checkUpdate(boolean manual) {
         new Thread(() -> {
@@ -419,6 +473,7 @@ public class MainActivity extends Activity {
     // الشاشة راحت للخلف: إذا مو المطعم اللي طلع منها (يعني التلفزيون غطّاها بواجهته أو HDMI أو القنوات) ← ترجع وحدها بعد 20 ثانية
     @Override protected void onStop() {
         super.onStop();
+        beatFg = false;
         if (!BuildConfig.SCREEN || isFinishing()) return;
         AutoLog.add(this, "bg", leaving ? "me" : "");
         if (!leaving && appPrefs().getBoolean("autoStart", true)) ScreenWatch.away(this);
@@ -664,7 +719,7 @@ public class MainActivity extends Activity {
     }
     @Override public void onRequestPermissionsResult(int req, String[] perms, int[] res) { super.onRequestPermissionsResult(req, perms, res); notifyPage(); }
 
-    @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); web.saveState(out); }
+    @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); if (!webDropped && web != null) web.saveState(out); }
 
     @Override public void onBackPressed() {
         if (web.canGoBack()) { web.goBack(); return; }

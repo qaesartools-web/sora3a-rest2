@@ -293,7 +293,7 @@ html.xs-emptyFg .empty{color:var(--x-emptyFg)!important;opacity:1!important}
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('screen-sw.js', { scope: './screen' }).catch(function () {});
 </script>
 <script type="module">
-import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc } from './staff.js';
+import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc, liveGuard } from './staff.js';
 // الشاشة تنربط برمز ويعتمدها البرج (بدون إيميل ولا كلمة سر) — جلستها «مجهولة» بتطبيق Firebase منفصل
 const db = screenFb().db;
 import { lanLink } from './lanlink.js?v=1';
@@ -505,7 +505,9 @@ function clock() {
   $('clk').innerHTML = ((h % 12) || 12) + ':' + String(d.getMinutes()).padStart(2, '0') + ' <small>' + (h < 12 ? 'ص' : 'م') + '</small>';
   try { $('dt').textContent = d.toLocaleDateString('ar-IQ-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' }); } catch (e) {}
 }
-setInterval(() => { clock(); if (rid) { if (bagDay() !== day) listen(); else render(); } }, 30000);
+// __scrBeat: نبض الصفحة — تطبيق التلفزيون يعيد تحميلها إذا وقف (الصفحة جمدت)
+window.__scrBeat = Date.now();
+setInterval(() => { window.__scrBeat = Date.now(); clock(); if (rid) { if (bagDay() !== day) listen(); else render(); } }, 30000);
 
 // ── التحديث التلقائي: أي تحديث للشاشة يوصل للتلفزيون وحده بدون ما أحد يلمس شي ──
 //  نراقب ملفات الصفحة كل دقيقة؛ إذا تغيّرت (ونتأكد مرتين) نحدّث بلحظة هادئة — مو وقت ما رقم جديد يومض
@@ -625,6 +627,8 @@ screenGate($('gate'), {
   title: 'شاشة «طلبك جاهز»', kind: 'ready', label: 'شاشة طلبك جاهز',
   onIn: async (u) => {
     rid = u.rid; first = true; seenReady.clear();
+    // حارس الاتصال: إذا الطلبات وقفت تتحدث بدون خطأ (المكتبة علكت) يعيد الاتصال، وإذا بقت ← يحمّل الصفحة من جديد
+    liveGuard(db, () => (rid ? doc(db, 'screens', u.uid) : null), { quiet: () => ![...fresh.values()].some((t) => Date.now() - t < 15000) && menu.hidden });
     // هذي الشاشة: أي كاشيرية تطلع طلباتهم (مطعم بيه أكثر من صالة) — يحددها صاحب المطعم من لوحة الإدارة ويتطبق فوراً
     cashiers = (u.screen && u.screen.cashiers) || []; types = (u.screen && u.screen.types) || [];
     if (unsubMe) unsubMe();

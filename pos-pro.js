@@ -49,6 +49,16 @@
   const bizNote = (h) => (!okHM(h) ? 'بدون أوقات: اليوم من ١٢ بالليل لـ ١٢ بالليل' + (restData && restData.hours && restData.hours.on && okHM(restData.hours) ? ' (هسه ماشي على ساعات الدوام من برج سرعة)' : '')
     : h.close > h.open ? 'اليوم من ' + hmStr(h.open) + ' لـ ' + hmStr(h.close) + ' — نفس اليوم'
     : 'يعبر ١٢ بالليل: مبيعات لحد ' + hmStr(h.close) + ' بالليل تنحسب على اليوم اللي قبله (اليوم الجديد يبدي ' + hmStr(Math.round(h.close + (h.open - h.close) / 2)) + ')');
+  // ══════════ الصالات ══════════
+  //  المطعم اللي بيه أكثر من صالة: كل صالة إلها أرقام طاولات (من — لـ)، وكل كاشير إله صالة (يحددها صاحب المطعم من لوحة الإدارة ← الكاشيرية)
+  //  الكاشير تجيه طلبات طاولات صالته بس (باركود الطاولة والويتر). بدون صالة = كل الصالات. وباركودات الطاولات تنطبع لكل صالة لوحدها
+  const HALLS_MAX = 4;
+  const hallList = () => (Array.isArray(settings.halls) ? settings.halls : []).filter((h) => h && h.id && h.name && Number.isInteger(h.from) && Number.isInteger(h.to) && h.from >= 1 && h.to >= h.from);
+  const tblNum = (t) => parseInt(String(t == null ? '' : t).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)), 10);
+  const hallOf = (t) => { const n = tblNum(t); return isNaN(n) ? null : hallList().find((h) => n >= h.from && n <= h.to) || null; };
+  const myHall = () => { const id = window.posUser && window.posUser.hall; return id ? hallList().find((h) => h.id === id) || null : null; };
+  const hallOk = (t) => { const m = myHall(); if (!m) return true; const h = hallOf(t); return !h || h.id === m.id; };
+  window.posHallOf = hallOf; window.posMyHall = myHall;
   const hmVal = (v) => { const x = /^(\d{1,2}):(\d{2})$/.exec(String(v || '')); return x && +x[1] < 24 && +x[2] < 60 ? +x[1] * 60 + +x[2] : null; };
   const setKey = () => 'pos_settings_' + rid();
 
@@ -1234,6 +1244,11 @@ const showMTabCore = tab=>{
       <div class="sh-card"><div class="sh-title">🪑 الطاولات والبيجر</div>
         <div class="set-row"><div><div class="flbl">عدد الطاولات (0 = بدون)</div><input class="finp" id="stTables" type="number" min="0" max="200" value="${s.tables || 0}"></div>
           <div><div class="flbl">📟 عدد أجهزة البيجر (0 = بدون)</div><input class="finp" id="stPagers" type="number" min="0" max="30" value="${s.pagers != null ? s.pagers : 10}"></div></div>
+        <div class="flbl" style="margin-top:12px">🏛️ الصالات (إذا المطعم بيه أكثر من صالة)</div>
+        <div class="ac-sub" style="margin-bottom:6px;line-height:1.8">اسم كل صالة وأرقام طاولاتها. كل كاشير تجيه طلبات طاولات صالته بس (باركود الطاولة والويتر) — صالة كل كاشير تنختار من لوحة الإدارة ← الكاشيرية. وباركودات الطاولات تنطبع لكل صالة لوحدها. اتركها فارغة إذا صالة وحدة.</div>
+        ${Array.from({ length: HALLS_MAX }, (_, i) => { const h = (Array.isArray(s.halls) ? s.halls : [])[i] || {};
+          return `<div class="set-row hall-row"><div><input class="finp" id="stHallN${i}" maxlength="20" placeholder="${i ? 'اسم الصالة' : 'مثال: الصالة العائلية'}" value="${esc(h.name || '')}"></div>
+            <div style="display:flex;gap:6px"><input class="finp" id="stHallF${i}" type="number" min="1" max="200" placeholder="من طاولة" value="${h.from || ''}"><input class="finp" id="stHallT${i}" type="number" min="1" max="200" placeholder="لـ طاولة" value="${h.to || ''}"></div></div>`; }).join('')}
       </div>
       <div class="sh-card"><div class="sh-title">🕐 يوم العمل (الحسابات)</div>
         <div class="ac-sub" style="margin-bottom:8px;line-height:1.8">وقت فتح المطعم وإغلاقه: مبيعات اليوم والتقارير تنحسب من الفتح للإغلاق حتى لو يعبر ١٢ بالليل (مثلاً يسد ٢ بالليل). أرقام الطلبات تتصفر ١٢ بالليل.</div>
@@ -1269,7 +1284,21 @@ const showMTabCore = tab=>{
       catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
       quickAdd: $('stQuick').checked, quickNotes: list($('stNotes').value).slice(0, 10).map((x) => x.slice(0, 30)),
       bizHours: settings.bizHours || null,
+      halls: Array.isArray(settings.halls) ? settings.halls : [],
     };
+    if ($('stHallN0')) {
+      const halls = [], old = Array.isArray(settings.halls) ? settings.halls : [];
+      for (let i = 0; i < HALLS_MAX; i++) {
+        const nm = $('stHallN' + i).value.trim().slice(0, 20), f = Math.round(num($('stHallF' + i).value)), t = Math.round(num($('stHallT' + i).value));
+        if (!nm && !f && !t) continue;
+        if (!nm || !(f >= 1) || !(t >= f) || t > 200) { toast('⚠️ الصالة ' + toA(i + 1) + ': اكتب اسمها وأرقام طاولاتها (من طاولة ≤ لـ طاولة)'); return; }
+        const x = halls.find((h) => f <= h.to && t >= h.from);
+        if (x) { toast('⚠️ طاولات «' + nm + '» داخلة ويا طاولات «' + x.name + '»'); return; }
+        halls.push({ id: (old[i] && old[i].id) || 'h' + Date.now().toString(36) + i, name: nm, from: f, to: t });
+      }
+      next.halls = halls;
+    }
+    const hallsWas = JSON.stringify(settings.halls || []);
     if ($('stBizOpen')) {
       const bo = hmVal($('stBizOpen').value), bc = hmVal($('stBizClose').value);
       if ((bo == null) !== (bc == null) || (bo != null && bo === bc)) { toast('⚠️ يوم العمل: حدد وقت الفتح والإغلاق (مختلفين)، أو اتركهم فارغين'); return; }
@@ -1291,7 +1320,8 @@ const showMTabCore = tab=>{
     try { await fb().setDoc(sub('settings', 'main'), { ...settings, updatedAtMs: Date.now() }); toast('✅ تم حفظ الإعدادات لكل أجهزة المطعم'); }
     catch (e) { toast('⚠️ حُفظت على هذا الجهاز فقط — تحقق من الإنترنت'); }
     publishMenu(onBefore !== JSON.stringify(onlineCfg()));
-    renderCart();
+    renderCart(); renderWeb();
+    if (hallsWas !== JSON.stringify(settings.halls || [])) renderSettings();   // أزرار باركودات كل صالة
   };
   function listenSettings() {
     settings = { ...DEFAULTS, ...lsGet(setKey(), {}) };
@@ -1312,6 +1342,7 @@ const showMTabCore = tab=>{
       lsSet(setKey(), settings);
       bizSync();
       renderCart();
+      renderWeb();   // الصالات تغيّرت ← طلبات الطاولات اللي تخص هذا الكاشير
       lanSettingsPush();
     }, () => {}));
   }
@@ -1451,6 +1482,8 @@ const ordCancelCore = id=>{
       if (!d || d.disabled || d.role !== 'cashier') { toast('⛔ تم إيقاف حسابك'); setTimeout(() => fb().signOut(fb().auth), 1500); return; }
       const before = JSON.stringify(u.perms || {});
       u.perms = d.perms || {}; u.name = d.name || u.name;
+      const hallWas = u.hall || ''; u.hall = String(d.hall || '');
+      if (hallWas !== u.hall) { renderWeb(); const h = myHall(); toast(h ? '🏛️ صالتك: ' + h.name + ' — توصلك طلبات طاولاتها بس' : '🏛️ توصلك طلبات كل الصالات'); }
       u.hours = d.hours && typeof d.hours.from === 'number' ? d.hours : null;
       u.hoursExt = d.hoursExt && typeof d.hoursExt.untilMs === 'number' ? d.hoursExt : null;   // تمديد (من هذا الجهاز أو جهاز ثاني، أو صاحب المطعم لغاه)
       dutyCheck();
@@ -2930,7 +2963,8 @@ const ordCancelCore = id=>{
   // طلبات الويتر: دائماً تطلع للكاشير بتنبيه وتنتظر موافقته («قبول وإرسال للمطبخ»). التلقائي بس لطلبات QR الطاولات إذا مفعّل
   // كل كاشير يشوف الطلبات الأونلاين اللي من اختصاصه: التوصيل لكاشير الدلفري، الطاولات (QR والويتر) لكاشير الصالة، الاستلام لسفري قيد التحضير
   //   (الويتر وQR الطاولة ← الصالة؛ QR الاستلام (منها شاشة «طلبك جاهز») ← السفري)
-  const webMine = (w) => (w.mode === 'delivery' ? myPerm('oDeliv') : w.mode === 'table' ? myPerm('oSalon') : myPerm('oHold') || myPerm('oTake'));
+  //  الطاولة: بس طاولات صالة هذا الكاشير (إذا المطعم بيه صالات وصاحب المطعم حدد صالته)
+  const webMine = (w) => (w.mode === 'delivery' ? myPerm('oDeliv') : w.mode === 'table' ? myPerm('oSalon') && hallOk(w.table) : myPerm('oHold') || myPerm('oTake'));
   const webVisible = () => [...webs.values()].filter(webMine);
   // كل طلبات الباركود (الطاولة وشاشة «طلبك جاهز») والويتر تمر على الكاشير أول — ما في طلب يدخل للمطبخ بدون قبوله
   const webAutoOk = () => false;
@@ -3267,7 +3301,8 @@ const ordCancelCore = id=>{
       <div class="flbl">ملاحظة تظهر للزبون (اختياري)</div><input class="finp" id="stOnNote" maxlength="300" value="${esc(oc.note || '')}" placeholder="مثال: التوصيل من ١٢ الظهر لحد ١٢ بالليل">
       <label class="set-check" style="margin-top:8px"><input type="checkbox" id="stOnDev" ${webAutoDev() ? 'checked' : ''}> 🖨️ هذا الجهاز يقبل الطلبات التلقائية ويطبعها (خليها على جهاز الكاشير بس)</label>
       <div class="on-link"><input class="finp" id="stOnLink" readonly dir="ltr" value="${esc(menuLink())}" onclick="this.select()"><button type="button" class="btn-soft" onclick="copyMenuLink()">📋 نسخ</button><a class="btn-soft" href="${esc(menuLink())}" target="_blank" rel="noopener">👁️ فتح</a></div>
-      <div class="on-qr"><button type="button" class="btn-soft" onclick="printTableQR()">🖨️ QR الطاولات (${toA(settings.tables || 0)})</button><button type="button" class="btn-soft" onclick="printTableQR(true)">🖨️ QR المطعم (استلام وتوصيل)</button></div>
+      <div class="on-qr"><button type="button" class="btn-soft" onclick="printTableQR()">🖨️ QR الطاولات (${toA(settings.tables || 0)})</button><button type="button" class="btn-soft" onclick="printTableQR(true)">🖨️ QR المطعم (استلام وتوصيل)</button>
+        ${hallList().map((h) => `<button type="button" class="btn-soft" onclick="printTableQR(false,'${esc(h.id)}')">🖨️ QR ${esc(h.name)} (${toA(h.from)}–${toA(h.to)})</button>`).join('')}</div>
     </div>`;
   }
   function readOnlineForm() {
@@ -3285,7 +3320,8 @@ const ordCancelCore = id=>{
     return new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vendor/qrcode.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
   }
   const qrSvg = (u) => { const q = window.qrcode(0, 'M'); q.addData(u); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); };
-  window.printTableQR = async (general) => {
+  //  hallId: باركودات صالة وحدة بس. بدون: كل الطاولات — وإذا المطعم بيه صالات، كل صالة بصفحة لوحدها واسمها على كل باركود
+  window.printTableQR = async (general, hallId) => {
     if (!onlineOk()) { toast('⚠️ شغّل المنيو الأونلاين واحفظ الإعدادات أولاً'); return; }
     const n = settings.tables || 0;
     if (!general && !n) { toast('⚠️ حدد عدد الطاولات بقسم «الأسعار والضرائب» واحفظ'); return; }
@@ -3293,14 +3329,21 @@ const ordCancelCore = id=>{
     const name = settings.receiptTitle || restData.name || '';
     const list = general ? [''] : Array.from({ length: n }, (_, i) => String(i + 1));
     const view = onlineCfg().viewOnly;
-    const cards = list.map((t) => `<div class="qc"><div class="qn">${esc(name)}</div><div class="qt">${t ? 'طاولة ' + toA(t) : view ? 'المنيو' : 'اطلب أونلاين'}</div>${qrSvg(menuLink(t))}
-      <div class="qh">📱 وجّه كاميرا تلفونك على الكود ${view ? 'وشوف المنيو' : 'واطلب'}</div><div class="qs">سرعة · sora3a</div></div>`).join('');
+    const card = (t) => { const h = t && hallOf(t); return `<div class="qc"><div class="qn">${esc(name)}</div><div class="qt">${t ? 'طاولة ' + toA(t) : view ? 'المنيو' : 'اطلب أونلاين'}</div>${h ? `<div class="qa">${esc(h.name)}</div>` : ''}${qrSvg(menuLink(t))}
+      <div class="qh">📱 وجّه كاميرا تلفونك على الكود ${view ? 'وشوف المنيو' : 'واطلب'}</div><div class="qs">سرعة · sora3a</div></div>`; };
+    const hs = general ? [] : hallList().filter((h) => !hallId || h.id === hallId);
+    if (hallId && !hs.length) { toast('⚠️ الصالة مو موجودة — احفظ الإعدادات أولاً'); return; }
+    const groups = !hs.length ? [{ t: list }]
+      : hs.map((h) => ({ h, t: list.filter((t) => { const x = hallOf(t); return x && x.id === h.id; }) })).concat(hallId ? [] : [{ h: { name: 'طاولات بدون صالة' }, t: list.filter((t) => !hallOf(t)) }]).filter((g) => g.t.length);
+    if (!groups.length) { toast('⚠️ ماكو طاولات بهالصالة — راجع عدد الطاولات وأرقام الصالة'); return; }
+    const cards = groups.map((g, i) => `${g.h ? `<h2 class="hh"${i ? ' style="break-before:page;page-break-before:always"' : ''}>🏛️ ${esc(g.h.name)}${g.h.from ? ' — طاولات ' + toA(g.h.from) + '–' + toA(g.h.to) : ''}</h2>` : ''}<div class="g">${g.t.map(card).join('')}</div>`).join('');
     const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>QR — ${esc(name)}</title><style>@page{size:A4;margin:10mm}
       body{margin:0;font-family:Tajawal,Arial,sans-serif;color:#0A100D}.g{display:grid;grid-template-columns:repeat(2,1fr);gap:8mm}
       .qc{border:2px dashed #0A100D;border-radius:6mm;padding:6mm;text-align:center;break-inside:avoid;page-break-inside:avoid}
       .qn{font-weight:900;font-size:18pt}.qt{display:inline-block;margin:2mm 0 3mm;padding:1mm 6mm;border-radius:99px;background:#0A100D;color:#fff;font-weight:900;font-size:16pt}
-      .qc svg{width:55mm;height:55mm;display:block;margin:0 auto}.qh{font-size:11pt;margin-top:2mm;font-weight:700}.qs{font-size:8pt;color:#666;margin-top:1mm}</style></head>
-      <body><div class="g">${cards}</div></body></html>`;
+      .qc svg{width:55mm;height:55mm;display:block;margin:0 auto}.qh{font-size:11pt;margin-top:2mm;font-weight:700}.qs{font-size:8pt;color:#666;margin-top:1mm}
+      .qa{font-weight:800;font-size:12pt;margin:-1mm 0 2mm}.hh{font-size:16pt;margin:0 0 5mm;text-align:center}</style></head>
+      <body>${cards}</body></html>`;
     // ورقة A4 بنافذة الطباعة (مو طابعة الفواتير)
     let fr = $('qrFr');
     if (!fr) { fr = document.createElement('iframe'); fr.id = 'qrFr'; fr.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:800px;height:1100px;border:none'; document.body.appendChild(fr); }
@@ -3334,7 +3377,7 @@ function enterAppCore(){
     const lo = document.querySelector('.lout'); if (lo) { lo.textContent = '🔌 فصل الجهاز'; lo.onclick = () => { if (confirm('فصل جهاز المخزن؟ بعدها يحتاج رمز جديد من لوحة الإدارة')) window.storeUnlink(); }; }
     loadAcc(); startListeners2(); ledInit(); listenMenu(); updateAccBadge();
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', restData.id), (s) => { if (s.exists()) { restData = Object.assign(restData, s.data()); } }, () => {}));
-    acCur = 'mat'; goTab('acc');
+    acCur = 'home'; goTab('acc');   // أمين المخزن يبدي من «الرئيسية»
     window.storeNetUi();
     if (window.acKick) window.acKick();
     if (window.SB) {
