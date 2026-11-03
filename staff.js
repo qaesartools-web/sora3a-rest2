@@ -3,7 +3,7 @@
 // وشاشات المطبخ (المجهز والأقسام): تنربط بالمطعم برمز — بدون إيميل ولا كلمة سر (screenGate تحت).
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, signInWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocFromServer, disableNetwork, enableNetwork } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocFromServer, getDocFromCache, disableNetwork, enableNetwork } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 export * from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const CFG = {
@@ -194,7 +194,8 @@ export function liveGuard(db, ref, { every = 180000, timeout = 20000, quiet = ()
   every = window.__lgMs || every; timeout = window.__lgTo || timeout;   // الاختبارات تقصّر الأوقات
   let fails = 0, busy = false, going = false;
   const RK = 'sb_guard_reloads';
-  const netUp = () => fetch('brand.css?lg=' + Date.now(), { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
+  // النت نفسه يجاوب؟ (بـ«اللحظة اللي بين» الطلب يبقى معلّق: ٨ ثواني بدون جواب = النت مقطوع، ما نعيد التحميل)
+  const netUp = () => Promise.race([fetch('brand.css?lg=' + Date.now(), { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false), new Promise((res) => setTimeout(() => res(false), 8000))]);
   const reload = async (why) => {
     if (going) return;
     if (!quiet()) { setTimeout(() => reload(why), 5000); return; }
@@ -292,6 +293,16 @@ async function adoptOwnerScreen(uid, code, platform) {
     return true;
   } catch (e) { return false; }
 }
+// «اللحظة اللي بين» (الواي فاي متصل والنت ما يجاوب): getDoc ينتظر السيرفر لحد ١٠ ثواني قبل ما يقرا نسخة الجهاز.
+//  إذا السيرفر ما جاوب خلال ٢٫٥ ثانية (أو عرفنا من فحص الحساب إن النت عالق — __netStuckAt من brand.js) وعندنا نسخة بالجهاز: نكمل بيها.
+//  ما عندنا نسخة (أول مرة، أو بعده ما انعتمد): ننتظر السيرفر مثل قبل
+async function quickGet(ref) {
+  const p = getDoc(ref);
+  const ms = Date.now() - (window.__netStuckAt || 0) < 20000 ? 0 : 2500;
+  const t = await Promise.race([p.then((v) => ({ v }), (e) => ({ e })), new Promise((res) => setTimeout(() => res(null), ms))]);
+  if (t) { if (t.e) throw t.e; return t.v; }
+  try { const c = await getDocFromCache(ref); p.catch(() => {}); return c; } catch (e) { return p; }
+}
 // kind: 'kitchen' | 'kitchenSec' | 'waiter' | 'ready' — onIn({uid, rid, rest, screen}) / onOut()
 export function screenGate(el, { title, kind, label, onIn, onOut }) {
   const F = screenFb();
@@ -343,7 +354,7 @@ export function screenGate(el, { title, kind, label, onIn, onOut }) {
   async function linked(user, d) {
     clearTimeout(retryT); retryT = 0;
     try {
-      const r = await getDoc(doc(F.db, 'restaurants', d.restaurantId));
+      const r = await quickGet(doc(F.db, 'restaurants', d.restaurantId));
       if (user !== cur || inUid) return;
       inUid = user.uid; el.hidden = true; el.innerHTML = '';
       brandSync(F.db);

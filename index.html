@@ -446,7 +446,7 @@ html.store-mode .ac-ext{display:none!important}
     <div class="splash-dot"></div>
   </div>
 </div>
-<script src="brand.js?v=4"></script>
+<script src="brand.js?v=5"></script>
 <script>window.SB && SB.mount(window.STORE_MODE ? 'store' : 'cashier')</script>
 
 
@@ -1015,9 +1015,14 @@ window.addEventListener('fbReady',()=>{
         enterApp();
       };
       const isNet=e=>e&&(e.code==='unavailable'||/offline|network/i.test(e.message||''));
+      // «اللحظة اللي بين» (الواي فاي متصل والنت ما يجاوب): الجهاز اللي عنده جلسة محفوظة ما ينتظر السيرفر أكثر من ~٧ ثواني من فتح الصفحة —
+      //  يفتح من نسخته مثل ما يفتح بدون نت، والصلاحيات تتحدث وحدها أول ما يرجع النت
+      let hasSess=false;try{hasSess=!!(JSON.parse(localStorage.getItem(sessKey)||'null')||{}).rest;}catch(e){}
+      //  وإذا عرفنا من فحص الحساب إن النت عالق (__netStuckAt من brand.js) ما ننتظر أصلاً
+      const quick=p=>!hasSess?p:Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error('offline: server slow'),{code:'unavailable'})),Date.now()-(window.__netStuckAt||0)<20000?0:Math.max(2500,(window.__openMs||7000)-performance.now())))]);
       try{
         // الصلاحية من users/{uid} فقط — لا بحث بالإيميل ولا إعادة ربط تلقائية
-        const u=await fb.getDoc(fb.doc(fb.db,'users',user.uid));
+        const u=await quick(fb.getDoc(fb.doc(fb.db,'users',user.uid)));
         const ud=u.exists()?u.data():null;
         if(ud&&(ud.disabled||!['restaurant','cashier'].includes(ud.role))){await denyLogin('❌ هذا الحساب غير مسجل كمطعم');return;}
         const isCashierAcc=!!ud&&ud.role==='cashier';
@@ -1030,7 +1035,7 @@ window.addEventListener('fbReady',()=>{
         // الفروع: صاحب المطعم يختار الفرع اللي يشتغل عليه هذا الجهاز (يربطها المدير الأعلى)
         const branches=!isCashierAcc&&ud&&Array.isArray(ud.branches)?ud.branches.filter(b=>b&&b!==restId):[];
         if(branches.length)restId=await pickBranch(user.uid,[restId,...branches]);
-        const rs=await fb.getDoc(fb.doc(fb.db,'restaurants',restId));
+        const rs=await quick(fb.getDoc(fb.doc(fb.db,'restaurants',restId)));
         if(!rs.exists()||(!isCashierAcc&&rs.data().userId!==user.uid&&!branches.includes(restId))){await denyLogin('❌ هذا الحساب غير مرتبط بمطعم');return;}
         const rd=rs.data();
         const brMsg=branches.length?' — سجّل دخول مرة ثانية واختار فرع ثاني':'';
@@ -1041,7 +1046,7 @@ window.addEventListener('fbReady',()=>{
         // الأجهزة المعتمدة: الكاشير يسجّل جلسته على هذا الجهاز؛ إذا الجهاز مو معتمد لمطعمه (والخدمة شغّالة) ما يفتح
         if(isCashierAcc&&window.SoraDev){
           const fsx={db:fb.db,doc:fb.doc,getDoc:fb.getDoc,setDoc:fb.rawSetDoc,updateDoc:fb.rawUpdateDoc,onSnapshot:fb.onSnapshot};
-          if(await SoraDev.claim(fsx,user,{...ud,restaurantId:restId},rd)==='blocked'){showDevBlock(fsx,restId);return;}
+          if(await quick(SoraDev.claim(fsx,user,{...ud,restaurantId:restId},rd))==='blocked'){showDevBlock(fsx,restId);return;}
         }
         // من يستخدم الكاشير: صاحب المطعم (كل الصلاحيات) أو كاشير بصلاحيات يحددها صاحب المطعم
         window.posUser={uid:user.uid,role:isCashierAcc?'cashier':'owner',name:(ud&&ud.name)||'',perms:isCashierAcc?(ud.perms||{}):null,hall:isCashierAcc?String(ud.hall||''):'',branches:branches.length>0};
@@ -3075,7 +3080,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=74"></script>
+<script src="pos-pro.js?v=75"></script>
 <script type="module">
 // «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
 if (window.STORE_MODE) {
