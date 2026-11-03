@@ -1,5 +1,28 @@
 // هوية سرعة الموحدة («الشريط»): شريط بلون التطبيق فوق بيه شعارنا واسم التطبيق، سطر حقوقنا تحت، وشاشة فتح موحدة.
 // نفس الملف بكل مستودع (sora3a-rest2 / sora3a-captain / sora3a-admin) — أي تعديل ينعاد بالثلاثة.
+// «اللحظة اللي بين» (الواي فاي متصل والنت ما يجاوب): من ينفتح التطبيق، مكتبة الدخول تفحص الحساب المحفوظ ويه السيرفر وتنتظر لحد ٣٠ ثانية —
+//  وكل شي ينتظرها (حتى الطلبات والمنيو المحفوظة بالجهاز)، فالتطبيق يبقى معلّك على شاشة الفتح.
+//  أول ٢٠ ثانية من الفتح: فحص الحساب وتجديد رمزه ما ينتظرون أكثر من ٣ ثواني، والتطبيق يكمل بالحساب المحفوظ مثل ما يفتح بدون نت
+//  (الفحص ينعاد وحده من يجاوب النت). تسجيل الدخول بالإيميل والرمز أو بالربط ما يتأثر: من يبدي، الحد يتشال لهاي الصفحة.
+//  __netStuckAt: وقت ما عرفنا النت عالق — التطبيق ما ينتظر السيرفر بعدها (يفتح ويشتغل من نسخته)
+(function () {
+  var f = window.fetch, t0 = Date.now(), on = true;
+  if (!f || f.__sbFast) return;
+  var BG = /(identitytoolkit\.googleapis\.com\/v1\/accounts:lookup|securetoken\.googleapis\.com\/v1\/token)/;
+  var SIGN = /identitytoolkit\.googleapis\.com\/v\d+\/accounts:sign/;
+  var w = function (input) {
+    var url = String((input && input.url) || input || '');
+    var p = f.apply(window, arguments);
+    if (SIGN.test(url)) on = false;
+    if (!on || Date.now() - t0 > 20000 || !BG.test(url)) return p;
+    return new Promise(function (res, rej) {
+      var tm = setTimeout(function () { window.__netStuckAt = Date.now(); rej(new TypeError('Failed to fetch: network stuck')); }, window.__authFastMs || 3000);
+      p.then(function (r) { clearTimeout(tm); res(r); }, function (e) { clearTimeout(tm); rej(e); });
+    });
+  };
+  w.__sbFast = true;
+  window.fetch = w;
+})();
 // رقمنا وإيميلنا مكتوبين هنا: صاحب المطعم ما يكدر يغيرهن ولا يخفيهن. يتغيرن من برج سرعة بس (config/brand) وينحفظن بالجهاز.
 (function () {
   var APPS = {

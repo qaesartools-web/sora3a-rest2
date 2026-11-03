@@ -1510,7 +1510,7 @@ const ordCancelCore = id=>{
   // «اللحظة اللي بين»: الواي فاي متصل والنت ما يجاوب (المتصفح يحسب نفسه متصل). عملية تنتظر السيرفر (transaction) ما تعلّك:
   //  بعد NET_WAIT نكمل بطريق «بدون نت» (ينرفع من يرجع النت)، ونعتبر النت عالق ٢٠ ثانية حتى العمليات الجاية ما تنتظر هي هم
   const NET_WAIT = 4000, NET_STUCK = 20000;
-  const netOk = () => navigator.onLine !== false && window.posFsLive !== false && Date.now() - (window.posNetStuckAt || 0) > NET_STUCK;
+  const netOk = () => navigator.onLine !== false && window.posFsLive !== false && Date.now() - Math.max(window.posNetStuckAt || 0, window.__netStuckAt || 0) > NET_STUCK;   // __netStuckAt: فحص الحساب عند الفتح لگه النت عالق (brand.js)
   const netTry = (p, ms = NET_WAIT) => {
     p.catch(() => {});   // إذا خلص بعدين (أو فشل) ما يطلع خطأ
     return Promise.race([p, new Promise((_, rej) => setTimeout(() => { window.posNetStuckAt = Date.now(); rej(Object.assign(new Error('net stuck'), { code: 'net-stuck' })); }, ms))]);

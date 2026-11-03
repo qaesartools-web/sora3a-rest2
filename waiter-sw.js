@@ -1,7 +1,7 @@
 // سرعة — الويتر: Service Worker صغير خاص بالويتر (التثبيت + فتح سريع + يفتح بدون نت)
 // نطاقه /sora3a-rest2/waiter فقط، فما يتدخل بالكاشير. بيانات Firebase نفسها تمشي بالشبكة (وبدون نت الطلبات تروح للكاشير على نفس الواي فاي).
-const CACHE = 'waiter-v19';
-const SHELL = ['waiter.html', 'staff.js', 'brand.js?v=4', 'brand.css?v=4', 'lanlink.js?v=2', 'vendor/qrcode.js', 'waiter.webmanifest', 'waiter-192.png', 'waiter-512.png'];
+const CACHE = 'waiter-v20';
+const SHELL = ['waiter.html', 'staff.js', 'brand.js?v=5', 'brand.css?v=4', 'lanlink.js?v=2', 'vendor/qrcode.js', 'waiter.webmanifest', 'waiter-192.png', 'waiter-512.png'];
 // مكتبات Firebase (إصدار ثابت): تنحفظ حتى التطبيق يفتح حتى لو انقطع النت
 const CDN = ['app', 'auth', 'firestore'].map((m) => `https://www.gstatic.com/firebasejs/10.7.1/firebase-${m}.js`);
 self.addEventListener('install', (e) => {
