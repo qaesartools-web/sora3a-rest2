@@ -2074,6 +2074,7 @@ window.matBuy=id=>{const m=matById(id);if(!m)return;ledInit();
     {id:'pm',label:'الدفع من',type:'select',options:ledPmOpts('out')},
     {id:'sup',label:'ملاحظة (اختياري)'}
   ],v=>{
+    const m=matById(id);if(!m){toast('⚠️ المادة انحذفت من جهاز ثاني');return;}   // نسخة المادة الحالية (المزامنة ممكن بدلت المخزون والنافذة مفتوحة)
     const q=r3(v.qty),t=r2(v.total);
     if(!(q>0)){toast('⚠️ أدخل الكمية');return false;}
     if(v.total===''||!(t>=0)){toast('⚠️ أدخل المبلغ');return false;}
@@ -2097,6 +2098,7 @@ window.matWaste=id=>{const m=matById(id);if(!m)return;
     {id:'qty',label:'الكمية ('+m.unit+') *',type:'number',step:'any'},
     {id:'why',label:'السبب',type:'select',options:WASTE_REASONS.map(x=>({v:x,t:x})),value:WASTE_REASONS[0]}
   ],v=>{
+    const m=matById(id);if(!m){toast('⚠️ المادة انحذفت من جهاز ثاني');return;}   // نسخة المادة الحالية (المزامنة ممكن بدلت المخزون والنافذة مفتوحة)
     const q=r3(v.qty);if(!(q>0)){toast('⚠️ أدخل الكمية');return false;}
     mvAdd(m,'waste',-q,null,v.why);
     saveAcc();renderAcc();toast('✅ تم تسجيل التالف');
@@ -2105,6 +2107,7 @@ window.matCount=id=>{const m=matById(id);if(!m)return;
   acDialog('📋 جرد: '+m.name,'المسجل بالدفاتر: '+fmtQ(m.qty)+' '+m.unit,[
     {id:'actual',label:'الكمية الفعلية الموجودة ('+m.unit+') *',type:'number',step:'any'}
   ],v=>{
+    const m=matById(id);if(!m){toast('⚠️ المادة انحذفت من جهاز ثاني');return;}   // نسخة المادة الحالية (المزامنة ممكن بدلت المخزون والنافذة مفتوحة)
     if(v.actual===''){toast('⚠️ أدخل الكمية الفعلية');return false;}
     const a=r3(v.actual),diff=r3(a-m.qty);
     if(diff)mvAdd(m,'count',diff,null,'مسجل '+fmtQ(m.qty)+' ← فعلي '+fmtQ(a));
@@ -2116,6 +2119,7 @@ window.matReturn=id=>{const m=matById(id);if(!m)return;
     {id:'qty',label:'الكمية المرجّعة ('+m.unit+') *',type:'number',step:'any'},
     {id:'refund',label:'المبلغ المسترد (د.ع) — فاضي = بسعر التكلفة',type:'number',step:'any'}
   ],v=>{
+    const m=matById(id);if(!m){toast('⚠️ المادة انحذفت من جهاز ثاني');return;}   // نسخة المادة الحالية (المزامنة ممكن بدلت المخزون والنافذة مفتوحة)
     const q=r3(v.qty);if(!(q>0)){toast('⚠️ أدخل الكمية');return false;}
     if(q>m.qty){toast('⚠️ الكمية أكبر من المتوفر');return false;}
     const refund=v.refund===''?r2(q*(Number(m.cost)||0)):r2(v.refund);
@@ -2277,6 +2281,7 @@ window.matEdit=id=>{if(!ownerOnly())return;const m=matById(id);if(!m)return;
     {id:'cost',label:'تكلفة الوحدة (د.ع)',type:'number',step:'any',value:m.cost},
     {id:'cat',label:'🏷️ الفئة (اختياري)',ph:'مثال: لحوم، خضار، تغليف',list:matCats(),value:m.cat||''}
   ],v=>{
+    const m=matById(id);if(!m){toast('⚠️ المادة انحذفت من جهاز ثاني');return;}   // نسخة المادة الحالية (المزامنة ممكن بدلت المخزون والنافذة مفتوحة)
     const name=v.name.trim();if(!name){toast('⚠️ أدخل الاسم');return false;}
     if(acc.materials.some(x=>x.id!==m.id&&x.name===name)){toast('⚠️ الاسم مستخدم');return false;}
     m.name=name;m.unit=v.unit;m.min=r3(v.min);m.cost=r2(v.cost);
