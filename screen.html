@@ -296,7 +296,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('screen-sw.js
 import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc, liveGuard } from './staff.js';
 // الشاشة تنربط برمز ويعتمدها البرج (بدون إيميل ولا كلمة سر) — جلستها «مجهولة» بتطبيق Firebase منفصل
 const db = screenFb().db;
-import { lanLink } from './lanlink.js?v=1';
+import { lanLink, score } from './lanlink.js?v=2';
 document.getElementById('gateCss').textContent = GATE_CSS;
 window.__scrOk = true;   // تطبيق «سرعة — الشاشة» يتأكد إن الصفحة اشتغلت (وإلا يطلب تحديث محرك الإنترنت)
 const $ = (id) => document.getElementById(id);
@@ -309,11 +309,20 @@ let orders = [], unsub = null, rid = '', day = '', first = true, sound = ls.get(
 // شبكة المطعم: بتطبيق الشاشة الطلبات توصل من الكاشير على نفس الواي فاي حتى لو النت مقطوع
 let fsOrders = [], fsLive = false, setFromFs = false;
 const lan = lanLink({ role: 'screen', onChange: () => view() });
+// لكل طلب النسخة الأكثر تقدّماً (السيرفر أو الكاشير على الواي فاي) — مثل شاشة المطبخ.
+//  قبل: إذا اتصال السيرفر علك، الطلبات القديمة تبقى «قيد التحضير» من نسخة السيرفر حتى لو الكاشير يقول «جاهز».
+//  وإذا بقت نسخة السيرفر متأخرة عن الواي فاي دقيقة ونص ← الاتصال عالق: الحارس يعيد الاتصال، وإذا بقت ← تحميل من جديد
+let guard = null, staleSince = 0;
+const STALE_MS = window.__stMs || 90000;
 function view() {
   if (!rid) return;
   const L = lan.orders(), m = new Map(fsOrders.map((o) => [o.id, o]));
-  L.forEach((o, id) => { if (!fsLive || !m.has(id)) m.set(id, o); });
+  let behind = 0;
+  L.forEach((o, id) => { const x = m.get(id); if (!x || !fsLive) m.set(id, o); else if (score(o) > score(x)) { m.set(id, o); behind++; } });
   orders = [...m.values()];
+  if (!behind || !fsLive) { staleSince = 0; if (guard && fsLive) guard.fresh(); }
+  else if (!staleSince) staleSince = Date.now();
+  else if (Date.now() - staleSince > STALE_MS && guard) { staleSince = Date.now(); guard.stale('server copy behind the cashier'); }
   const st = lan.settings();
   if (st && !setFromFs) { scr = { salon: true, delivery: false, qr: true, ...(st.screen || {}) }; if (st.receiptTitle) setName(st.receiptTitle); }
   render();
@@ -409,6 +418,7 @@ function listen() {
   if (unsub) unsub();
   // اليوم وأمس (المطاعم اللي تشتغل بعد نص الليل) — مساواة بس، ما تحتاج فهارس
   unsub = onSnapshot(query(collection(db, 'orders'), where('restaurantId', '==', rid), where('day', 'in', [day, bagDay(Date.now() - 86400000)])), { includeMetadataChanges: true }, (s) => {
+    if (window.__fsFreeze) return;   // الاختبار: المكتبة «تعلك» (توقف توصل التحديثات وهي تحسب نفسها متصلة)
     fsOrders = s.docs.map((d) => ({ id: d.id, ...d.data() }));
     fsLive = !s.metadata.fromCache;
     view();
@@ -507,7 +517,7 @@ function clock() {
 }
 // __scrBeat: نبض الصفحة — تطبيق التلفزيون يعيد تحميلها إذا وقف (الصفحة جمدت)
 window.__scrBeat = Date.now();
-setInterval(() => { window.__scrBeat = Date.now(); clock(); if (rid) { if (bagDay() !== day) listen(); else render(); } }, 30000);
+setInterval(() => { window.__scrBeat = Date.now(); clock(); if (rid) { if (bagDay() !== day) listen(); else view(); } }, window.__viewMs || 30000);
 
 // ── التحديث التلقائي: أي تحديث للشاشة يوصل للتلفزيون وحده بدون ما أحد يلمس شي ──
 //  نراقب ملفات الصفحة كل دقيقة؛ إذا تغيّرت (ونتأكد مرتين) نحدّث بلحظة هادئة — مو وقت ما رقم جديد يومض
@@ -628,7 +638,7 @@ screenGate($('gate'), {
   onIn: async (u) => {
     rid = u.rid; first = true; seenReady.clear();
     // حارس الاتصال: إذا الطلبات وقفت تتحدث بدون خطأ (المكتبة علكت) يعيد الاتصال، وإذا بقت ← يحمّل الصفحة من جديد
-    liveGuard(db, () => (rid ? doc(db, 'screens', u.uid) : null), { quiet: () => ![...fresh.values()].some((t) => Date.now() - t < 15000) && menu.hidden });
+    guard = liveGuard(db, () => (rid ? doc(db, 'screens', u.uid) : null), { quiet: () => ![...fresh.values()].some((t) => Date.now() - t < 15000) && menu.hidden });
     // هذي الشاشة: أي كاشيرية تطلع طلباتهم (مطعم بيه أكثر من صالة) — يحددها صاحب المطعم من لوحة الإدارة ويتطبق فوراً
     cashiers = (u.screen && u.screen.cashiers) || []; types = (u.screen && u.screen.types) || [];
     if (unsubMe) unsubMe();

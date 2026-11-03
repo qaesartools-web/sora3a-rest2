@@ -188,9 +188,9 @@ let scrFb = null;
 //  نعيد الاتصال، وإذا بقى عالق نعيد تحميل الصفحة. خطأ داخلي قاتل من المكتبة ← تحميل من جديد فوراً،
 //  وإذا تكرر التحميل بسبب نسخة محلية خربانة نمسح النسخة المحلية (الطلبات ترجع من السيرفر)
 //  quiet(): وقت مناسب للتحميل (مو وقت ما رقم جديد يومض أو القائمة مفتوحة)
-let guardOn = false;
+let guardApi = null;
 export function liveGuard(db, ref, { every = 180000, timeout = 20000, quiet = () => true } = {}) {
-  if (guardOn) return; guardOn = true;
+  if (guardApi) return guardApi;
   every = window.__lgMs || every; timeout = window.__lgTo || timeout;   // الاختبارات تقصّر الأوقات
   let fails = 0, busy = false, going = false;
   const RK = 'sb_guard_reloads';
@@ -234,6 +234,16 @@ export function liveGuard(db, ref, { every = 180000, timeout = 20000, quiet = ()
   // المكتبة تكتب خطأها القاتل بالـ console قبل ما تتوقف
   const ce = console.error;
   console.error = function () { try { if ([].some.call(arguments, (a) => fatal(a && (a.message || a)))) setTimeout(() => reload('fatal error'), 2000); } catch (e) {} return ce.apply(console, arguments); };
+  // الصفحة لاحظت إن نسخة السيرفر متأخرة وعالقة (مثلاً الكاشير على الواي فاي يقول «جاهز» والسيرفر بعده «قيد التحضير»):
+  //  أول مرة اتصال جديد، وإذا بقت متأخرة ← تحميل من جديد. fresh(): رجعت مضبوطة
+  let staleN = 0;
+  async function stale(why) {
+    if (going) return;
+    if (++staleN === 1) { try { await Promise.race([disableNetwork(db).then(() => enableNetwork(db)), new Promise((res) => setTimeout(res, timeout))]); } catch (e) {} }
+    else reload(why || 'server copy behind');
+  }
+  guardApi = { stale, fresh: () => { staleN = 0; }, reload };
+  return guardApi;
 }
 export function screenFb() {
   if (!scrFb) {
