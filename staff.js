@@ -3,7 +3,7 @@
 // وشاشات المطبخ (المجهز والأقسام): تنربط بالمطعم برمز — بدون إيميل ولا كلمة سر (screenGate تحت).
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, signInWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocFromServer, disableNetwork, enableNetwork } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 export * from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const CFG = {
@@ -182,6 +182,59 @@ export function staffGate(el, { title, sub, onIn, onOut, remember, device }) {
 // الشاشة تطلع رمز (screenPairs/{الرمز}) ← صاحب المطعم (لوحة الإدارة ← الشاشات) أو برج سرعة يكتبه ← screens/{uid}
 // ← تفتح وحدها. إذا «الأجهزة المعتمدة» شغّالة، اللي يربطها صاحب المطعم تنتظر اعتماد البرج.
 let scrFb = null;
+// ── حارس الاتصال لشاشات التلفزيون والمطبخ (تبقى شغّالة أيام) ──
+//  أحياناً مكتبة قاعدة البيانات «تعلك» بالأجهزة الضعيفة (خصوصاً بعد زحمة طلبات): الطلبات توقف تتحدث بدون أي خطأ،
+//  والشاشة تبقى على آخر شكل. كل 3 دقايق نسأل السيرفر سؤال صغير (مستند واحد) — إذا النت شغّال وما جاوب:
+//  نعيد الاتصال، وإذا بقى عالق نعيد تحميل الصفحة. خطأ داخلي قاتل من المكتبة ← تحميل من جديد فوراً،
+//  وإذا تكرر التحميل بسبب نسخة محلية خربانة نمسح النسخة المحلية (الطلبات ترجع من السيرفر)
+//  quiet(): وقت مناسب للتحميل (مو وقت ما رقم جديد يومض أو القائمة مفتوحة)
+let guardOn = false;
+export function liveGuard(db, ref, { every = 180000, timeout = 20000, quiet = () => true } = {}) {
+  if (guardOn) return; guardOn = true;
+  every = window.__lgMs || every; timeout = window.__lgTo || timeout;   // الاختبارات تقصّر الأوقات
+  let fails = 0, busy = false, going = false;
+  const RK = 'sb_guard_reloads';
+  const netUp = () => fetch('brand.css?lg=' + Date.now(), { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
+  const reload = async (why) => {
+    if (going) return;
+    if (!quiet()) { setTimeout(() => reload(why), 5000); return; }
+    going = true;
+    let n = [];
+    try { n = JSON.parse(localStorage.getItem(RK) || '[]').filter((t) => Date.now() - t < 30 * 60000); n.push(Date.now()); localStorage.setItem(RK, JSON.stringify(n)); } catch (e) {}
+    console.warn('liveGuard reload:', why);
+    // ٣ مرات بنص ساعة: النسخة المحلية بالجهاز غالباً خربانة ← نمسحها (الربط والدخول ما يتأثرون)
+    if (n.length >= 3 && window.indexedDB && indexedDB.databases) {
+      try { (await indexedDB.databases()).forEach((d) => { if (d && /^firestore\//.test(d.name || '')) indexedDB.deleteDatabase(d.name); }); localStorage.setItem(RK, '[]'); } catch (e) {}
+    }
+    setTimeout(() => location.reload(), 300);
+  };
+  async function probe() {
+    if (busy || going) return;
+    const r = ref && ref(); if (!r) return;
+    busy = true;
+    try {
+      const ok = await Promise.race([
+        getDocFromServer(r).then(() => true, (e) => !!(e && e.code === 'permission-denied')),   // رفض = السيرفر جاوب
+        new Promise((res) => setTimeout(() => res(false), timeout)),
+      ]);
+      if (ok) { fails = 0; window.__fsOk = Date.now(); return; }
+      if (navigator.onLine === false || !(await netUp())) return;   // النت نفسه مقطوع: الشاشة تكمل على الواي فاي (الكاشير)
+      fails++;
+      // أول مرة: اتصال جديد — وإذا إعادة الاتصال نفسها علكت (تصير ويا الاتصال العالق) ← تحميل من جديد
+      if (fails === 1) {
+        const done = await Promise.race([disableNetwork(db).then(() => enableNetwork(db)).then(() => true, () => true), new Promise((res) => setTimeout(() => res(false), timeout))]);
+        if (!done) reload('reconnect stuck');
+      } else reload('server does not answer');
+    } finally { busy = false; }
+  }
+  setInterval(probe, every);
+  const fatal = (m) => /INTERNAL ASSERTION FAILED|Unexpected state/i.test(String(m || ''));
+  window.addEventListener('error', (e) => { if (fatal(e.message) || fatal(e.error && e.error.message)) setTimeout(() => reload('fatal error'), 2000); });
+  window.addEventListener('unhandledrejection', (e) => { const x = e.reason; if (fatal(x && (x.message || x))) setTimeout(() => reload('fatal error'), 2000); });
+  // المكتبة تكتب خطأها القاتل بالـ console قبل ما تتوقف
+  const ce = console.error;
+  console.error = function () { try { if ([].some.call(arguments, (a) => fatal(a && (a.message || a)))) setTimeout(() => reload('fatal error'), 2000); } catch (e) {} return ce.apply(console, arguments); };
+}
 export function screenFb() {
   if (!scrFb) {
     const a = initializeApp(CFG, 'sora3a-screen');
