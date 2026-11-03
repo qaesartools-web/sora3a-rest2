@@ -391,7 +391,7 @@ const needPick = () => SECMODE && (!SEC || (sections.length && !sections.some((x
 screenGate($('gate'), {
   title: SECMODE ? 'سرعة — شاشة المطبخ' : 'سرعة — شاشة المجهز', kind: FEAT, label: SECMODE ? 'شاشة المطبخ' : 'شاشة المجهز',
   // حارس الاتصال: إذا الطلبات وقفت تتحدث بدون خطأ (المكتبة علكت) يعيد الاتصال، وإذا بقت ← يحمّل الصفحة من جديد
-  onIn: (u) => { me = u; start(); liveGuard(db, () => (me ? doc(db, 'screens', me.uid) : null)); },
+  onIn: (u) => { me = u; start(); guard = liveGuard(db, () => (me ? doc(db, 'screens', me.uid) : null)); },
   onOut: () => { unsubs.forEach((f) => f()); unsubs = []; me = null; orders = []; seen.clear(); $('app').hidden = true; $('off').hidden = true; $('pick').hidden = true; },
 });
 let offArmed = false;
@@ -446,11 +446,18 @@ function start() {
 
 // الطلبات = نسخة السيرفر + نسخة الكاشير على الواي فاي: لكل طلب النسخة الأكثر تقدّماً
 //  (بدون نت الكاشير عنده الأحدث، ولما يرجع النت السيرفر يتأخر ثواني لحد ما الكاشير يرفع اللي صار — فما يرجع طلب «جاهز» للشاشة)
+//  وإذا بقت نسخة السيرفر متأخرة عن الواي فاي دقيقة ونص ← اتصال السيرفر عالق: الحارس يعيد الاتصال، وإذا بقت ← تحميل من جديد
+let guard = null, staleSince = 0;
+const STALE_MS = window.__stMs || 90000;
 function syncView() {
   if (!me) return;
   const L = lan.orders(), m = new Map(fsOrders.map((o) => [o.id, o]));
-  L.forEach((o, id) => { const x = m.get(id); if (!x || !fsLive || score(o) > score(x)) m.set(id, o); });
+  let behind = 0;
+  L.forEach((o, id) => { const x = m.get(id); if (x && fsLive && score(o) > score(x)) behind++; if (!x || !fsLive || score(o) > score(x)) m.set(id, o); });
   orders = [...m.values()];
+  if (!behind || !fsLive) { staleSince = 0; if (guard && fsLive) guard.fresh(); }
+  else if (!staleSince) staleSince = Date.now();
+  else if (Date.now() - staleSince > STALE_MS && guard) { staleSince = Date.now(); guard.stale('server copy behind the cashier'); }
   // «جاهز» وصل للسيرفر ← ننسى الضغطة المعلّقة (حتى لو الطلب رجع للمطبخ بإضافة أو «رجّع» يبين فوراً)
   orders.forEach((o) => { if (o.kitchen === 'ready') pend.delete('d:' + o.id); if (SEC && o.kSec && o.kSec[SEC] && o.kSec[SEC].readyAt) pend.delete('s:' + o.id + '|' + SEC); });
   // ماكو نت والكاش فارغ: الأقسام واسم المطعم من الكاشير
@@ -728,7 +735,7 @@ $('mOut').onclick = () => { if (!outArmed) { outArmed = true; $('mOut').textCont
 // الوقت على البطاقات يمشي، والشاشة ما تطفي
 // __scrBeat: نبض الصفحة — تطبيق المطبخ يعيد تحميلها إذا وقف (الصفحة جمدت)
 window.__scrBeat = Date.now();
-setInterval(() => { window.__scrBeat = Date.now(); if (!$('app').hidden) { lanUi(); render(); } }, 30000);
+setInterval(() => { window.__scrBeat = Date.now(); if (!$('app').hidden) syncView(); }, 30000);   // syncView: يرسم ويفحص إذا نسخة السيرفر متأخرة
 let lock = null;
 async function keepOn() { try { if ('wakeLock' in navigator && !document.hidden) lock = await navigator.wakeLock.request('screen'); } catch (e) {} }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) keepOn(); });

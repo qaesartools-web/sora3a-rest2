@@ -1507,7 +1507,15 @@ const ordCancelCore = id=>{
   //  نحجز رقم واحد مقدماً بس: إذا الصفحة انسدت، أقصى شي يتخطى رقم واحد
   //  وإذا النت بطيء (الحجز ياخذ أكثر من ثانية) نحجز 3 مقدماً حتى ما يخلص المحجوز ونرجع للعدّ المحلي اللي يكرر الأرقام
   let TK_BLOCK = 1;
-  const netOk = () => navigator.onLine !== false && window.posFsLive !== false;
+  // «اللحظة اللي بين»: الواي فاي متصل والنت ما يجاوب (المتصفح يحسب نفسه متصل). عملية تنتظر السيرفر (transaction) ما تعلّك:
+  //  بعد NET_WAIT نكمل بطريق «بدون نت» (ينرفع من يرجع النت)، ونعتبر النت عالق ٢٠ ثانية حتى العمليات الجاية ما تنتظر هي هم
+  const NET_WAIT = 4000, NET_STUCK = 20000;
+  const netOk = () => navigator.onLine !== false && window.posFsLive !== false && Date.now() - (window.posNetStuckAt || 0) > NET_STUCK;
+  const netTry = (p, ms = NET_WAIT) => {
+    p.catch(() => {});   // إذا خلص بعدين (أو فشل) ما يطلع خطأ
+    return Promise.race([p, new Promise((_, rej) => setTimeout(() => { window.posNetStuckAt = Date.now(); rej(Object.assign(new Error('net stuck'), { code: 'net-stuck' })); }, ms))]);
+  };
+  window.posNetTry = netTry; window.posNetOk = () => netOk();
   let tkPool = { day: '', nums: [] }, tkBusy = null, tkBusyAt = 0, tkSeen = { day: '', n: 0 };   // آخر رقم شفناه بالعدّاد
   function localTicketMax() {
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
@@ -3059,19 +3067,23 @@ const ordCancelCore = id=>{
   async function webClaim(w) {
     const f = fb(), ref = f.doc(f.db, 'webOrders', w.id), L = lanApi();
     if (L && lanOn) L.broadcast({ t: 'wtaken', id: w.id });   // الكاشيرية الثانية على نفس الواي فاي تشيله فوراً
-    if (!netOk()) {
+    const offClaim = () => {
       const x = wMine()[w.id];
       if (x && x.lan) wCreate(w.id, x);   // إذا ما انسجّل قبل (السيرفر يقبله مرة وحدة بس)
       (f.rawUpdateDoc || f.updateDoc)(ref, { status: 'accepted', acceptedBy: deviceId, acceptedAtMs: Date.now(), stage: 'preparing', stageAtMs: Date.now() }).catch((e) => console.warn('web claim', e.code));
-      return true;   // ينرفع من يرجع النت
-    }
-    const r = await f.runTransaction(f.db, async (tx) => {
-      const s = await tx.get(ref);
-      if (!s.exists()) return webLan.has(w.id) ? 'lan' : false;
-      if (s.data().status !== 'new') return false;
-      tx.update(ref, { status: 'accepted', acceptedBy: deviceId, acceptedAtMs: Date.now(), stage: 'preparing', stageAtMs: Date.now() });
-      return true;
-    });
+      return true;   // ينرفع من يرجع النت (والقواعد ما تقبل قبولين لنفس الطلب)
+    };
+    if (!netOk()) return offClaim();
+    let r;
+    try {
+      r = await netTry(f.runTransaction(f.db, async (tx) => {
+        const s = await tx.get(ref);
+        if (!s.exists()) return webLan.has(w.id) ? 'lan' : false;
+        if (s.data().status !== 'new') return false;
+        tx.update(ref, { status: 'accepted', acceptedBy: deviceId, acceptedAtMs: Date.now(), stage: 'preparing', stageAtMs: Date.now() });
+        return true;
+      }));
+    } catch (e) { if (e && e.code === 'net-stuck') return offClaim(); throw e; }   // النت ما يجاوب: نقبله «بدون نت»
     if (r !== 'lan') return r;
     // طلب وصل على الواي فاي ولسه ما انرفع: نسجّله وبعدين نقبله (بالترتيب)
     const x = wMine()[w.id];
