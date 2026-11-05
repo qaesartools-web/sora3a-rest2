@@ -737,6 +737,33 @@ $('menuBtn').onclick = () => menu.hidden ? openMenu() : closeMenu();
 $('mClose').onclick = closeMenu;
 $('mSnd').onclick = () => { sound = !sound; try { localStorage.setItem('kds_sound', sound ? '1' : '0'); } catch (e) {} if (sound) beep(); sndUi(); };
 $('mReload').onclick = () => location.reload();
+
+// ── التحديث التلقائي (المجهز والمطبخ والأقسام): أي تحديث يوصل للشاشة وحده — بدون ما أحد يسكّرها ويفتحها ──
+//  چانت تبقى على النسخة القديمة لحد ما تنسكّر (أيام)، فالتصليحات ما توصلها. نراقب ملفات الصفحة كل دقيقة؛
+//  إذا تغيّرت (ونتأكد مرتين) نحدّث بلحظة هادئة: ماكو ضغطة «جاهز» معلّقة ولا زر «رجّع» ولا قائمة مفتوحة، ومحد لمس الشاشة 20 ثانية
+(() => {
+  const AU_MS = window.__auMs || 60000, files = ['kitchen.html', 'staff.js'];
+  let base = null, cand = null, busy = false, lastTouch = Date.now();
+  ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => document.addEventListener(ev, () => { lastTouch = Date.now(); }, true));
+  const sig = (r) => r.headers.get('last-modified') || (r.headers.get('etag') || '').replace(/^W\//, '');
+  const quiet = () => !undo && ![...pend.keys()].some((k) => pendOn(k)) && $('menu').hidden && $('pick').hidden && Date.now() - lastTouch > (window.__auIdle || 20000);
+  async function check() {
+    if (busy || !navigator.onLine) return;
+    busy = true;
+    try {
+      // «اللحظة اللي بين»: الطلب يبقى معلّق — ما ننتظره أكثر من 15 ثانية
+      const rs = await Promise.race([Promise.all(files.map((f) => fetch(f + '?au=' + Date.now(), { method: 'HEAD', cache: 'no-store' }))), new Promise((res) => setTimeout(() => res(null), 15000))]);
+      if (!rs || rs.some((r) => !r.ok)) return;
+      const s = rs.map(sig).join('|');
+      if (!s.replace(/\|/g, '')) return;
+      if (base === null) { base = s; return; }
+      if (s === base) { cand = null; return; }
+      if (cand !== s) { cand = s; return; }
+      if (quiet()) location.reload();   // مو هادئة هسه ← نجرب بالدورة الجاية
+    } catch (e) {} finally { busy = false; }
+  }
+  setTimeout(check, Math.min(5000, AU_MS)); setInterval(check, AU_MS);
+})();
 $('fsBtn').onclick = () => { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else if (d.documentElement.requestFullscreen) d.documentElement.requestFullscreen().catch(() => {}); closeMenu(); };
 $('mOut').onclick = () => { if (!outArmed) { outArmed = true; $('mOut').textContent = '⚠️ متأكد؟ اضغط مرة ثانية'; return; } $('menu').hidden = true; unlinkScreen(); };
 
