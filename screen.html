@@ -45,8 +45,9 @@ button:focus{outline:3px solid var(--neon);outline-offset:3px}
 .nmw{flex:1;min-width:0}
 .nm{color:var(--c1fg,#fff);font-family:var(--kufi);font-size:2.6vw;font-size:clamp(20px,2.6vw,42px);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .live{display:inline-flex;align-items:center;font-size:1vw;font-size:clamp(11px,1vw,16px);color:var(--c1fg,rgba(255,255,255,.9));font-weight:600}
-.live i{width:9px;height:9px;border-radius:50%;background:#fff;margin-left:7px;box-shadow:0 0 0 0 rgba(255,255,255,.7);animation:dot 2s ease-out infinite}
-@keyframes dot{70%{box-shadow:0 0 0 9px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+.live i{width:9px;height:9px;border-radius:50%;background:#fff;margin-left:7px;animation:dot 2s ease-in-out infinite}
+/* نبض بالشفافية بس: التلفزيون يرسمه بدون ما يشغل الصفحة (الظل المتحرك چان يعيد رسم كل لحظة) */
+@keyframes dot{50%{opacity:.3}}
 .when{text-align:left;flex:none}
 .clk{color:var(--c1fg,#fff);font-family:var(--num);font-weight:800;font-size:3vw;font-size:clamp(22px,3vw,52px);line-height:1;letter-spacing:.5px}
 .clk small{font-size:.5em;font-weight:700;opacity:.8;letter-spacing:0}
@@ -97,7 +98,9 @@ html.wm-on .col.ready .empty b{display:none}
 .ready .n.feat::before{content:'🔔 آخر طلب جاهز';font-family:var(--font);font-weight:700;font-size:1.4vw;font-size:clamp(13px,1.4vw,24px);margin-bottom:10px;opacity:.7}
 .ready .n.feat .pg{font-size:1.6vw;font-size:clamp(14px,1.6vw,28px)}
 .ready .n.new{animation:pop 1s ease-in-out 6}
-@keyframes pop{50%{transform:scale(1.03);box-shadow:0 0 0 8px rgba(var(--neon-rgb),.25),0 8px 22px rgba(var(--t-rgb),.3)}}
+/* تكبير خفيف بس (بدون ظل متحرك): التلفزيون يرسمه بدون ما يشغل الصفحة، والإطار المضيء ثابت */
+.ready .n.new{box-shadow:0 0 0 6px rgba(var(--neon-rgb),.22),0 8px 22px rgba(var(--t-rgb),.28)}
+@keyframes pop{50%{transform:scale(1.04)}}
 
 .prep .n{background:#FFF4E6;border:1px solid #FFD3A1;color:#9A3412;font-size:3.6vw;font-size:clamp(30px,3.6vw,64px);min-width:8.5vw;min-width:clamp(90px,8.5vw,160px);padding:1.2vw 1vw 1.5vw;padding:clamp(12px,1.2vw,20px) clamp(10px,1vw,16px) clamp(16px,1.5vw,24px);overflow:hidden}
 .prep .n[data-t]::after{background:var(--card);color:var(--muted)}
@@ -107,6 +110,9 @@ html.wm-on .col.ready .empty b{display:none}
 /* شريط «يتحضر» يتحرك أسفل كل بطاقة */
 .prep .n::before{content:'';position:absolute;bottom:0;right:0;left:0;height:4px;background:linear-gradient(90deg,transparent,#EA7A0C,transparent);background-size:200% 100%;animation:cook 2.4s linear infinite;opacity:.8}
 @keyframes cook{from{background-position:200% 0}to{background-position:-200% 0}}
+/* طلبات هواية: الشريط يبقى ثابت — كل شريط يتحرك يخلي التلفزيون يعيد رسم البطاقة كل لحظة،
+   ويه ~٢٠ طلب التلفزيون الضعيف يختنق وما يلحك يحدّث الطلبات («جاهز» ما يطلع) */
+.nums.calm .n::before{animation:none;background-position:50% 0}
 
 .qrbox{flex:none;display:flex;align-items:center;margin-top:12px;padding:1.1vw;padding:clamp(10px,1.1vw,18px);border-radius:22px;background:#3F5BD0;background:linear-gradient(135deg,#6B86FF,#1E3A8A)}
 .qrc{flex:none;width:11vw;height:11vw;width:clamp(100px,11vw,190px);height:clamp(100px,11vw,190px);background:#fff;border-radius:14px;padding:8px}
@@ -325,8 +331,11 @@ function view() {
   else if (Date.now() - staleSince > STALE_MS && guard) { staleSince = Date.now(); guard.stale('server copy behind the cashier'); }
   const st = lan.settings();
   if (st && !setFromFs) { scr = { salon: true, delivery: false, qr: true, ...(st.screen || {}) }; if (st.receiptTitle) setName(st.receiptTitle); }
-  render();
+  renderSoon();
 }
+// وقت الزحمة التحديثات تجي ورا بعض (السيرفر والكاشير على الواي فاي): نرسم مرة وحدة لكل دفعة — التلفزيون الضعيف ما يلحك يرسم كل وحدة
+let renderT = 0;
+function renderSoon() { if (renderT) return; renderT = setTimeout(() => { renderT = 0; render(); }, window.__renderMs || 150); }
 // شنو يطلع على الشاشة (يحدده المطعم من إعدادات الكاشير): السفري والبيجر دائماً
 let scr = { salon: true, delivery: false, qr: true }, unsubSet = null, pm = null, unsubPm = null, qrUrl = '';
 // خدمات المطعم (يشغّلها أو يوقفها المدير الأعلى): الشاشة نفسها، والباركود (كود المنيو بالزاوية)
@@ -372,18 +381,38 @@ function render() {
     const flash = cls && fresh.has(o.id) && Date.now() - fresh.get(o.id) < 8000;
     return `<div class="n${cls ? ' ' + cls : ''}${flash ? ' new' : ''}" data-id="${esc(o.id)}"${t && !o.pager ? ` data-t="${t}"` : ''}><span><span class="h">#</span>${esc(numOf(o))}</span>${o.pager ? `<span class="pg">📟 بيجر ${esc(o.pager)}</span>` : ''}</div>`;
   };
-  $('ready').innerHTML = ready.map((o, i) => tile(o, i === 0 ? 'feat' : 'r')).join('')
-    || '<div class="empty"><b>🍽️</b>ماكو طلبات جاهزة هسه</div>';
-  $('prep').innerHTML = prep.map((o) => tile(o, '')).join('') || '<div class="empty"><b>👨‍🍳</b>لا توجد طلبات</div>';
+  // نرسم العمود بس إذا تغيّر شي بيه (چان كل تحديث يعيد رسم الشاشة كلها ويصغّر الأرقام من جديد)
+  const rh = ready.map((o, i) => tile(o, i === 0 ? 'feat' : 'r')).join('') || '<div class="empty"><b>🍽️</b>ماكو طلبات جاهزة هسه</div>';
+  const ph = prep.map((o) => tile(o, '')).join('') || '<div class="empty"><b>👨‍🍳</b>لا توجد طلبات</div>';
+  if (colHtml.ready !== rh) { colHtml.ready = rh; $('ready').innerHTML = rh; fit($('ready')); }
+  if (colHtml.prep !== ph) { colHtml.prep = ph; $('prep').innerHTML = ph; fit($('prep')); }
+  $('prep').classList.toggle('calm', prep.length > (window.__calmN || 8));
   $('rdN').textContent = ready.length;
   $('ppN').textContent = prep.length;
-  fit($('ready')); fit($('prep'));
 }
-// يصغّر الأرقام خطوة خطوة لحد ما تبين كلها بالعمود (بدون ما يتغير شكل الشاشة إذا الطلبات قليلة)
+const colHtml = { ready: '', prep: '' };
+// يصغّر الأرقام لحد ما تبين كلها بالعمود (بدون ما يتغير شكل الشاشة إذا الطلبات قليلة).
+//  كل محاولة تخلي التلفزيون يعيد ترتيب الشاشة — چانت لحد ١٤ محاولة بكل عمود بكل تحديث، فالتلفزيون الضعيف يعلك من تكثر الطلبات (~١٩).
+//  هسه: نفس عدد الطلبات ونفس حجم العمود ← نفس الحجم اللي قبل بمحاولة وحدة، وإذا تغيّر ← بحث سريع (٦ محاولات بالأكثر)
+const fitMemo = new Map();
 function fit(el) {
   if (!el) return;
-  let z = 1; el.style.setProperty('--z', '1');
-  for (let i = 0; i < 14 && el.scrollHeight > el.clientHeight + 2 && z > 0.3; i++) { z = Math.max(0.3, Math.round((z - 0.06) * 100) / 100); el.style.setProperty('--z', String(z)); }
+  const over = () => el.scrollHeight > el.clientHeight + 2;
+  const key = el.childElementCount + '|' + el.querySelectorAll('.pg').length + '|' + el.clientWidth + 'x' + el.clientHeight;
+  const m = fitMemo.get(el.id);
+  if (m && m.key === key) { el.style.setProperty('--z', m.z); if (!over()) return; }
+  let z = 1;
+  el.style.setProperty('--z', '1');
+  if (over()) {
+    let lo = 0.3, hi = 1;
+    el.style.setProperty('--z', String(lo));
+    if (!over()) {
+      for (let i = 0; i < 5; i++) { const mid = Math.round(((lo + hi) / 2) * 100) / 100; el.style.setProperty('--z', String(mid)); if (over()) hi = mid; else lo = mid; }
+    }
+    z = lo;
+    el.style.setProperty('--z', String(z));
+  }
+  fitMemo.set(el.id, { key, z: String(z) });
 }
 window.addEventListener('resize', () => { fit($('ready')); fit($('prep')); });
 
