@@ -302,7 +302,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('screen-sw.js
 import { screenFb, screenGate, unlinkScreen, esc, bagDay, GATE_CSS, collection, query, where, onSnapshot, doc, liveGuard } from './staff.js';
 // الشاشة تنربط برمز ويعتمدها البرج (بدون إيميل ولا كلمة سر) — جلستها «مجهولة» بتطبيق Firebase منفصل
 const db = screenFb().db;
-import { lanLink, score } from './lanlink.js?v=2';
+import { lanLink, score } from './lanlink.js?v=3';
 document.getElementById('gateCss').textContent = GATE_CSS;
 window.__scrOk = true;   // تطبيق «سرعة — الشاشة» يتأكد إن الصفحة اشتغلت (وإلا يطلب تحديث محرك الإنترنت)
 const $ = (id) => document.getElementById(id);

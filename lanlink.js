@@ -49,13 +49,20 @@ export function lanLink({ role, onChange }) {
       } else if (d.t === 'ack') { const p = pend.get(d.rq); if (p) { pend.delete(d.rq); p(!!d.ok); } }
     }
   }
-  const ready = waitLan(4000).then((x) => {
+  let lastCfg = null;
+  const attach = (x) => {
     if (!x || x.role === 'hub') return null;
+    if (L) return L;
     L = x;
     L.on(onEv);
+    if (lastCfg) Promise.resolve(x.start(lastCfg)).catch(() => {});
     // الصفحة انفتحت والتطبيق متصل من قبل: نطلب الطلبات من كل كاشير
     return Promise.resolve(L.status()).then((s) => { ((s && s.peers) || []).forEach((p) => { hub(p.id, p.name); L.send(p.id, { t: 'sync', role }); }); fire(); return L; }, () => L);
-  });
+  };
+  const ready = waitLan(4000).then(attach);
+  // جسر التطبيق وصل متأخر (محركات أندرويد القديمة تحقنه بعد ما تخلص الصفحة تحميل — وبدون نت التحميل يطول أكثر من ٤ ثواني):
+  //  چانت الصفحة تتركه وما تتصل بالكاشير أبد (الويتر يقول «ماكو نت» والطلب ما يوصل). هسه نتصل بيه أول ما يوصل
+  window.addEventListener('soralan', () => { if (!L && window.SoraLan) { attach(window.SoraLan); fire(); } });
   const synced = () => [...hubs.values()].filter((h) => h.synced);
   function ask(to, m, ms) {
     const rq = role + '-' + Date.now().toString(36) + '-' + (++seq);
@@ -68,7 +75,7 @@ export function lanLink({ role, onChange }) {
   return {
     ready,
     // {rid, key, name}: تنحفظ بالتطبيق — حتى لو انقطع النت يتصل وحده بآخر إعدادات
-    start: (cfg) => ready.then((x) => (x ? x.start(cfg) : null)),
+    start: (cfg) => { lastCfg = cfg; return ready.then((x) => { const l = x || L; return l ? l.start(cfg) : null; }); },
     app: () => !!L,
     on: () => synced().length > 0,
     hubs: () => [...hubs.entries()].map(([id, h]) => ({ id, name: h.name, synced: h.synced })),
