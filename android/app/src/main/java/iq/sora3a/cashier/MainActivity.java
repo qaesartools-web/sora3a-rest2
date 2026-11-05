@@ -406,7 +406,23 @@ public class MainActivity extends Activity {
             }
         } catch (Exception e) {}
         dropWeb();
+        // أندرويد ٩ وأقدم: ما نكدر نطفي المحرك العالق، والمتصفح الجديد يشتغل على نفس المحرك (كل متصفحات التطبيق تشاركه)
+        //  فتطلع صفحة بيضة. نعيد تشغيل التطبيق كله (تطبيق جديد = محرك جديد) ويرجع يفتح وحده بعد ثانية ونص
+        if (Build.VERSION.SDK_INT < 29) { restartApp(why); return; }
         recreate();
+    }
+    private void restartApp(String why) {
+        try {
+            AutoLog.add(this, "stuck", why);
+            Intent i = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 0x5c12, i,
+                android.app.PendingIntent.FLAG_CANCEL_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+            am.set(android.app.AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 1500, pi);
+        } catch (Exception e) { recreate(); return; }
+        leaving = true;   // مو «شي غطّى الشاشة» — احنا نعيد تشغيلها
+        finishAffinity();
+        android.os.Process.killProcess(android.os.Process.myPid());
     }
     // نشيل المتصفح القديم (المكالمات عليه بعدها ما تسوي شي — ما نخليه null حتى ما ينهار شي ينتظر عليه)
     private boolean webDropped;
@@ -680,6 +696,7 @@ public class MainActivity extends Activity {
             case "return": return "↩️ رجّعناها قدام وحدها";
             case "killed": return "⛔ التلفزيون سكّر التطبيق بالقوة" + (d.isEmpty() ? "" : " (قبل " + d + " دقيقة)");
             case "noboot": return "⛔ التلفزيون اشتغل وما بلّغ التطبيق";
+            case "stuck": return "🔁 الشاشة علكت ← انفتحت من جديد وحدها" + (d.isEmpty() ? "" : " (" + d + ")");
             case "adb-ok": return "🔧 التلفزيون سمح بالفتح مثل الريموت";
             case "adb-open": return "📺 فتحناها مثل الريموت";
             case "adb-set": return "🔧 ثبّتنا: " + d;
