@@ -821,7 +821,7 @@ html.store-mode .ac-ext{display:none!important}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, updateDoc as _updateDoc, deleteDoc as _deleteDoc, getDoc, getDocFromServer, getDocs, setDoc as _setDoc, arrayUnion, increment, query, where, orderBy, limit, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, updateDoc as _updateDoc, deleteDoc as _deleteDoc, getDoc, getDocFromServer, getDocs, setDoc as _setDoc, arrayUnion, increment, deleteField, query, where, orderBy, limit, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
   apiKey:"AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ",
@@ -874,7 +874,7 @@ const setDoc=(...a)=>settle(_setDoc(...a));
 const updateDoc=(...a)=>settle(_updateDoc(...a));
 const deleteDoc=(...a)=>settle(_deleteDoc(...a));
 const addDoc=(col,data)=>{const ref=doc(col);return settle(_setDoc(ref,data)).then(()=>ref);};
-window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,deleteDoc,getDoc,getDocs,setDoc,arrayUnion,increment,query,where,orderBy,limit,onSnapshot,runTransaction,app,rawSetDoc:_setDoc,rawUpdateDoc:_updateDoc,getDocFromServer};
+window._fb={auth,db,signInWithEmailAndPassword,signOut,onAuthStateChanged,collection,doc,addDoc,updateDoc,deleteDoc,getDoc,getDocs,setDoc,arrayUnion,increment,query,where,orderBy,limit,onSnapshot,runTransaction,app,rawSetDoc:_setDoc,rawUpdateDoc:_updateDoc,getDocFromServer,deleteField};
 window.dispatchEvent(new Event('fbReady'));
 </script>
 
@@ -3080,7 +3080,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=76"></script>
+<script src="pos-pro.js?v=77"></script>
 <script type="module">
 // «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
 if (window.STORE_MODE) {
