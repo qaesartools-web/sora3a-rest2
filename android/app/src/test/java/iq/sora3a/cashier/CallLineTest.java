@@ -26,11 +26,28 @@ public class CallLineTest {
         assertTrue(CallLine.body(C, "7", false).contains("\"7  \""));   // القواعد تطلب 3 أحرف على الأقل
     }
 
-    @Test public void sameCallerWithin45sCountsOnce() {
-        assertTrue(CallLine.firstRing("wa:x", 1_000_000));
-        assertFalse(CallLine.firstRing("wa:x", 1_010_000));
-        assertTrue(CallLine.firstRing("wa:y", 1_010_000));
-        assertTrue(CallLine.firstRing("wa:x", 1_050_001));
+    @Test public void sameRingCountsOnceAndARedialCountsAgain() {
+        assertTrue(CallLine.firstRing("wa:p:x", 1_000_000));
+        assertFalse(CallLine.firstRing("wa:p:x", 1_010_000));   // نفس الرنّة (الواتساب حدّث إشعاره)
+        assertTrue(CallLine.firstRing("wa:p:y", 1_010_000));    // رقم ثاني
+        assertFalse(CallLine.firstRing("wa:p:x", 1_050_000));   // بعدها ترن: كل تحديث يمدد
+        assertTrue(CallLine.firstRing("wa:p:x", 1_095_001));    // 45 ثانية بدون أي تحديث = خلصت
+        // الزبون سد ورجع اتصل بعد 5 ثواني: انتهاء المكالمة يصفّر ← المكالمة الجديدة توصل فوراً
+        CallLine.endRing("wa:p:");
+        assertTrue(CallLine.firstRing("wa:p:x", 1_100_000));
+        // انتهاء مكالمة شريحة ما يأثر على رنّة واتساب شغّالة
+        assertTrue(CallLine.firstRing("sim:0770", 1_100_000));
+        CallLine.endRing("sim:");
+        assertFalse(CallLine.firstRing("wa:p:x", 1_101_000));
+        assertTrue(CallLine.firstRing("sim:0770", 1_101_000));
+    }
+
+    @Test public void whatsappCallNotificationsAreRecognisedForTheEndOfACall() {
+        assertTrue(CallLine.whatsappCallNote("com.whatsapp", "call", "أي شي"));
+        assertTrue(CallLine.whatsappCallNote("com.whatsapp.w4b", null, "مكالمة صوتية واردة"));
+        assertTrue(CallLine.whatsappCallNote("com.whatsapp", null, "Ongoing voice call"));
+        assertFalse(CallLine.whatsappCallNote("com.whatsapp", "msg", "مرحبا"));
+        assertFalse(CallLine.whatsappCallNote("com.other", "call", "Incoming voice call"));
     }
 
     @Test public void whatsappIncomingCallsAreRecognised() {

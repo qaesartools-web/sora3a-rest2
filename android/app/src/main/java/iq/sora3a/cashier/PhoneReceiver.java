@@ -16,7 +16,10 @@ public class PhoneReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context ctx, Intent intent) {
         if (!TelephonyManager.ACTION_PHONE_STATE_CHANGED.equals(intent.getAction())) return;
-        if (!TelephonyManager.EXTRA_STATE_RINGING.equals(intent.getStringExtra(TelephonyManager.EXTRA_STATE))) return;
+        String state = intent.getStringExtra(TelephonyManager.EXTRA_STATE);
+        // المكالمة انرد عليها أو انسدت: الرنّة خلصت — إذا الزبون رجع اتصل توصل مكالمته الجديدة للكاشير فوراً
+        if (TelephonyManager.EXTRA_STATE_IDLE.equals(state) || TelephonyManager.EXTRA_STATE_OFFHOOK.equals(state)) { CallLine.endRing("sim:"); return; }
+        if (!TelephonyManager.EXTRA_STATE_RINGING.equals(state)) return;
         @SuppressWarnings("deprecation")
         String number = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER); // يوصل بس مع إذن سجل المكالمات
         if (number == null || number.isEmpty()) return;

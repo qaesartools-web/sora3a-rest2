@@ -21,4 +21,16 @@ public class WaListener extends NotificationListenerService {
             if (caller != null) LineStore.reportWa(this, caller, sbn.getPackageName());
         } catch (Throwable ignored) {}
     }
+
+    // انشال إشعار مكالمة الواتساب = المكالمة خلصت (انسدت أو انرد عليها وخلصت): إذا الزبون رجع اتصل توصل فوراً
+    @Override
+    public void onNotificationRemoved(StatusBarNotification sbn) {
+        try {
+            Notification n = sbn.getNotification();
+            if (n == null) return;
+            CharSequence text = n.extras == null ? null : n.extras.getCharSequence(Notification.EXTRA_TEXT);
+            if (CallLine.whatsappCallNote(sbn.getPackageName(), n.category, text == null ? null : text.toString()))
+                CallLine.endRing("wa:" + sbn.getPackageName() + ":");
+        } catch (Throwable ignored) {}
+    }
 }
