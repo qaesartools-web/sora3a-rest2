@@ -2396,6 +2396,7 @@ const ordCancelCore = id=>{
   // ══════════ المكالمات الواردة (توكن جوكر) ══════════
   const calls = new Map();      // id -> {id, number, line, data, at}
   let callsReady = false, callRingT = null, ringingNow = new Set();
+  const callsShown = () => [...calls.values()].filter((c) => !c.hidden);   // ✕ يخفي البطاقة من هذا الكاشير
   const CALL_TTL = () => window.__callTtl || 120000;   // البطاقة تختفي بعد دقيقتين
   // كل رقم للمطعم يرن عند كاشيريته (صاحب المطعم يختار من لوحة الإدارة ← الكاشير ← «أرقام المطعم اللي ترن عنده»)
   //  perms.lines = ['1','3'] ← خط ١ و٣ بس (الشريحة والواتساب). بدون تحديد ← كل الأرقام
@@ -2419,17 +2420,8 @@ const ordCancelCore = id=>{
       }
       s.docChanges().forEach((ch) => {
         if (ch.type === 'added') {
-          const c = { id: ch.doc.id, ...ch.doc.data(), at: Date.now(), data: undefined };
-          if (!feat(/(واتس|whats)/i.test(c.line || '') ? 'whatsapp' : 'calls')) return;
-          if (!myPerm('oDeliv')) return;   // الاتصالات لكاشير الدلفري بس (كاشير الصالة ما يرن عنده)
-          if (!lineMine(c.line)) return;    // رقم مخصص لكاشير ثاني
-          // واتساب يحدّث إشعار المكالمة أكثر من مرة: نفس الرقم ونفس الخط خلال دقيقة = بطاقة واحدة
-          const dup = [...calls.values()].find((x) => x.number === c.number && x.line === c.line && c.at - x.at < 60000);
-          if (dup) { dup.at = c.at; if (dup.lanId && !dup.fsId) dup.fsId = c.id; return; }   // وصلت من الواي فاي قبل
-
-          calls.set(c.id, c);
-          getCustomer(c.number).then((d) => { const x = calls.get(c.id); if (x) { x.data = d; renderCalls(); } });
-          notifyCall(c);
+          const d = ch.doc.data();
+          callArrive({ id: ch.doc.id, fsId: ch.doc.id, number: d.number, line: d.line, at: Date.now(), data: undefined }, 'fsId');
         } else if (ch.type === 'removed') { calls.delete(ch.doc.id); calls.forEach((x, k) => { if (x.fsId === ch.doc.id) calls.delete(k); }); }     // استلمها كاشير آخر
       });
       renderCalls();
@@ -2445,7 +2437,7 @@ const ordCancelCore = id=>{
   function notifyCall(c) {
     ringCall();
     clearInterval(callRingT);
-    let n = 0; callRingT = setInterval(() => { if (!calls.size || ++n > 8) { clearInterval(callRingT); return; } ringCall(); }, 2500);
+    let n = 0; callRingT = setInterval(() => { if (!callsShown().length || ++n > 8) { clearInterval(callRingT); return; } ringCall(); }, 2500);
     if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
       navigator.serviceWorker && navigator.serviceWorker.getRegistration().then((r) => r && r.showNotification('📞 مكالمة واردة — خط ' + (c.line || ''), { body: c.number, tag: 'call-' + c.id, dir: 'rtl', lang: 'ar', requireInteraction: true }));
     }
@@ -2457,7 +2449,7 @@ const ordCancelCore = id=>{
     const el = $('callsBox'); if (!el) return;
     // تختفي تلقائياً بعد دقيقتين
     [...calls.values()].forEach((c) => { if (Date.now() - c.at > CALL_TTL()) { calls.delete(c.id); callMissed(c.fsId || c.id); } });
-    el.innerHTML = [...calls.values()].sort((a, b) => b.at - a.at).slice(0, 4).map((c) => `
+    el.innerHTML = callsShown().sort((a, b) => b.at - a.at).slice(0, 4).map((c) => `
       <div class="call-card">
         <div class="call-top"><span class="call-pulse">📞</span> مكالمة واردة <span class="call-line">خط ${esc(c.line || '—')}</span>
           <button type="button" class="call-x" title="إخفاء" onclick="callHide('${esc(c.id)}')">✕</button></div>
@@ -2472,15 +2464,30 @@ const ordCancelCore = id=>{
   setInterval(() => { if (calls.size) renderCalls(); }, Math.min(15000, CALL_TTL()));
   // مكالمة من تلفون الخط عن طريق الواي فاي (تشتغل حتى لو النت مقطوع) — نفس بطاقة المكالمة، والمكرر من النت يندمج وياها
   function callIn(x) {
-    const c = { id: 'lan-' + x.lanId, lanId: x.lanId, number: x.number, line: x.line, at: Date.now(), data: undefined };
-    if (!feat(/(واتس|whats)/i.test(c.line || '') ? 'whatsapp' : 'calls')) return;
-    if (!myPerm('oDeliv') || !lineMine(c.line)) return;
-    const dup = [...calls.values()].find((y) => y.number === c.number && y.line === c.line && c.at - y.at < 60000);
-    if (dup) { if (!dup.lanId) dup.lanId = c.lanId; return; }
-    calls.set(c.id, c);
-    getCustomer(c.number).then((d) => { const y = calls.get(c.id); if (y) { y.data = d; renderCalls(); } });
-    notifyCall(c);
+    callArrive({ id: 'lan-' + x.lanId, lanId: x.lanId, number: x.number, line: x.line, at: Date.now(), data: undefined }, 'lanId');
     renderCalls();
+  }
+  // مكالمة وصلت — via: 'fsId' (من النت) أو 'lanId' (من الواي فاي)
+  //  • نفس المكالمة توصل من الطريقين بنفس اللحظة (أو نفس الحدث مرتين) ← بطاقة وحدة، وإذا الكاشير خفاها (✕) تبقى مخفية
+  //  • مكالمة جديدة من نفس الرقم (الزبون سد ورجع اتصل) ← بطاقة جديدة ترن، حتى لو الكاشير خفى اللي قبلها —
+  //    تلفون الخط صار يرسل كل مكالمة جديدة لوحدها (CallLine.firstRing)، فكل حدث جديد من نفس الطريق = مكالمة جديدة
+  function callArrive(c, via) {
+    if (!feat(/(واتس|whats)/i.test(c.line || '') ? 'whatsapp' : 'calls')) return;
+    if (!myPerm('oDeliv')) return;   // الاتصالات لكاشير الدلفري بس (كاشير الصالة ما يرن عنده)
+    if (!lineMine(c.line)) return;    // رقم مخصص لكاشير ثاني
+    const x = [...calls.values()].find((y) => y.number === c.number && y.line === c.line && c.at - y.at < 60000);
+    if (x && x[via] === c[via]) return;                                          // نفس الحدث وصل مرتين
+    if (x && !x[via] && c.at - x.at < 15000) { x[via] = c[via]; return; }        // نفس المكالمة من الطريق الثاني
+    let ring = true;
+    if (x) {                                                                      // مكالمة جديدة من نفس الرقم
+      calls.delete(x.id);
+      if (x.fsId) callMissed(x.fsId);                                             // اللي قبلها فاتت (تختفي من باقي الكاشيرية)
+      if (x.data !== undefined) c.data = x.data;                                  // نفس الزبون — ما نعيد البحث
+      ring = x.hidden || c.at - x.at >= 3000;                                     // تكرار بنفس اللحظة (أجهزة قديمة) ما يرن مرتين
+    }
+    calls.set(c.id, c);
+    if (c.data === undefined) getCustomer(c.number).then((d) => { const y = calls.get(c.id); if (y) { y.data = d; renderCalls(); } });
+    if (ring) notifyCall(c);
   }
   // كاشير ثاني استلمها (بالواي فاي)
   function callTakenElsewhere(d) {
@@ -2495,7 +2502,9 @@ const ordCancelCore = id=>{
     if (!calls.size) clearInterval(callRingT);
     renderCalls();
   };
-  window.callHide = (id) => { calls.delete(id); renderCalls(); };
+  // ✕: البطاقة تختفي من هذا الكاشير بس (تبقى بالذاكرة مخفية حتى نفس المكالمة ما ترجع تطلع من الطريق الثاني) —
+  //  وإذا الزبون رجع اتصل تطلع بطاقة جديدة وترن
+  window.callHide = (id) => { const c = calls.get(id); if (c) c.hidden = true; if (!callsShown().length) clearInterval(callRingT); renderCalls(); };
   window.callTake = async (id, repeat) => {
     const c = calls.get(id); if (!c) return;
     calls.delete(id); clearInterval(callRingT); renderCalls();

@@ -80,13 +80,29 @@ public final class CallLine {
         return b.append('"').toString();
     }
 
-    // نفس المتصل خلال 45 ثانية = نفس المكالمة (الواتساب يحدّث الإشعار وهو يرن، والشريحة ترسل الحالة مرتين)
+    // نفس الرنّة = نفس المكالمة (الواتساب يحدّث الإشعار وهو يرن، والشريحة ترسل الحالة مرتين): توصل للكاشير مرة وحدة.
+    //  الرنّة تخلص أول ما المكالمة تنتهي (endRing: الشريحة رجعت «فاضية» أو انشال إشعار مكالمة الواتساب)،
+    //  فالزبون اللي يسد ويرجع يتصل توصل مكالمته الجديدة فوراً. وإذا ما وصلنا خبر انتهاء المكالمة:
+    //  كل تحديث من نفس الرنّة يمدد، و45 ثانية بدون أي تحديث = خلصت
+    static final long RING_GAP = 45_000;
     private static final Map<String, Long> recent = new HashMap<>();
     public static synchronized boolean firstRing(String key, long now) {
-        recent.entrySet().removeIf(e -> now - e.getValue() > 45_000);
-        if (recent.containsKey(key)) return false;
+        recent.entrySet().removeIf(e -> now - e.getValue() > RING_GAP);
+        boolean first = !recent.containsKey(key);
         recent.put(key, now);
-        return true;
+        return first;
+    }
+    // المكالمة انتهت (انرد عليها أو انسدت): كل رنّات هذا المصدر خلصت — prefix مثل "sim:" أو "wa:com.whatsapp:"
+    public static synchronized void endRing(String prefix) {
+        recent.keySet().removeIf(k -> k.startsWith(prefix));
+    }
+
+    // إشعار مكالمة واتساب (واردة، جارية، أو يتصل) — انشيله = المكالمة خلصت
+    public static boolean whatsappCallNote(String pkg, String category, String text) {
+        boolean wa = false;
+        for (String p : WA_PACKAGES) wa |= p.equals(pkg);
+        if (!wa) return false;
+        return "call".equals(category) || (text != null && text.matches("(?is).*(incoming (voice|video) call|مكالمة (صوتية|فيديو)? ?واردة|مكالمة واردة|ongoing|جارية).*"));
     }
 
     // إشعار واتساب ← اسم/رقم المتصل إذا كان مكالمة واردة، وإلا null
