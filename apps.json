@@ -1,0 +1,24 @@
+{
+  "_": "كل تطبيقات سرعة — برج سرعة يقرا هذا الملف ويبين كل تطبيق بآخر نسخة (النسخة والتاريخ من صفحة Releases). أي تطبيق جديد: ضيفه هنا ويطلع بالبرج وحده بدون ما يتحدث البرج. kind: web = رابط يتحدث وحده، apk = أندرويد، win = ويندوز، zip = للفلاشة. rel: وين تنشر نسخته (tag ثابت، أو tagRe لأحدث وحدة تطابق، أو latest). only: settings = بإعدادات البرج بس (مو بروابط المطعم).",
+  "v": 1,
+  "apps": [
+    { "id": "cashier", "ar": "الكاشير (متصفح)", "en": "Cashier (browser)", "ic": "receipt", "kind": "web", "url": "https://qaesartools-web.github.io/sora3a-rest2/" },
+    { "id": "kitchen", "ar": "شاشة المجهز (تنربط برمز)", "en": "Prep screen (pairs with a code)", "ic": "kitchen", "kind": "web", "feat": "kitchen", "url": "https://qaesartools-web.github.io/sora3a-rest2/kitchen.html" },
+    { "id": "kitchenSec", "ar": "شاشة المطبخ — الأقسام (تنربط برمز)", "en": "Kitchen screen — stations (pairs with a code)", "ic": "flame", "kind": "web", "feat": "kitchenSec", "url": "https://qaesartools-web.github.io/sora3a-rest2/kitchen.html?sec" },
+    { "id": "waiter", "ar": "تطبيق الويتر (ينربط برمز)", "en": "Waiter app (pairs with a code)", "ic": "waiter", "kind": "web", "feat": "waiter", "url": "https://qaesartools-web.github.io/sora3a-rest2/waiter.html" },
+    { "id": "store", "ar": "إدارة المخزن — أمين المخزن (ينربط برمز)", "en": "Inventory — storekeeper (pairs with a code)", "ic": "bag", "kind": "web", "feat": "store", "url": "https://qaesartools-web.github.io/sora3a-rest2/index.html?store=1" },
+    { "id": "menu", "ar": "منيو الباركود", "en": "QR menu", "ic": "qr", "kind": "web", "feat": "online", "url": "https://qaesartools-web.github.io/sora3a-rest2/menu.html?r={rid}" },
+    { "id": "captain", "ar": "تطبيق الكابتن", "en": "Captain app", "ic": "bike", "kind": "web", "feat": "captain", "url": "https://qaesartools-web.github.io/sora3a-captain/captain.html" },
+    { "id": "admin", "ar": "لوحة إدارة المطعم", "en": "Restaurant admin panel", "ic": "settings", "kind": "web", "url": "https://qaesartools-web.github.io/sora3a-admin/" },
+
+    { "id": "kitchenApk", "ar": "شاشة المطبخ (أندرويد) — تشتغل بدون نت", "en": "Kitchen screen (Android) — works offline", "ic": "flame", "kind": "apk", "feat": "kitchenSec", "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/download/kitchen-android/sora3a-kitchen.apk", "rel": { "repo": "sora3a-rest2", "tag": "kitchen-android" } },
+    { "id": "prepApk", "ar": "شاشة المجهز (أندرويد) — تشتغل بدون نت", "en": "Prep screen (Android) — works offline", "ic": "kitchen", "kind": "apk", "feat": "kitchen", "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/download/prep-android/sora3a-prep.apk", "rel": { "repo": "sora3a-rest2", "tag": "prep-android" } },
+    { "id": "waiterApk", "ar": "تطبيق الويتر (أندرويد) — يشتغل بدون نت", "en": "Waiter app (Android) — works offline", "ic": "waiter", "kind": "apk", "feat": "waiter", "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/download/waiter-android/sora3a-waiter.apk", "rel": { "repo": "sora3a-rest2", "tag": "waiter-android" } },
+    { "id": "screenApk", "ar": "شاشة طلبك جاهز (أندرويد / تلفزيون)", "en": "Order-ready screen (Android / TV)", "ic": "tv", "kind": "apk", "feat": "screen", "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/download/screen-android/sora3a-screen.apk", "rel": { "repo": "sora3a-rest2", "tag": "screen-android" } },
+    { "id": "lineApk", "ar": "خط المطعم (أندرويد)", "en": "Restaurant line (Android)", "ic": "phone", "kind": "apk", "feat": "calls", "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/download/line-android/sora3a-line.apk", "rel": { "repo": "sora3a-rest2", "tag": "line-android" } },
+    { "id": "cashierApk", "ar": "تطبيق الكاشير (أندرويد)", "en": "Cashier app (Android)", "ic": "download", "kind": "apk", "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/download/cashier-android/sora3a-cashier.apk", "rel": { "repo": "sora3a-rest2", "tag": "cashier-android" } },
+    { "id": "cashierWin", "ar": "برنامج الكاشير (ويندوز)", "en": "Cashier program (Windows)", "ic": "download", "kind": "win", "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/latest/download/sora3a-cashier-setup.exe", "rel": { "repo": "sora3a-rest2", "tagRe": "^cashier-v" } },
+    { "id": "captainApk", "ar": "الكابتن (أندرويد)", "en": "Captain (Android)", "ic": "bike", "kind": "apk", "feat": "captain", "url": "https://github.com/qaesartools-web/sora3a-captain/releases/latest/download/sora3a-captain.apk", "rel": { "repo": "sora3a-captain", "latest": true } },
+    { "id": "flashKit", "ar": "كل تطبيقات سرعة (للفلاشة)", "en": "All Sora3a apps (USB kit)", "ic": "download", "kind": "zip", "only": "settings", "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/download/flash-kit/sora3a-apps.zip", "rel": { "repo": "sora3a-rest2", "tag": "flash-kit" } }
+  ]
+}
