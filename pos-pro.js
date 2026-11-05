@@ -1517,6 +1517,7 @@ const ordCancelCore = id=>{
   };
   window.posNetTry = netTry; window.posNetOk = () => netOk();
   let tkPool = { day: '', nums: [] }, tkBusy = null, tkBusyAt = 0, tkSeen = { day: '', n: 0 };   // آخر رقم شفناه بالعدّاد
+  let tkHung = false;   // آخر حجز علك (السيرفر ما جاوب) — لحد ما يجاوب ما ننتظره بكل طلب
   function localTicketMax() {
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     let m = 0;
@@ -1537,8 +1538,8 @@ const ordCancelCore = id=>{
       const n = Math.max(d.day === day ? Number(d.n) || 0 : 0, localTicketMax());
       tx.set(ref, { day, n: n + block, updatedAtMs: Date.now() });
       return Array.from({ length: block }, (_, i) => n + 1 + i);
-    }).then((nums) => { TK_BLOCK = Date.now() - t0 > 1000 ? 3 : 1; tkSeen = { day, n: Math.max(tkSeen.day === day ? tkSeen.n : 0, nums[nums.length - 1]) }; if (bagDay() !== day) return; if (tkPool.day !== day) tkPool = { day, nums: [] }; tkPool.nums.push(...nums); })
-      .catch((e) => { TK_BLOCK = 3; console.warn('tickets', e.code || e.message); return e; })
+    }).then((nums) => { tkHung = false; TK_BLOCK = Date.now() - t0 > 1000 ? 3 : 1; tkSeen = { day, n: Math.max(tkSeen.day === day ? tkSeen.n : 0, nums[nums.length - 1]) }; if (bagDay() !== day) return; if (tkPool.day !== day) tkPool = { day, nums: [] }; tkPool.nums.push(...nums); })
+      .catch((e) => { tkHung = false; TK_BLOCK = 3; console.warn('tickets', e.code || e.message); return e; })
       .then((e) => {
         if (tkBusy !== job) return;
         tkBusy = null;
@@ -1556,9 +1557,13 @@ const ordCancelCore = id=>{
     if (tkPool.day === bagDay() && tkPool.nums.length) return;
     if (!netOk()) return;   // بدون نت (حتى لو الواي فاي شغّال): رقم محلي فوراً بدون انتظار
     tkRefill();
+    // «اللحظة اللي بين» (الواي فاي شغّال والسيرفر ما يجاوب): آخر حجز علك وبعده ما جاوب ← ما ننتظر 4 ثواني بكل طلب
+    //  (چانت كل الطلبات تتأخر وتطلع بالمطبخ والشاشة متأخرة) — رقم محلي فوراً لحد ما السيرفر يجاوب
+    if (tkHung) return;
     const until = Date.now() + 4000;
     // ننتظر الحجز (ومحاولاته الثانية إذا فشل) لحد 4 ثواني
     while (tkBusy && !(tkPool.day === bagDay() && tkPool.nums.length) && Date.now() < until) await Promise.race([tkBusy, new Promise((r) => setTimeout(r, until - Date.now()))]);
+    if (tkBusy && !(tkPool.day === bagDay() && tkPool.nums.length)) { tkHung = true; window.posNetStuckAt = Date.now(); }
   }
   window.addEventListener('online', () => tkRefill());
   // رقم العدّ المحلي (بدون إنترنت) ياخذ حرف الجهاز: «#12ب» — حتى لو كاشير ثاني عدّ هو هم بدون إنترنت ما يتكرر نفس الرقم
@@ -2570,6 +2575,13 @@ const ordCancelCore = id=>{
         const all = Object.values(ks).every((v) => v.readyAt);
         if (all && !featOn('kitchen')) await lanReady({ ...o, kSec: ks });   // ماكو مجهز ← جاهز
         else await fb().updateDoc(fb().doc(fb().db, 'orders', o.id), all ? { kSec: ks, kitchenSecDoneAt: Date.now() } : { kSec: ks });
+      } else if (d.op === 'undo') {
+        // «رجّع» من المجهز (انضغط «جاهز» بالغلط): الطلب يرجع للمطبخ/المجهز — ما يرجع إذا انسلّم أو انلغى
+        if (['delivered', 'done', 'cancelled'].includes(o.status) || o.servedAtMs || o.captainId) return reply(false);
+        const f = fb(), x = { kitchen: 'new', kitchenReadyAt: f.deleteField() };
+        if (d.kSec && typeof d.kSec === 'object') x.kSec = d.kSec;
+        if (d.status === 'preparing' && o.status === 'ready') { x.status = 'preparing'; x.readyAt = f.deleteField(); }
+        await f.updateDoc(f.doc(f.db, 'orders', o.id), x);
       } else return reply(false);
       reply(true);
     } catch (e) { reply(false); }

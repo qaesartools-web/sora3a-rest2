@@ -574,6 +574,8 @@ $('undoB').onclick = async () => {
   const u = undo; if (!u) return; undo = null; undoUi();
   const o = orders.find((x) => x.id === u.id);
   if (!o || ['delivered', 'done', 'cancelled'].includes(o.status) || o.servedAtMs || o.captainId) { toast('⚠️ ما يرجع — الطلب انسلّم أو انلغى'); return; }
+  // الكاشير على الواي فاي يرجّعه هم (حتى نسخته ما تبقى «جاهز» بالشاشة)
+  tellHub(u.id, 'undo', { status: u.prev.status || '', kSec: u.prev.kSec || null });
   try { await updateDoc(doc(db, 'orders', u.id), u.prev); pend.delete('d:' + u.id); if (SEC) pend.delete('s:' + u.id + '|' + SEC); render(); toast('↩️ #' + u.num + ' رجع للشاشة'); }
   catch (e) { toast('❌ تعذّر الرجوع — ' + (e.code || '')); }
 };
@@ -659,12 +661,17 @@ $('grid').addEventListener('click', (e) => {
 
 // الضغطة تروح للكاشير على الواي فاي إذا ماكو نت، أو الطلب لسه ما وصل السيرفر (انسجّل بدون نت والكاشير يرفعه هسه)
 const viaLan = (id) => lan.has(id) && (!fsLive || !fsOrders.some((o) => o.id === id));
+// وحتى لو الصفحة تحسب نفسها متصلة بالسيرفر: إذا الكاشير على الواي فاي نبلّغه هم.
+//  «اللحظة اللي بين» (النت انقطع والواي فاي باقي): الاتصال يبقى مفتوح وساكت، فالصفحة تكتب للسيرفر وماكو شي يوصل —
+//  چان الكاشير ما يدري والشاشة تبقى «قيد التحضير». هسه الكاشير يحفظها ويوصلها للشاشة فوراً ويرفعها من يرجع النت
+const tellHub = (id, op, extra) => { if (lan.has(id)) lan.act(id, op, { at: Date.now(), ...(extra || {}) }).catch(() => {}); };
 async function done(id, prevKSec) {
   const o = orders.find((x) => x.id === id); if (!o || pendOn('d:' + id)) return;
   const prev = undoPrev(o, prevKSec);
   pend.set('d:' + id, Date.now() + 20000); render();
   const back = (msg) => { pend.delete('d:' + id); render(); toast(msg); };
   if (viaLan(id)) { const ok = await lan.act(id, 'ready', { at: Date.now() }); if (ok) toast('✅ #' + kNum(o) + ' جاهز'); else back('❌ تعذّر — تأكد إن الكاشير شغّال'); return; }
+  tellHub(id, 'ready');
   const fields = { kitchen: 'ready', kitchenReadyAt: Date.now() };
   if (o.kSec) fields.kSec = Object.fromEntries(Object.entries(o.kSec).map(([k, v]) => [k, { ...v, readyAt: v.readyAt || Date.now() }]));
   // طلب أونلاين قيد التحضير ← نعلن «جاهز» حتى يوصل للزبون، ويرجع للكاشير للتسليم/الكابتن (نفس القديم)
@@ -688,6 +695,7 @@ async function secDone(id, sid) {
   const ks = { ...o.kSec, [sid]: { ...o.kSec[sid], readyAt: o.kSec[sid].readyAt ? 0 : Date.now() } }, origKSec = o.kSec;
   const all = Object.values(ks).every((v) => v.readyAt);
   if (all && !prepOn()) { o.kSec = ks; if (opt) pend.delete(pk); return done(id, origKSec); }   // ماكو مجهز ← خلص المطبخ = جاهز
+  tellHub(id, 'sec', { sec: sid, on: !o.kSec[sid].readyAt });
   try {
     await updateDoc(doc(db, 'orders', id), all ? { kSec: ks, kitchenSecDoneAt: Date.now() } : { kSec: ks });
     if (opt) setUndo(o, all ? { kSec: origKSec, kitchenSecDoneAt: o.kitchenSecDoneAt || deleteField() } : { kSec: origKSec });
