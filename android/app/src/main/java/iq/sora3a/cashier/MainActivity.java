@@ -413,7 +413,7 @@ public class MainActivity extends Activity {
     }
     private void restartApp(String why) {
         try {
-            AutoLog.add(this, "restart", why);
+            AutoLog.add(this, "stuck", why);
             Intent i = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 0x5c12, i,
                 android.app.PendingIntent.FLAG_CANCEL_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
@@ -696,7 +696,7 @@ public class MainActivity extends Activity {
             case "return": return "↩️ رجّعناها قدام وحدها";
             case "killed": return "⛔ التلفزيون سكّر التطبيق بالقوة" + (d.isEmpty() ? "" : " (قبل " + d + " دقيقة)");
             case "noboot": return "⛔ التلفزيون اشتغل وما بلّغ التطبيق";
-            case "restart": return "🔁 الشاشة علكت ← انفتحت من جديد وحدها" + (d.isEmpty() ? "" : " (" + d + ")");
+            case "stuck": return "🔁 الشاشة علكت ← انفتحت من جديد وحدها" + (d.isEmpty() ? "" : " (" + d + ")");
             case "adb-ok": return "🔧 التلفزيون سمح بالفتح مثل الريموت";
             case "adb-open": return "📺 فتحناها مثل الريموت";
             case "adb-set": return "🔧 ثبّتنا: " + d;
