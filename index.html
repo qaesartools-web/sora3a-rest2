@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="كاشير سرعة">
 <link rel="manifest" href="manifest.json">
 <script>
-// تطبيق «إدارة المخزن» (index.html?store=1): نفس برنامج الكاشير بس المخزون والوصفات والموردين، والجهاز ينربط برمز (بدون إيميل)
+// تطبيق «إدارة المخزن» (index.html?store=1): نفس برنامج الكاشير بس المخزون والموردين، والجهاز ينربط برمز (بدون إيميل)
 window.STORE_MODE=/[?&]store=1(&|$)/.test(location.search);
 if(window.STORE_MODE){document.documentElement.classList.add('store-mode');document.querySelector('link[rel="manifest"]').href='store.webmanifest';document.title='سرعة — إدارة المخزن';}
 </script>
@@ -670,7 +670,6 @@ html.store-mode .ac-ext{display:none!important}
     <div class="screen" id="accScreen">
       <div class="actabs" id="acTabs">
         <button class="mtab on" data-t="mat" onclick="acTab('mat')">📦 المواد</button>
-        <button class="mtab" data-t="rec" onclick="acTab('rec')">🧾 الوصفات</button>
         <button class="mtab" data-t="exp" onclick="acTab('exp')">💸 المصاريف</button>
         <button class="mtab" data-t="fin" onclick="acTab('fin')">💰 الحسابات</button>
         <button class="mtab" data-t="log" onclick="acTab('log')">🕘 السجل</button>
@@ -1488,7 +1487,7 @@ function renderRepExtra(fil){
   const from=document.getElementById('repFrom')?.value,to=document.getElementById('repTo')?.value;
   const start=from?dayMsOf(from):0,end=to?dayMsOf(to)+86400000:Infinity;
   const f=finCalc(fil,start,end);
-  el.innerHTML=(f.noCost?`<div class="ac-row" style="border-color:#d97706"><div class="ac-sub" style="color:#d97706;font-weight:700">⚠️ ${toA(f.noCost)} صنف مباع بدون تكلفة — أضف وصفاته من «المخزون والحسابات» حتى يطلع الربح بدقة.</div></div>`:'')+stmtHTML(f)+cancelHTML(f);
+  el.innerHTML=(f.noCost?`<div class="ac-row" style="border-color:#d97706"><div class="ac-sub" style="color:#d97706;font-weight:700">⚠️ ${toA(f.noCost)} صنف مباع بدون تكلفة — حط تكلفته من لوحة الإدارة ← «المخزون والحسابات» ← «الأصناف والأرباح» حتى يطلع الربح بدقة.</div></div>`:'')+stmtHTML(f)+cancelHTML(f);
 }
 window.renderRep=()=>{
   const fil=getRepOrders();
@@ -1769,7 +1768,7 @@ const EDITABLE=['pending','accepted','pickup','preparing','ready'];
 const MV={open:'رصيد افتتاحي',purchase:'وارد — مشتريات',sale:'صادر — منصرف للمبيعات',sale_return:'وارد — مردود مبيعات (رجوع للمخزن)',waste:'صادر — تالف / هالك',count:'تسوية جرد (عجز / زيادة)',purchase_return:'صادر — مرتجع للمورد'};
 
 let acc={materials:[],recipes:{},costs:{},moves:[],expenses:[]};
-let acCur=window.STORE_MODE?'home':'mat',acRec={ci:0,pi:0,vi:0},acMatQ='',acMatCat='';
+let acCur=window.STORE_MODE?'home':'mat',acMatQ='',acMatCat='';
 let acRange={from:ymd(new Date()),to:ymd(new Date())},acAuto=true;   // acAuto: الفترة الافتراضية (اليوم) — تمشي ويا يوم العمل
 // تغيّر وقت يوم العمل (أو انقرت الإعدادات): «اليوم» بالحسابات والمصروفات يصير يوم العمل الحالي
 window.posBizChanged=()=>{const d=ymd(bizDay());if(acAuto)acRange={from:d,to:d};if(acExpAuto)acExpDay=d;};
@@ -1997,7 +1996,7 @@ function rangeBar(){
 
 // ── التبويبات ──
 // الشغل اليومي بالكاشير؛ قائمة الدخل وحركة المخزون والتقارير بلوحة الإدارة (بدون تكرار)
-const AC_TABS=[['home','🏠 الرئيسية'],['mat','📦 المخزون'],['rec','🧾 الوصفات والتكلفة'],['exp','💸 المصروفات'],['sup','🏭 الموردين'],['cust','🧾 ديون الزبائن'],['tools','🧰 أدوات']];
+const AC_TABS=[['home','🏠 الرئيسية'],['mat','📦 المخزون'],['exp','💸 المصروفات'],['sup','🏭 الموردين'],['cust','🧾 ديون الزبائن'],['tools','🧰 أدوات']];
 // سجل التنقل بين الأقسام حتى يعمل زر «رجوع»
 const acHist=[];
 window.acTab=t=>{if(t!==acCur){acHist.push(acCur);if(acHist.length>20)acHist.shift();}acCur=t;renderAcc();const sc=document.getElementById('accScreen');if(sc)sc.scrollTop=0;};
@@ -2006,23 +2005,22 @@ function renderAcc(){
   const tabs=document.getElementById('acTabs');
   const CASHIER_TABS=['mat','exp','sup','cust'];
   ledInit();
-  // «إدارة المخزن»: بتطبيقه بس المخزون والوصفات والموردين؛ وإذا خدمته شغّالة ينشالن من الكاشير (والعكس)
+  // «إدارة المخزن»: بتطبيقه بس المخزون والموردين؛ وإذا خدمته شغّالة ينشالن من الكاشير (والعكس)
+  //  تكلفة الأصناف ووصفاتها صارت من لوحة الإدارة بس (ولا بالكاشير ولا بتطبيق المخزن)
   //  «الرئيسية» (لوحة أمين المخزن) بتطبيق المخزن بس
-  const STK=['mat','rec','sup'],storeOn=!window.STORE_MODE&&window.storeSvcOn&&storeSvcOn();
+  const STK=['mat','sup'],storeOn=!window.STORE_MODE&&window.storeSvcOn&&storeSvcOn();
   const vis=AC_TABS.filter(([k])=>window.STORE_MODE?(k==='home'||STK.includes(k)):k!=='home'&&(isOwnerPOS()||CASHIER_TABS.includes(k))&&!(storeOn&&STK.includes(k)));
   if(!vis.some(([k])=>k===acCur))acCur=(vis[0]||['exp'])[0];
   if(tabs)tabs.innerHTML=(acHist.length?`<button class="mtab ac-back" onclick="acBack()">↩️ رجوع</button>`:'')+vis.map(([k,l])=>`<button class="mtab ${k===acCur?'on':''}" onclick="acTab('${k}')">${l}</button>`).join('')
     +(isOwnerPOS()&&!window.STORE_MODE?`<button class="mtab ac-ext" onclick="openAdminPanel()" title="تنفتح بلوحة الإدارة">💰 قائمة الدخل والحركات ↗</button>`:'');
   const body=document.getElementById('acBody');if(!body)return;
-  const fn={home:tabHome,mat:tabMat,mov:tabMov,rec:tabRec,exp:tabExp,sup:tabSup,cust:tabCust,fin:tabFin,tools:tabTools}[acCur]||tabMat;
-  body.innerHTML=(storeOn?'<div class="store-note">📦 المخزون والوصفات والموردين صاروا بتطبيق «إدارة المخزن» (جهاز أمين المخزن). إذا انطفت الخدمة يرجعون هنا وحدهم.</div>':'')+fn();
+  const fn={home:tabHome,mat:tabMat,mov:tabMov,exp:tabExp,sup:tabSup,cust:tabCust,fin:tabFin,tools:tabTools}[acCur]||tabMat;
+  body.innerHTML=(storeOn?'<div class="store-note">📦 المخزون والموردين صاروا بتطبيق «إدارة المخزن» (جهاز أمين المخزن). إذا انطفت الخدمة يرجعون هنا وحدهم.</div>':'')+fn();
   if(acLoadingNow)body.insertAdjacentHTML('afterbegin','<div class="rep-loading">⏳ دا ينجاب طلبات الفترة القديمة من السيرفر…</div>');
   acLoadingNow=false;
   if(acCur==='mat')renderMatList();
   if(acCur==='sup')renderSupList();
   if(acCur==='cust')renderCustList();
-  // الكاشير: الوصفات للمشاهدة فقط
-  if(!isOwnerPOS()&&acCur==='rec')body.querySelectorAll('input,select,button[onclick^="rec"]').forEach(el=>{el.disabled=true;});
 }
 
 // ---- المخزون (المواد) ----
@@ -2034,6 +2032,7 @@ function tabMat(){
     <div class="st"><div class="sv">${toA(mats.length)}</div><div class="sl">مادة بالمخزن</div></div>
     <div class="st"><div class="sv" style="color:${low?'#e11d48':'#16a34a'}">${toA(low)}</div><div class="sl">تحتاج شراء</div></div>
     ${isOwnerPOS()?`<div class="st"><div class="sv" style="font-size:14px">${fmt(Math.round(val))}</div><div class="sl">قيمة المخزون د.ع</div></div>`:''}</div>
+  <div class="ac-sub" style="margin:0 2px 8px">🧾 وصفات الأصناف وتكلفتها تنحط من لوحة الإدارة ← «المخزون والحسابات» ← «الأصناف والأرباح». هنا المواد وأسعارها بس.</div>
   <button class="sivbtn" style="margin-bottom:8px" onclick="matNew()">➕ إضافة مادة جديدة</button>
   <input class="finp" id="acMatQ" placeholder="🔍 بحث عن مادة..." value="${esc(acMatQ)}" oninput="acMatQ=this.value;renderMatList()">
   ${matCats().length?`<div class="st-chips" id="acMatCats">${['',...matCats()].map(c=>`<button type="button" class="st-chip ${c===acMatCat?'on':''}" data-cat="${esc(c)}" onclick="acMatCat=this.dataset.cat;renderAcc()">${c?esc(c):'الكل'}</button>`).join('')}</div>`:''}
@@ -2351,40 +2350,7 @@ function tabMov(){
   <div class="rcard"><div class="rtitle">🕘 سجل العمليات</div>${inP.filter(e=>e.type!=='sale'&&e.type!=='sale_return').sort((a,b)=>b.ts-a.ts).slice(0,60).map(e=>`<div class="ac-line"><span>${esc(e.name)}<div class="ac-sub">${MV[e.type]||e.type} • ${fmtQ(Math.abs(e.qty))} ${esc(e.unit)} • ${new Date(e.ts).toLocaleString('ar-IQ-u-nu-latn')}${e.note?' • '+esc(e.note):''}</div></span><b class="${e.qty>0?'ac-pos':'ac-neg'}">${e.qty>0?'+':'−'}${fmt(Math.round(Math.abs(e.value)))}</b></div>`).join('')||'<div class="ac-empty">لا توجد عمليات</div>'}</div>`;
 }
 
-// ---- الوصفات والتكلفة ----
-function curKey(){const p=menu[acRec.ci].items[acRec.pi];return p.name+'|'+p.variants[acRec.vi].name;}
-function tabRec(){
-  const items=[];menu.forEach((c,ci)=>c.items.forEach((p,pi)=>items.push({ci,pi,label:c.emoji+' '+p.name})));
-  if(!items.length)return '<div class="ac-empty">لا توجد أصناف بالمنيو</div>';
-  if(!menu[acRec.ci]||!menu[acRec.ci].items[acRec.pi])acRec={ci:items[0].ci,pi:items[0].pi,vi:0};
-  const p=menu[acRec.ci].items[acRec.pi];if(acRec.vi>=p.variants.length)acRec.vi=0;
-  const v=p.variants[acRec.vi],key=p.name+'|'+v.name,rec=acc.recipes[key]||[];
-  const cost=unitCost(p.name,v.name),profit=v.price-cost,mg=v.price?Math.round(profit/v.price*100):0;
-  const matOpts=sel=>acc.materials.map(m=>`<option value="${m.id}" ${m.id===sel?'selected':''}>${esc(m.name)}</option>`).join('');
-  const rows=[];menu.forEach(c=>c.items.forEach(it=>it.variants.forEach(vr=>{
-    const k=it.name+'|'+vr.name,cs=unitCost(it.name,vr.name);
-    rows.push({n:it.name+(it.variants.length>1?' — '+vr.name:''),price:vr.price,cost:cs,has:!!((acc.recipes[k]&&acc.recipes[k].length)||acc.costs[k])});
-  })));
-  return `<div class="rcard"><div class="rtitle">🧾 وصفة الصنف وتكلفته</div>
-   <div class="flbl">الصنف</div>
-   <select class="fsel" onchange="recPick(this.value)">${items.map(i=>`<option value="${i.ci}-${i.pi}" ${i.ci===acRec.ci&&i.pi===acRec.pi?'selected':''}>${esc(i.label)}</option>`).join('')}</select>
-   ${p.variants.length>1?`<div class="flbl">الحجم</div><select class="fsel" onchange="acRec.vi=+this.value;renderAcc()">${p.variants.map((x,i)=>`<option value="${i}" ${i===acRec.vi?'selected':''}>${esc(x.name)} — ${fmt(x.price)} د.ع</option>`).join('')}</select>`:`<div class="ac-sub" style="margin-bottom:8px">سعر البيع: ${fmt(v.price)} د.ع</div>`}
-   <div class="flbl">المكونات (الكمية لوجبة واحدة) — تنخصم من المخزن مع كل بيع</div>
-   ${rec.map((r,i)=>{const m=matById(r.mid);return `<div class="ac-ing"><select class="fsel" onchange="recSet(${i},'mid',this.value)">${matOpts(r.mid)}</select><input class="finp" type="number" step="any" min="0" value="${r.q}" onchange="recSet(${i},'q',this.value)"><span class="ac-sub" style="white-space:nowrap">${m?esc(m.unit):''}</span><button class="vdel" onclick="recDel(${i})">✕</button></div>`;}).join('')}
-   <button class="avbtn" onclick="recAdd()">+ إضافة مكوّن</button>
-   ${rec.length?'':`<div class="flbl">أو تكلفة ثابتة للوجبة (إذا ما تريد وصفة)</div><input class="finp" type="number" step="any" min="0" value="${acc.costs[key]||''}" placeholder="د.ع" onchange="recCost(this.value)">`}
-   <div class="rstats"><div class="rstat"><div class="rsv">${fmt(Math.round(cost))}</div><div class="rsl">التكلفة د.ع</div></div>
-   <div class="rstat"><div class="rsv ${profit>=0?'ac-pos':'ac-neg'}">${fmt(Math.round(profit))}</div><div class="rsl">الربح د.ع</div></div>
-   <div class="rstat"><div class="rsv ${mg>=0?'ac-pos':'ac-neg'}">${toA(mg)}٪</div><div class="rsl">هامش الربح</div></div></div></div>
-   <div class="rcard"><div class="rtitle">📊 ربحية كل الأصناف</div>${rows.map(r=>{const mg2=r.price?Math.round((r.price-r.cost)/r.price*100):0;
-     return `<div class="ac-line"><span>${esc(r.n)}${r.has?'':' <span class="ac-bd low">بدون تكلفة</span>'}</span><span><b>${fmt(Math.round(r.price-r.cost))}</b> <span class="ac-sub">(${toA(mg2)}٪)</span></span></div>`;}).join('')}</div>`;
-}
-window.recPick=val=>{const [a,b]=val.split('-').map(Number);acRec={ci:a,pi:b,vi:0};renderAcc();};
-window.recAdd=()=>{if(!ownerOnly())return;if(!acc.materials.length){toast('⚠️ أضف مواد أولاً من تبويب المخزون');return;}
-  const k=curKey();(acc.recipes[k]=acc.recipes[k]||[]).push({mid:acc.materials[0].id,q:0});saveAcc();renderAcc();};
-window.recSet=(i,f,val)=>{if(!ownerOnly())return;const r=acc.recipes[curKey()];if(!r||!r[i])return;if(f==='q')r[i].q=r3(val);else r[i].mid=val;saveAcc();renderAcc();};
-window.recDel=i=>{if(!ownerOnly())return;const k=curKey(),r=acc.recipes[k];if(!r)return;r.splice(i,1);if(!r.length)delete acc.recipes[k];saveAcc();renderAcc();};
-window.recCost=val=>{const k=curKey();if(val===''||!(Number(val)>0))delete acc.costs[k];else acc.costs[k]=r2(val);saveAcc();renderAcc();};
+// ---- الوصفات والتكلفة: صارت بلوحة الإدارة ← «المخزون والحسابات» ← «الأصناف والأرباح» (هنا تنقرا بس لخصم المواد وتكلفة البيع) ----
 
 // ---- المصروفات التشغيلية ----
 let acExpDay=ymd(new Date()),acExpAuto=true;
@@ -2710,7 +2676,7 @@ function tabFin(){
   const lowMats=acc.materials.filter(m=>matStatus(m)!=='ok');
   const cash=f.sales-f.purch+f.pret-f.exp;
   return rangeBar()+
-  (f.noCost?`<div class="ac-row" style="border-color:#d97706"><div class="ac-sub" style="color:#d97706;font-weight:700">⚠️ ${toA(f.noCost)} صنف مباع بدون تكلفة — أضف وصفاتها من تبويب «الوصفات والتكلفة» حتى يطلع الربح بدقة.</div></div>`:'')+
+  (f.noCost?`<div class="ac-row" style="border-color:#d97706"><div class="ac-sub" style="color:#d97706;font-weight:700">⚠️ ${toA(f.noCost)} صنف مباع بدون تكلفة — حط تكلفتها من لوحة الإدارة ← «المخزون والحسابات» ← «الأصناف والأرباح» حتى يطلع الربح بدقة.</div></div>`:'')+
   stmtHTML(f)+
   `<div class="rcard"><div class="rtitle">🏦 التدفق النقدي (تقريبي)</div>
    ${ln('(+) المبيعات المُسلَّمة',fmt(Math.round(f.sales))+' د.ع','ac-pos')}
