@@ -429,7 +429,7 @@ html.store-mode .bnav .nb:not([data-tab="acc"]),html.store-mode .desktop-nav .dn
 html.store-mode .ac-ext{display:none!important}
 .store-note{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:rgba(176,122,74,.12);border:1px solid rgba(176,122,74,.35);color:#8a5a2b;font-size:13.5px;line-height:1.8}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=31">
+<link rel="stylesheet" href="pos-pro.css?v=32">
 <script src="device.js?v=2"></script>
 <script src="ask.js?v=2"></script>
 </head>
@@ -527,6 +527,7 @@ html.store-mode .ac-ext{display:none!important}
           </div>
           <div class="shift-warn" id="shiftWarn" onclick="goTab('shift')">⚠️ لا توجد وردية مفتوحة — اضغط لفتح وردية</div>
           <div class="cur-cust" id="curCust"></div>
+          <div class="ord-note" id="ordNote"></div>
           <div class="clist" id="cartList"><div class="cempty">السلة فارغة</div></div>
           <div class="cfoot">
             <div id="cartBreak"></div>
@@ -3089,7 +3090,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=80"></script>
+<script src="pos-pro.js?v=81"></script>
 <script type="module">
 // «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
 if (window.STORE_MODE) {

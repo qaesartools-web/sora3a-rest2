@@ -93,6 +93,8 @@
 
   // ══════════ حالة الكاشير ══════════
   let disc = { type: 'amt', value: 0, reason: '' };
+  // ملاحظة عامة على الطلب كله (الكاشير يكتبها من بداية دك الطلب) — تطلع بتذكرة المطبخ والفاتورة
+  let orderNote = '';
   let prodQuery = '';
   let shift = null;           // الوردية المفتوحة
   let lastSaved = null;       // آخر طلب انحفظ من finalOrder (رقمه لدين الزبون)
@@ -353,9 +355,18 @@ const openVarCore = (ci,ii)=>{
     $('sendBtn').disabled = cart.length === 0;
     $('discBtn').classList.toggle('on', !!t.disc);
     $('discBtn').style.display = can('discount') ? '' : 'none';
+    const on = $('ordNote');
+    if (on) on.innerHTML = orderNote
+      ? `<div class="on-chip" onclick="ordNoteEdit()" title="تعديل">📝 <b>ملاحظة الطلب:</b> ${esc(orderNote)}</div><button type="button" class="on-x" onclick="ordNoteClear()" aria-label="شيل الملاحظة">✕</button>`
+      : `<button type="button" class="on-add" onclick="ordNoteEdit()">📝 ملاحظة على الطلب كله</button>`;
     renderCurCust();
     renderPagers();
   };
+  window.ordNoteEdit = () => {
+    acDialog('📝 ملاحظة على الطلب كله', 'تطلع بتذكرة المطبخ والفاتورة' + (notesArr(settings.quickNotes).length ? ' — ' + notesArr(settings.quickNotes).join(' • ') : ''),
+      [{ id: 'n', label: 'الملاحظة', value: orderNote, ph: 'مثال: الزبون مستعجل / كل شي بدون بصل', list: notesArr(settings.quickNotes) }], (v) => { orderNote = String(v.n || '').trim().slice(0, 200); renderCart(); }, '✅ حفظ');
+  };
+  window.ordNoteClear = () => { orderNote = ''; renderCart(); };
   window.cNote = (i) => {
     const c = cart[i]; if (!c) return;
     acDialog('📝 ملاحظة: ' + c.name, notesArr(settings.quickNotes).join(' • '), [{ id: 'n', label: 'الملاحظة', value: c.note || '' }], (v) => {
@@ -366,9 +377,9 @@ const openVarCore = (ci,ii)=>{
     }, '✅ حفظ');
   };
   window.clearCart = async () => {
-    if (!cart.length && !disc.value) return;
+    if (!cart.length && !disc.value && !orderNote) return;
     if (cart.length && !(await askOk('تفريغ السلة؟'))) return;
-    cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
+    cart = []; disc = { type: 'amt', value: 0, reason: '' }; orderNote = ''; renderCart();
   };
   window.openDiscount = () => {
     if (!can('discount')) { deny(); return; }
@@ -461,12 +472,13 @@ function openDelivModalCore(){
       day: bagDay(),             // يوم الطلب بتوقيت بغداد (لشاشة «طلبك جاهز» بدون فهارس إضافية)
     };
     if (t.disc) { o.discountInfo = { type: disc.type, value: disc.value, reason: disc.reason || '' }; if (disc.loyalty) o.discountInfo.loyalty = true; }
+    if (orderNote) o.note = orderNote;
     // طلب من المنيو الأونلاين أو الويتر
     if (webAttach) {
       o.webId = webAttach.id; o.source = webAttach.source === 'waiter' ? 'waiter' : 'qr';
       if (webAttach.waiter) o.waiter = String(webAttach.waiter).slice(0, 60);
       if (webAttach.waiterUid) o.waiterUid = String(webAttach.waiterUid).slice(0, 128);
-      if (webAttach.note) o.note = String(webAttach.note).slice(0, 500);
+      if (webAttach.note) o.note = [String(webAttach.note), orderNote].filter(Boolean).join(' — ').slice(0, 500);
     }
     applySections(o);
     return o;
@@ -518,7 +530,7 @@ function openDelivModalCore(){
     else printOrderAll({ id: ref.id, ...o }, receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen && !o.kSec));
     const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: later ? '🏍️ دلفري قيد التحضير — لما يجهز حوّله للكابتن' : '🏍️ دلفري — ' + (captain ? captain.name : '') };
     toast('✅ تم — ' + names[type] + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : '') + (pay && pay.payment.change ? ' • الباقي ' + money(pay.payment.change) : ''));
-    cart = cart.filter((c) => !sold.includes(c)); if (disc === discUsed) disc = { type: 'amt', value: 0, reason: '' }; renderCart();
+    cart = cart.filter((c) => !sold.includes(c)); if (disc === discUsed) disc = { type: 'amt', value: 0, reason: '' }; orderNote = ''; renderCart();
     lastSaved = { id: ref.id, ...o };
     return ref.id;
   };
@@ -531,7 +543,7 @@ function openDelivModalCore(){
     const f = fb(), ref = f.doc(f.collection(f.db, 'orders'));
     const o = baseOrder('takeaway', t, items);
     const num_ = o.ticketNo;          // نفس رقم الطلب اللي يطلع بشاشة المجهز و«طلبك جاهز» (مو عدّاد خاص بالجهاز)
-    Object.assign(o, { held: true, holdNum: num_, customer: info.name || ('سفري #' + num_), phone: info.phone || '', note: info.note || '',
+    Object.assign(o, { held: true, holdNum: num_, customer: info.name || ('سفري #' + num_), phone: info.phone || '', note: [o.note, info.note].filter(Boolean).join(' — ').slice(0, 500),
       status: 'preparing', timeline: [{ status: 'preparing', time: now, text: 'تم إنشاء الطلب — قيد التحضير' }] });
     if (pagerSel && feat('pager')) { o.pager = pagerSel; pagerSel = 0; }
     f.setDoc(ref, o).catch((e) => toast('❌ تعذر حفظ الطلب: ' + (e.code || e.message)));
@@ -542,7 +554,7 @@ function openDelivModalCore(){
     if (o.kSec) printOrderAll({ id: ref.id, ...o }, null);
     else printSlip('🍳 تذكرة مطبخ #' + num_, { id: ref.id, ...o }, items, t.total, 'المجموع', o.note);
     toast('🍳 حُفظ الطلب #' + num_ + ' — قيد التحضير' + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : ''));
-    cart = cart.filter((c) => !sold.includes(c)); disc = { type: 'amt', value: 0, reason: '' }; renderCart();
+    cart = cart.filter((c) => !sold.includes(c)); disc = { type: 'amt', value: 0, reason: '' }; orderNote = ''; renderCart();
   };
 
   // التسليم للزبون: يطلب الدفع إن لم يُدفع
@@ -743,7 +755,20 @@ function orderActionsCore(o){
   window.posReceiptLogo = rLogo;
   const rLogoPv = () => { const l = rLogo(); return l ? `<img src="${l}" alt="">` : '<span class="ac-sub">ماكو شعار — يتحط من برج سرعة (المطعم ← الفاتورة)</span>'; };
   const prnW = () => (settings.paper === 58 ? 210 : 300);
-  const prnZ = (n) => Math.round(n * (settings.paper === 58 ? 0.8 : 1) * 10) / 10 + 'px';
+  // قياسات الفاتورة (يحددها برج سرعة لكل مطعم: restaurants/{id}/theme/receipt.cfg) — حتى المطعم يقلل الورق
+  const RCFG0 = { scale: 100, kScale: 100, logo: 120, logoW: 40, num: 24, gap: 100, border: 1.6, show: { sub: true, phones: true, inv: true, pager: true, pay: true, footer: true, brand: true } };
+  const clampN = (v, a, b, d) => { v = Number(v); return Number.isFinite(v) ? Math.min(b, Math.max(a, v)) : d; };
+  const rCfg = () => {
+    const c = lsGet('pos_rcfg_' + rid(), null) || {};
+    const sh = { ...RCFG0.show, ...(c.show && typeof c.show === 'object' ? c.show : {}) };
+    return { scale: clampN(c.scale, 60, 150, 100), kScale: clampN(c.kScale, 60, 160, 100), logo: clampN(c.logo, 0, 220, 120), logoW: clampN(c.logoW, 20, 60, 40),
+      num: clampN(c.num, 14, 56, 24), gap: clampN(c.gap, 30, 160, 100), border: clampN(c.border, 0.8, 3, 1.6), show: sh };
+  };
+  window.posReceiptCfg = rCfg;
+  const paperF = () => (settings.paper === 58 ? 0.8 : 1);
+  const prnZ = (n) => Math.round(n * paperF() * rCfg().scale / 100 * 10) / 10 + 'px';
+  const prnK = (n) => Math.round(n * paperF() * rCfg().kScale / 100 * 10) / 10 + 'px';
+  const prnG = (n) => Math.round(n * rCfg().gap / 100 * 10) / 10 + 'px';
   const prnFont = "@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800;900&display=swap');";
   const prnDate = (o) => { const d = new Date(o.createdAtMs || Date.now()); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate(); };
   const prnTime = (o) => { if (o.createdAt && /^\d{1,2}:\d{2}$/.test(String(o.createdAt).trim())) return t12(o.createdAt); const d = new Date(o.createdAtMs || Date.now()); return t12(d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0')); };
@@ -752,22 +777,22 @@ function orderActionsCore(o){
   // خانة: عنوان + قيمة (bx = مربع، big = رقم كبير)
   const fld = (label, val, cls) => `<div class="f"><div class="l">${esc(label)}</div><div class="v ${cls || ''}">${val}</div></div>`;
   function kTicketCss(W) {
-    const z = prnZ;
-    return `.kt2{font-family:'Tajawal',Arial,sans-serif;direction:rtl;width:${W}px;padding:6px 4px;color:#000;font-weight:800;line-height:1.3;box-sizing:border-box}
+    const z = prnK, g = prnG, bw = rCfg().border + 0.2 + 'px';
+    return `.kt2{font-family:'Tajawal',Arial,sans-serif;direction:rtl;width:${W}px;padding:${g(6)} 4px;color:#000;font-weight:800;line-height:1.3;box-sizing:border-box}
       .kt2 *{margin:0;padding:0;box-sizing:border-box;color:inherit}
-      .kt2 .bar{background:#000;color:#fff;text-align:center;font-size:${z(18)};font-weight:900;padding:4px;margin-bottom:6px}
-      .kt2 .ttl{text-align:center;font-size:${z(17)};font-weight:900;border:2px solid #000;padding:3px;margin-bottom:6px}
-      .kt2 .grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px}
+      .kt2 .bar{background:#000;color:#fff;text-align:center;font-size:${z(18)};font-weight:900;padding:${g(4)};margin-bottom:${g(6)}}
+      .kt2 .ttl{text-align:center;font-size:${z(17)};font-weight:900;border:${bw} solid #000;padding:${g(3)};margin-bottom:${g(6)}}
+      .kt2 .grid{display:grid;grid-template-columns:1fr 1fr;gap:${g(5)} 10px}
       .kt2 .f .l{font-size:${z(14)};font-weight:800;margin-bottom:2px}
-      .kt2 .f .v{border:1.8px solid #000;text-align:center;font-size:${z(16)};font-weight:900;padding:3px 4px;min-height:${z(28)}}
+      .kt2 .f .v{border:${bw} solid #000;text-align:center;font-size:${z(16)};font-weight:900;padding:${g(3)} 4px;min-height:${z(28)}}
       .kt2 .f .v.big{font-size:${z(26)};line-height:1.1}
-      .kt2 .nt{margin-top:6px;font-size:${z(15)};font-weight:800}
-      .kt2 table{width:100%;border-collapse:collapse;margin-top:8px}
-      .kt2 th,.kt2 td{border:1.6px solid #000;padding:4px;font-size:${z(16)};font-weight:900;vertical-align:middle}
+      .kt2 .nt{margin-top:${g(6)};font-size:${z(15)};font-weight:800}
+      .kt2 table{width:100%;border-collapse:collapse;margin-top:${g(8)}}
+      .kt2 th,.kt2 td{border:${bw} solid #000;padding:${g(4)} 4px;font-size:${z(16)};font-weight:900;vertical-align:middle}
       .kt2 th{font-size:${z(14.5)}}
       .kt2 td.q{text-align:center;width:16%;font-size:${z(19)}}
       .kt2 td.m{width:30%;font-size:${z(13.5)};font-weight:800}
-      .kt2 .oth{margin-top:6px;font-size:${z(13)};font-weight:700}`;
+      .kt2 .oth{margin-top:${g(6)};font-size:${z(13)};font-weight:700}`;
   }
   // تذكرة المطبخ (لكل قسم، أو كاملة، أو ورقة «إضافة على الطلب»)
   function kTicketHTML(o, items, opt = {}) {
@@ -796,31 +821,31 @@ function orderActionsCore(o){
     const type = getOrderType(o);
     const sub_ = o.subtotal != null ? o.subtotal : items.reduce((s, i) => s + (i.price || 0) * i.qty, 0);
     const p = (pay && pay.payment) || o.payment || {};
-    const W = prnW(), z = prnZ;
-    const logo = settings.receiptLogo === false ? '' : rLogo();
+    const W = prnW(), z = prnZ, g = prnG, C = rCfg(), sh = C.show, bw = C.border + 'px', bw2 = C.border + 0.4 + 'px';
+    const logo = settings.receiptLogo === false || !C.logo ? '' : rLogo();
     const css = `${prnFont}
-      *{margin:0;padding:0;box-sizing:border-box;color:inherit}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:6px 4px;width:${W}px;color:#000;font-weight:700;line-height:1.3}
-      .hd{display:flex;align-items:center;gap:8px;margin-bottom:6px}.hd .nm{flex:1;text-align:center}
+      *{margin:0;padding:0;box-sizing:border-box;color:inherit}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:${g(6)} 4px;width:${W}px;color:#000;font-weight:700;line-height:1.3}
+      .hd{display:flex;align-items:center;gap:8px;margin-bottom:${g(6)}}.hd .nm{flex:1;text-align:center}
       .hd .nm b{display:block;font-size:${z(logo ? 21 : 24)};font-weight:900;line-height:1.15}.hd .nm .ph{display:block;font-size:${z(16)};font-weight:800;direction:ltr}
-      .hd .nm .sb{display:block;font-size:${z(13.5)};font-weight:700}.hd .lg{width:40%;flex:none;text-align:center}.hd .lg img{max-width:100%;max-height:120px}
-      .grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin:4px 0 2px}
+      .hd .nm .sb{display:block;font-size:${z(13.5)};font-weight:700}.hd .lg{width:${C.logoW}%;flex:none;text-align:center}.hd .lg img{max-width:100%;max-height:${C.logo}px}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:${g(5)} 10px;margin:${g(4)} 0 ${g(2)}}
       .f .l{font-size:${z(13.5)};font-weight:800;margin-bottom:1px}.f .v{font-size:${z(15)};font-weight:800;text-align:center}
-      .f .v.bx{border:1.8px solid #000;padding:2px 4px;min-height:${z(26)}}.f .v.big{font-size:${z(24)};font-weight:900;line-height:1.1}
-      .wide{font-size:${z(14)};font-weight:800;margin-top:3px}
-      table.it{width:100%;border-collapse:collapse;margin-top:8px}table.it th,table.it td{border:1.6px solid #000;padding:3px 4px;font-size:${z(14.5)};font-weight:800;vertical-align:middle}
+      .f .v.bx{border:${bw2} solid #000;padding:${g(2)} 4px;min-height:${z(26)}}.f .v.big{font-size:${Math.round(C.num * paperF() * C.scale / 100)}px;font-weight:900;line-height:1.1}
+      .wide{font-size:${z(14)};font-weight:800;margin-top:${g(3)}}
+      table.it{width:100%;border-collapse:collapse;margin-top:${g(8)}}table.it th,table.it td{border:${bw} solid #000;padding:${g(3)} 4px;font-size:${z(14.5)};font-weight:800;vertical-align:middle}
       table.it th{font-weight:900}table.it td.q,table.it td.p{text-align:center;white-space:nowrap}table.it td.q{width:15%}table.it td.p{width:25%}
       table.it td small{display:block;font-size:${z(12.5)};font-weight:700}
-      .row{display:flex;justify-content:space-between;font-size:${z(14)};font-weight:800;margin:3px 2px 0;gap:6px}
-      .tot{display:flex;width:86%;margin:8px auto 0;border:2px solid #000}.tot span{flex:1;text-align:center;padding:4px;font-size:${z(20)};font-weight:900}.tot span+span{border-right:2px solid #000}
-      .foot{text-align:center;font-size:${z(14)};font-weight:800;margin-top:8px}.pb{page-break-before:always}`;
+      .row{display:flex;justify-content:space-between;font-size:${z(14)};font-weight:800;margin:${g(3)} 2px 0;gap:6px}
+      .tot{display:flex;width:86%;margin:${g(8)} auto 0;border:${bw2} solid #000}.tot span{flex:1;text-align:center;padding:${g(4)};font-size:${z(20)};font-weight:900}.tot span+span{border-right:${bw2} solid #000}
+      .foot{text-align:center;font-size:${z(14)};font-weight:800;margin-top:${g(8)}}.pb{page-break-before:always}`;
     const deliv = type === 'delivery';
     const due = deliv && o.fee ? (o.value || 0) + (o.fee || 0) : (o.value || 0);
-    const rcpt = `<div class="hd"><div class="nm"><b>${esc(title)}</b>${phones.map((x) => `<span class="ph">${esc(x)}</span>`).join('')}${subL ? `<span class="sb">${esc(subL)}</span>` : ''}</div>${logo ? `<div class="lg"><img src="${logo}" alt=""></div>` : ''}</div>
+    const rcpt = `<div class="hd"><div class="nm"><b>${esc(title)}</b>${sh.phones ? phones.map((x) => `<span class="ph">${esc(x)}</span>`).join('') : ''}${subL && sh.sub ? `<span class="sb">${esc(subL)}</span>` : ''}</div>${logo ? `<div class="lg"><img src="${logo}" alt=""></div>` : ''}</div>
       <div class="grid">${fld('نوع الطلب:', esc(prnType(o, captain)))}${fld('رقم الطلب:', '#' + esc(String(kNum(o))), 'bx big')}
         ${fld('التاريخ:', esc(prnDate(o)))}${fld('الوقت:', esc(prnTime(o)))}
-        ${fld('رقم الفاتورة:', esc(prnInv(o)))}${o.pager || Number(settings.pagers) > 0 ? fld('رقم البيجر:', esc(String(o.pager || '')), 'bx') : o.byName ? fld('الكاشير:', esc(o.byName)) : '<div></div>'}</div>
+        ${sh.inv ? fld('رقم الفاتورة:', esc(prnInv(o))) : ''}${sh.pager && (o.pager || Number(settings.pagers) > 0) ? fld('رقم البيجر:', esc(String(o.pager || '')), 'bx') : o.byName && sh.inv ? fld('الكاشير:', esc(o.byName)) : sh.inv ? '<div></div>' : ''}</div>
       ${o.customer && deliv ? `<div class="wide">الزبون: ${esc(o.customer)}</div>` : ''}${o.phone ? `<div class="wide">الهاتف: <span dir="ltr">${esc(o.phone)}</span></div>` : ''}
-      ${o.address && deliv ? `<div class="wide">العنوان: ${esc(o.address)}</div>` : ''}
+      ${o.address && deliv ? `<div class="wide">العنوان: ${esc(o.address)}</div>` : ''}${o.note ? `<div class="wide">ملاحظة: ${esc(o.note)}</div>` : ''}
       <table class="it"><tr><th>اسم الصنف</th><th>الكمية</th><th>السعر</th></tr>
         ${items.map((i) => `<tr><td>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<small>${esc(i.note)}</small>` : ''}</td><td class="q">${esc(String(i.qty))}</td><td class="p">${fmt((i.price || 0) * i.qty)}</td></tr>`).join('')}</table>
       ${o.discount ? `<div class="row"><span>المجموع</span><span>${fmt(sub_)}</span></div><div class="row"><span>خصم${o.discountInfo && o.discountInfo.reason ? ' (' + esc(o.discountInfo.reason) + ')' : ''}</span><span>-${fmt(o.discount)}</span></div>` : ''}
@@ -829,12 +854,12 @@ function orderActionsCore(o){
       ${deliv && o.fee ? `<div class="row"><span>الطلب</span><span>${fmt(o.value)}</span></div><div class="row"><span>أجور التوصيل</span><span>${fmt(o.fee)}</span></div>` : ''}
       ${deliv && o.fee === 0 ? `<div class="row"><span>التوصيل</span><span>مجاني</span></div>` : ''}
       <div class="tot"><span>${deliv ? 'المطلوب' : 'الصافي'}</span><span>${fmt(due)}</span></div>
-      ${p.method ? `<div class="row" style="margin-top:6px"><span>طريقة الدفع</span><span>${esc(PAY_AR[p.method] || p.method)}</span></div>` : ''}
+      ${p.method && sh.pay ? `<div class="row" style="margin-top:${g(6)}"><span>طريقة الدفع</span><span>${esc(PAY_AR[p.method] || p.method)}</span></div>` : ''}
       ${p.card && p.method === 'mixed' ? `<div class="row"><span>بطاقة</span><span>${fmt(p.card)}</span></div>` : ''}
       ${p.method === 'credit' && p.cust ? `<div class="row"><span>على حساب</span><span>${esc(p.cust.name)}${p.cust.phone ? ' • ' + esc(p.cust.phone) : ''}</span></div>` : ''}
-      ${p.received && (p.method === 'cash' || p.method === 'mixed') ? `<div class="row"><span>المستلم نقداً</span><span>${fmt(p.received)}</span></div><div class="row"><span>الباقي</span><span>${fmt(p.change || 0)}</span></div>` : ''}
-      ${settings.receiptFooter ? `<div class="foot">${esc(settings.receiptFooter)}</div>` : ''}
-      ${window.SB ? SB.receipt() : ''}`;
+      ${sh.pay && p.received && (p.method === 'cash' || p.method === 'mixed') ? `<div class="row"><span>المستلم نقداً</span><span>${fmt(p.received)}</span></div><div class="row"><span>الباقي</span><span>${fmt(p.change || 0)}</span></div>` : ''}
+      ${settings.receiptFooter && sh.footer ? `<div class="foot">${esc(settings.receiptFooter)}</div>` : ''}
+      ${window.SB && sh.brand ? SB.receipt() : ''}`;
     const kt = withKitchen ? `<div class="pb">${kTicketHTML(o, items)}</div>` : '';
     return `<html><head><meta charset="UTF-8"><style>${css}</style></head><body>${rcpt}${kt}</body></html>`;
   }
@@ -1306,7 +1331,9 @@ const showMTabCore = tab=>{
         <div class="flbl">⏱️ شاشة المطبخ: الطلب يصير أصفر بعد كم دقيقة، وأحمر (متأخر) بعد كم دقيقة</div>
         <div class="set-row"><div><input class="finp" id="stKWarn" type="number" min="1" max="120" value="${esc(s.kWarn || 10)}" placeholder="أصفر"></div><div><input class="finp" id="stKLate" type="number" min="2" max="240" value="${esc(s.kLate || 20)}" placeholder="أحمر"></div></div>
         <div class="flbl">الأقسام (اترك الاسم فارغاً لإلغاء القسم)</div>
-        ${part(() => secArr(s.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join(''))}
+        <div id="secRows">${part(() => secArr(s.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join(''))}</div>
+        <button type="button" class="btn-soft" style="width:100%;margin-top:6px" onclick="secAddRow()">➕ إضافة قسم (طابعة ثانية)</button>
+        <div class="ac-sub" style="margin-top:4px;line-height:1.7">كل قسم إله طابعته (تختارها تحت). تكدر تضيف لحد ٣٠ قسم — اكتب الاسم واضغط «حفظ»، بعدها يطلع بقائمة الفئات والطابعات.</div>
         <div class="flbl" style="margin-top:10px">كل فئة بالمنيو تابعة لأي قسم؟</div>
         ${part(() => (Array.isArray(menu) ? menu : []).filter((c) => c && c.cat).map((c, i) => `<div class="set-row"><div class="sec-cat">${esc(c.emoji || '')} ${esc(c.cat)}</div><div><select class="fsel" id="stCat${i}" data-cat="${esc(c.cat)}"><option value="">— بدون قسم (لا تُطبع بالمطبخ) —</option>${secArr(s.sections || []).filter((x) => x.name).map((x) => `<option value="${esc(x.id)}" ${(s.catSection || {})[c.cat] === x.id ? 'selected' : ''}>${esc(x.emoji || '')} ${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<div class="ac-sub">أضف فئات للمنيو أولاً</div>')}
         <div id="secHealth" class="sec-health"></div>
@@ -1587,6 +1614,17 @@ const ordCancelCore = id=>{
   // ══════════ أقسام المطبخ (شاورما، كنتاكي، برغر، بيتزا...) ══════════
   // كل صنف يتبع قسم فئته بالمنيو. الطلب يتقسم: كل قسم يطبع أصنافه فقط، ورقم الطلب يوحّد الكل.
   const secList = () => secArr(settings.sections || []).filter((x) => x.name);
+  // قسم جديد (طابعة جديدة): صف فارغ ينحفظ ويا الإعدادات — لحد ٣٠ قسم
+  window.secAddRow = () => {
+    const arr = secArr(settings.sections || []);
+    if (arr.length >= 30) { toast('⚠️ الحد ٣٠ قسم'); return; }
+    let k = arr.length + 1; while (arr.some((x) => x.id === 'k' + k)) k++;
+    arr.push({ id: 'k' + k, name: '', emoji: '🍽️' });
+    settings.sections = arr;
+    const i = arr.length - 1, box = $('secRows'); if (!box) return;
+    box.insertAdjacentHTML('beforeend', `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="🍽️" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="" placeholder="اسم القسم"></div></div>`);
+    const n = $('stSecN' + i); if (n) n.focus();
+  };
   function secById(id) { return secList().find((x) => x.id === id); }
   const secOn = () => !!settings.kSecOn && secList().length > 0;
   function secOfItem(name) {
@@ -1770,6 +1808,7 @@ const ordCancelCore = id=>{
       if (receipt) jobs.push(deskPrint(receipt, c.main, '🧾 فاتورة #' + kNum(o), c.receiptCopies));
       for (const sid of secs) {
         const sc = secById(sid) || { name: sid };
+        if ((c.printers || {})[sid] === DP_NONE) continue;   // الكاشير اختار «لا تطبع هالقسم»
         jobs.push(deskPrint(docOf(secTicketBody(o, sid)), (c.printers || {})[sid] || c.main, '👨‍🍳 ' + sc.name + ' #' + kNum(o), (c.copies || {})[sid]));
       }
       await Promise.all(jobs);
@@ -1847,7 +1886,8 @@ const ordCancelCore = id=>{
   setInterval(() => {
     if (deskUpdV && DESK && DESK.installUpdate && deskIdle() && Date.now() - deskAct > (window.deskIdleMs || 5 * 60000)) { deskAct = Date.now(); Promise.resolve(DESK.installUpdate()).catch(() => {}); }
   }, window.deskTickMs || 60000);
-  const dpOpt = (list, cur, emptyLabel) => '<option value="">' + emptyLabel + '</option>' + [...new Set([...list.map((p) => p.name), cur].filter(Boolean))]
+  const DP_NONE = '__none';   // قسم بدون طباعة (بدل ما ينطبع على الطابعة الرئيسية)
+  const dpOpt = (list, cur, emptyLabel, none) => '<option value="">' + emptyLabel + '</option>' + (none ? `<option value="${DP_NONE}" ${cur === DP_NONE ? 'selected' : ''}>— لا تطبع هالقسم —</option>` : '') + [...new Set([...list.map((p) => p.name), cur].filter((x) => x && x !== DP_NONE))]
     .map((n) => { const p = list.find((x) => x.name === n); const st = !p ? ' — ❓ مو موجودة' : p.ok ? '' : ' — ⚠️ ' + p.statusText;
       return `<option value="${esc(n)}" ${n === cur ? 'selected' : ''}>${esc(n)}${p && p.isDefault ? ' (الافتراضية)' : ''}${st}</option>`; }).join('');
   window.dpFind = async (quiet) => {
@@ -1855,7 +1895,7 @@ const ordCancelCore = id=>{
     const list = await DESK.printers().catch(() => []);
     const c = dpCfg();
     const m = $('dpMain'); if (m) m.innerHTML = dpOpt(list, m.value || c.main, '— الطابعة الافتراضية للويندوز —');
-    secList().forEach((x) => { const sel = $('dpP_' + x.id); if (sel) sel.innerHTML = dpOpt(list, sel.value || (c.printers || {})[x.id] || '', '— نفس الطابعة الرئيسية —'); });
+    secList().forEach((x) => { const sel = $('dpP_' + x.id); if (sel) sel.innerHTML = dpOpt(list, sel.value || (c.printers || {})[x.id] || '', '— نفس الطابعة الرئيسية —', true); });
     const st = $('dpStatus');
     if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}${p.textOnly ? ' <small title="تعريف الطابعة نصي (Generic / Text Only) — البرنامج يطبعلها الورقة صورة حتى العربي يطلع صحيح">🖼️ تنطبع كصورة</small>'
         : DESK.canImageMode && DESK.setImageMode ? ` <button type="button" class="dp-img${p.image ? ' on' : ''}" data-n="${esc(p.name)}" data-on="${p.image ? '' : '1'}" onclick="dpImg(this.dataset.n, !!this.dataset.on)" title="إذا الفاتورة تطلع غلط أو تضيّع ورق بتعريف هالطابعة: البرنامج يطبعها صورة مباشرة">${p.image ? '🖼️ تنطبع كصورة ✓' : '🖼️ اطبع كصورة'}</button>` : ''}${p.kind === 'lan' && DESK.removePrinter ? ` <button type="button" class="dp-x" title="شيل الطابعة" onclick="dpRemoveNet(this.dataset.n)" data-n="${esc(p.name)}">✕</button>` : ''}</span>`).join('')
@@ -2103,6 +2143,8 @@ const ordCancelCore = id=>{
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', rid(), 'theme', 'receipt'), (s) => {
       const v = s.exists() ? String(s.data().data || '') : '';
       if (/^data:image\/(png|jpeg|webp);base64,/.test(v)) lsSet(rLogoKey(), v); else if (!s.metadata.fromCache) lsSet(rLogoKey(), '');
+      const cf = s.exists() ? s.data().cfg : null;
+      if (cf && typeof cf === 'object') lsSet('pos_rcfg_' + rid(), cf); else if (!s.metadata.fromCache) lsSet('pos_rcfg_' + rid(), null);
       const pv = $('stLogoPv'); if (pv) pv.innerHTML = rLogoPv();
     }, () => {}));
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', rid()), (s) => {
@@ -2132,10 +2174,15 @@ const ordCancelCore = id=>{
   const extUntil = (u) => (u.hoursExt && Number(u.hoursExt.untilMs)) || 0;
   const extOn = (u) => extUntil(u) > Date.now();
   const bagMinOf = (ms) => (Math.floor(ms / 60000) + 180) % 1440;
-  // نهاية اليوم بتوقيت بغداد: نص الليل (وإذا هسه بعد نص الليل: ٥ الصبح)
+  // «لنهاية اليوم» = نهاية دوام المطعم (وقت الإغلاق من الإعدادات أو برج سرعة) — حتى لو بعد نص الليل
+  //  قبل: نص الليل ثابت، فإذا دوام الكاشير يخلص قرب ١٢ تختفي «ساعة / ساعتين / ٣» لأنها تعدّي نص الليل
+  //  بدون وقت إغلاق للمطعم: لحد ٥ الصبح. والسيرفر يسمح لحد ٢٠ ساعة قدام
   function endOfDayMs() {
-    const now = Date.now(), m = bagMinOf(now), target = m < 300 ? 300 : 1440;
-    return now - (now % 60000) + (target - m) * 60000;
+    const now = Date.now(), m = bagMinOf(now), base = now - (now % 60000), cap = now + 19.5 * 3600000;
+    const h = bizHours();
+    if (h) { const d = (h.close - m + 1440) % 1440; if (d > 0 && d <= 16 * 60) return Math.min(base + d * 60000, cap); }
+    const target = m < 300 ? 300 : 1440 + 300;
+    return Math.min(base + (target - m) * 60000, cap);
   }
   // نفس شرط السيرفر: من نص ساعة قبل نهاية الدوام لحد ساعة بعدها، أو خلال تمديد (أو خلص قبل أقل من ساعة)
   function canExtend(u) {
@@ -2200,7 +2247,7 @@ const ordCancelCore = id=>{
   const extBtns = () => {
     const eod = endOfDayMs(), opts = [[1, '⏱️ ساعة'], [2, '⏱️ ساعتين'], [3, '⏱️ ٣ ساعات']].filter(([n]) => Date.now() + n * 3600000 < eod);
     return `<div class="ext-grid">${opts.map(([n, l]) => `<button type="button" class="ext-b" onclick="dutyExtend(${n})">${l}</button>`).join('')}
-      <button type="button" class="ext-b eod" onclick="dutyExtend('day')">🌙 لنهاية اليوم <small>لغاية ${hm(bagMinOf(eod))}</small></button></div>`;
+      <button type="button" class="ext-b eod" onclick="dutyExtend('day')">🌙 ${bizHours() ? 'لنهاية دوام المطعم' : 'لنهاية اليوم'} <small>لغاية ${hm(bagMinOf(eod))}</small></button></div>`;
   };
   function askExtend() {
     extAsk = true;
@@ -2278,6 +2325,7 @@ const ordCancelCore = id=>{
     const m = new Map();
     orders.forEach((o) => {
       if (!o.pager || o.pagerDone || o.status === 'cancelled' || Date.now() - (o.createdAtMs || 0) > 12 * 3600000) return;
+      if (!ordMine(o)) return;   // البيجر لكل كاشير: كل كاشير يشوف ويرن على بيجرات طلباته بس (أجهزة البيجر اللي عنده)
       const prev = m.get(o.pager); if (!prev || (o.createdAtMs || 0) > (prev.createdAtMs || 0)) m.set(o.pager, o);
     });
     return m;
@@ -3160,7 +3208,14 @@ const ordCancelCore = id=>{
   // كل كاشير يشوف الطلبات الأونلاين اللي من اختصاصه: التوصيل لكاشير الدلفري، الطاولات (QR والويتر) لكاشير الصالة، الاستلام لسفري قيد التحضير
   //   (الويتر وQR الطاولة ← الصالة؛ QR الاستلام (منها شاشة «طلبك جاهز») ← السفري)
   //  الطاولة: بس طاولات صالة هذا الكاشير (إذا المطعم بيه صالات وصاحب المطعم حدد صالته)
-  const webMine = (w) => (w.mode === 'delivery' ? myPerm('oDeliv') : w.mode === 'table' ? myPerm('oSalon') && hallOk(w.table) : myPerm('oHold') || myPerm('oTake'));
+  // طلب ويتر مربوط بكاشير (من لوحة الإدارة): يطلع لكاشيره بس — وإذا ما استلمه ٣ دقايق يطلع للكل حتى ما يضيع
+  const WEB_TO_ALL = () => window.__webToAll || 3 * 60000;
+  const webToMe = (w) => {
+    const to = Array.isArray(w.toCashiers) ? w.toCashiers.filter(Boolean) : [];
+    if (!to.length || !isCashierRole()) return true;
+    return to.includes((window.posUser && window.posUser.uid) || '') || Date.now() - (w.createdAtMs || Date.now()) > WEB_TO_ALL();
+  };
+  const webMine = (w) => webToMe(w) && (w.mode === 'delivery' ? myPerm('oDeliv') : w.mode === 'table' ? myPerm('oSalon') && hallOk(w.table) : myPerm('oHold') || myPerm('oTake'));
   const webVisible = () => [...webs.values()].filter(webMine);
   // كل طلبات الباركود (الطاولة وشاشة «طلبك جاهز») والويتر تمر على الكاشير أول — ما في طلب يدخل للمطبخ بدون قبوله
   const webAutoOk = () => false;
