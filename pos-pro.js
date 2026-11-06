@@ -20,6 +20,35 @@
   const num = (v) => { const n = Number(String(v ?? '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^\d.]/g, '')); return isFinite(n) ? n : 0; };
   // صلاحيات: صاحب المطعم كل شيء، والكاشير حسب ما يحدده صاحب المطعم من تطبيق الإدارة
   const can = (p) => !window.posUser || window.posUser.role === 'owner' || !!((window.posUser.perms || {})[p]);
+  window.posCanDo = can;
+  // ── سحب للتمرير: شاشات اللمس اللي تشتغل مثل الماوس (أجهزة الكاشير مثل SAM4S) ما تمرّر بالسحب —
+  //  كل قائمة بيها .dscroll تنزل وتصعد بسحب الإصبع/الماوس، والضغطة العادية تبقى ضغطة (الحركة أقل من 8 بكسل)
+  (() => {
+    let el = null, y0 = 0, x0 = 0, top0 = 0, left0 = 0, vx = false, vy = false, moved = false, pid = 0;
+    document.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch' || e.button !== 0) return;   // اللمس الحقيقي يمرّر وحده
+      const t = e.target.closest && e.target.closest('.dscroll');
+      if (!t || e.target.closest('input,textarea,select')) return;
+      vy = t.scrollHeight > t.clientHeight + 2; vx = t.scrollWidth > t.clientWidth + 2;   // ينزل/يصعد، أو للجنب (سطر الأقسام)
+      if (!vx && !vy) return;
+      el = t; y0 = e.clientY; x0 = e.clientX; top0 = t.scrollTop; left0 = t.scrollLeft; moved = false; pid = e.pointerId;
+    }, true);
+    document.addEventListener('pointermove', (e) => {
+      if (!el || e.pointerId !== pid) return;
+      const dy = e.clientY - y0, dx = e.clientX - x0;
+      if (!moved && Math.abs(dy) < 8 && Math.abs(dx) < 8) return;
+      if (!moved) { moved = true; el.classList.add('dragging'); }
+      if (vy) el.scrollTop = top0 - dy;
+      if (vx) el.scrollLeft = left0 - dx;
+      e.preventDefault();
+    }, true);
+    const end = () => {
+      if (!el) return;
+      const was = moved; el.classList.remove('dragging'); el = null;
+      if (was) { const kill = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; document.addEventListener('click', kill, { capture: true, once: true }); setTimeout(() => document.removeEventListener('click', kill, true), 80); }
+    };
+    document.addEventListener('pointerup', end, true); document.addEventListener('pointercancel', end, true);
+  })();
   const deny = () => toast('🔒 ليس لديك صلاحية — اطلبها من صاحب المطعم');
   const deviceId = lsGet('pos_device', null) || (() => { const d = uid('dev'); lsSet('pos_device', d); return d; })();
 
@@ -405,6 +434,7 @@ function openDelivModalCore(){
       $('dPhone').value = curCust.phone;
       if (curCust.data) { $('dName').value = curCust.data.name || ''; $('dAddr').value = curCust.data.address || ''; }
       else if (curCust.label) $('dName').value = curCust.label;
+      if (curCust.edit) { if (curCust.edit.name) $('dName').value = curCust.edit.name; if (curCust.edit.address) $('dAddr').value = curCust.edit.address; }
       showCustHint(curCust.data);
     }
     renderLoyalty();
@@ -1411,17 +1441,15 @@ const showMTabCore = tab=>{
   // الأساس (كان بـ index.html) — نفس الكود
 const ordEditCore = id=>{
   const o=orders.find(x=>x.id===id);if(!o)return;
-  if(!EDITABLE.includes(o.status)){toast(o.status==='delivering'?'🛵 الكابتن بالطريق — ما يمكن تعديل الأصناف':'⚠️ ما يمكن تعديل هذا الطلب');return;}
+  if(!EDITABLE.includes(o.status)){toast('⚠️ الطلب ملغي — ما يتعدّل');return;}
   const base=orderItemsFull(o);
   if(!base.length){toast('⚠️ أصناف هذا الطلب غير محفوظة (طلب قديم)');return;}
+  if(window.viewClose)viewClose();   // نافذة تفاصيل الطلب تتسكّر وتنفتح نافذة التعديل لحالها
   edState={id,o,base:base.map(x=>({...x})),work:base.map(x=>({...x})),restock:['pending','accepted'].includes(o.status)?'return':'waste',pick:{ci:0,pi:0,vi:0},addQty:1};
   renderEd();
 };
-  window.ordEdit = (id) => {
-    const o = orders.find((x) => x.id === id);
-    if (o && capPaidHere(o)) { toast('💵 الطلب مدفوع — أي إضافة سوّيها طلب جديد'); return; }
-    ordEditCore(id);
-  };
+  // كل الطلبات تتعدّل (حتى المدفوع: الفرق يتعدّل بالدفع أو بدين الزبون وحده)
+  window.ordEdit = (id) => { ordEditCore(id); };
   // الأساس (كان بـ index.html) — نفس الكود
 const ordCancelCore = id=>{
   const o=orders.find(x=>x.id===id);if(!o||o.status==='cancelled')return;
@@ -2384,7 +2412,7 @@ const ordCancelCore = id=>{
     const el = $('curCust'); if (!el) return;
     if (!curCust) { el.classList.remove('on'); el.innerHTML = ''; return; }
     el.classList.add('on');
-    el.innerHTML = `<div style="flex:1;min-width:0">📞 <b dir="auto">${esc(curCust.phone || curCust.label || '')}</b> — ${curCust.data ? esc(curCust.data.name || 'زبون') + ' • ' + toA(curCust.data.orders || 0) + ' طلب' + (loyaltyDue(curCust.data) ? '<span class="loy-badge">🎁 يستحق خصم بالدلفري</span>' : '') : 'زبون جديد'}</div><button type="button" title="إلغاء" onclick="clearCurCust()">✕</button>`;
+    el.innerHTML = `<div style="flex:1;min-width:0">📞 <b dir="auto">${esc(curCust.phone || curCust.label || '')}</b> — ${curCust.edit && curCust.edit.name && !curCust.data ? esc(curCust.edit.name) + ' • 🆕 زبون جديد' : curCust.data ? esc((curCust.edit && curCust.edit.name) || curCust.data.name || 'زبون') + ' • ' + toA(curCust.data.orders || 0) + ' طلب' + (loyaltyDue(curCust.data) ? '<span class="loy-badge">🎁 يستحق خصم بالدلفري</span>' : '') : 'زبون جديد'}</div><button type="button" title="إلغاء" onclick="clearCurCust()">✕</button>`;
   }
   window.clearCurCust = () => { curCust = null; renderCart(); };
   // سفري قيد التحضير: نفس التعبئة التلقائية
@@ -2458,7 +2486,7 @@ const ordCancelCore = id=>{
       <div class="call-card">
         <div class="call-top"><span class="call-pulse">📞</span> مكالمة واردة <span class="call-line">خط ${esc(c.line || '—')}</span>
           <button type="button" class="call-x" title="إخفاء" onclick="callHide('${esc(c.id)}')">✕</button></div>
-        <button type="button" class="call-num" onclick="callTake('${esc(c.id)}')" dir="auto">${esc(callLabel(c))}</button>
+        <button type="button" class="call-num" onclick="callInfo('${esc(c.id)}')" dir="auto" title="معلومات الزبون">${esc(callLabel(c))}</button>
         <div class="call-info">${c.data === undefined ? '⏳ جاري البحث عن الزبون…' : custSummary(c.data)}</div>
         <div class="call-btns">
           <button type="button" class="call-go" onclick="callTake('${esc(c.id)}')">✅ استلام وتعبئة</button>
@@ -2510,6 +2538,36 @@ const ordCancelCore = id=>{
   // ✕: البطاقة تختفي من هذا الكاشير بس (تبقى بالذاكرة مخفية حتى نفس المكالمة ما ترجع تطلع من الطريق الثاني) —
   //  وإذا الزبون رجع اتصل تطلع بطاقة جديدة وترن
   window.callHide = (id) => { const c = calls.get(id); if (c) c.hidden = true; if (!callsShown().length) clearInterval(callRingT); renderCalls(); };
+  // ضغطة على رقم المتصل: معلومات الزبون (الاسم والعنوان وطلباته) — يكمّلها أو يصححها، و«اطلب الأصناف» يفتح الكاشير والزبون معبّأ
+  window.callInfo = async (id) => {
+    const c = calls.get(id); if (!c) return;
+    const d = c.data === undefined ? await getCustomer(c.number) : c.data;
+    if (calls.get(id)) { calls.get(id).data = d; }
+    const ph = callPhone(c), f = favs(d, 5);
+    const last = d && (d.lastItems || []).length ? d.lastItems.map((i) => esc(i.name) + (i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : '') + ' ×' + toA(i.qty || 1)).join('، ') : '';
+    const box = $('callInfoBody'); if (!box) return;
+    box.dataset.id = id;
+    box.innerHTML = `<div class="ci-num" dir="ltr">${esc(ph || callLabel(c))}</div>
+      <div class="ci-sub">📞 خط ${esc(c.line || '—')}${d ? ' • ⭐ ' + toA(d.orders || 0) + ' طلب' + (d.spent ? ' • ' + money(d.spent) : '') + (d.lastOrderAt ? ' • آخر طلب ' + ago(d.lastOrderAt) : '') : ' • 🆕 زبون جديد'}${loyaltyDue(d) ? '<span class="loy-badge">🎁 يستحق خصم بالدلفري</span>' : ''}</div>
+      <label class="dlbl" for="ciName">👤 اسم الزبون</label><input class="dinp" id="ciName" value="${esc((d && d.name) || (ph ? '' : callLabel(c)))}" placeholder="مثال: أبو علي">
+      <label class="dlbl" for="ciAddr">📍 العنوان</label><textarea class="dinp" id="ciAddr" rows="2" placeholder="المنطقة، الشارع، أقرب نقطة دالة">${esc((d && d.address) || '')}</textarea>
+      ${last ? `<div class="ci-box"><b>🧾 آخر طلب</b>${last}</div>` : ''}
+      ${f.length ? `<div class="ci-box"><b>❤️ يطلب دائماً</b>${f.map(([n, q]) => esc(n) + ' ×' + toA(q)).join('، ')}</div>` : ''}
+      <button type="button" class="confbtn" onclick="callInfoGo(false)">✅ تمام — اطلب الأصناف للزبون</button>
+      ${last ? `<button type="button" class="ac-b ci-rep" onclick="callInfoGo(true)">🔁 كرر آخر طلب</button>` : ''}
+      <button type="button" class="cancel" onclick="callInfoClose()">رجوع</button>`;
+    $('callInfoOv').classList.add('on');
+    setTimeout(() => { const n = $('ciName'); if (n && !n.value) n.focus(); }, 60);
+  };
+  window.callInfoClose = () => { const o = $('callInfoOv'); if (o) o.classList.remove('on'); };
+  window.callInfoGo = async (repeat) => {
+    const box = $('callInfoBody'), id = box && box.dataset.id; if (!id) return;
+    const name = ($('ciName') || {}).value || '', addr = ($('ciAddr') || {}).value || '';
+    callInfoClose();
+    await callTake(id, repeat);
+    // اللي كتبه الكاشير يمشي ويا الطلب (نموذج الدلفري يتعبّى بيه، وينحفظ للزبون ويا الطلب)
+    if (curCust) { curCust.edit = { name: name.trim().slice(0, 60), address: addr.trim().slice(0, 200) }; renderCart(); }
+  };
   window.callTake = async (id, repeat) => {
     const c = calls.get(id); if (!c) return;
     calls.delete(id); clearInterval(callRingT); renderCalls();

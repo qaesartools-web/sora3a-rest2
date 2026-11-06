@@ -385,3 +385,71 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 .store-net{position:fixed;left:50%;bottom:calc(64px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:9000;max-width:calc(100% - 24px);padding:9px 14px;border-radius:12px;font-size:13px;font-weight:700;line-height:1.6;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.18)}
 .store-net.off{background:#FFF7E6;color:#8A5300;border:1px solid #F5C26B}
 .store-net.sync{background:#E8F7EE;color:#15803d;border:1px solid #B7E6C8}
+
+/* ══ نافذة تعديل الطلب: وحدة على قد الشاشة — بدون تمرير الصفحة ══
+   الطلب (الصفحة الصغيرة) يم الأصناف بالحاسبة وفوكها بالتلفون؛ الأصناف بس تنزل (بالسحب أو العجلة) */
+.ed-box{max-width:min(1060px,97vw)!important;width:100%;height:min(92vh,820px);max-height:94vh!important;display:flex;flex-direction:column;overflow:hidden!important;padding:12px 14px!important;text-align:right}
+.ed-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;flex:none}
+.ed-tit{flex:1;font-weight:900;font-size:17px;line-height:1.4}
+.ed-tit small{display:block;font-weight:600;font-size:12.5px;color:var(--muted)}
+.ed-x{flex:none;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:inherit;font-size:18px;font-weight:900;cursor:pointer}
+.ed-main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(270px,34%) 1fr;gap:12px}
+.ed-main>*{min-width:0}
+.ed-order{display:flex;flex-direction:column;min-height:0;border:1px solid var(--line);border-radius:14px;padding:10px;background:var(--panel2)}
+.ed-otit{font-weight:900;font-size:14px;display:flex;justify-content:space-between;margin-bottom:6px}
+.ed-otit span{color:var(--muted);font-weight:700;font-size:12.5px}
+.ed-lines{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+.ed-line{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:10px;background:var(--panel);border:1px solid var(--line)}
+.ed-ln{flex:1;min-width:0;font-weight:800;font-size:14px;line-height:1.35}
+.ed-ln small{display:block;color:var(--muted);font-weight:600;font-size:12px}
+.ed-q{display:flex;align-items:center;gap:5px;flex:none}
+.ed-q .ac-b{min-width:34px;height:34px;flex:none;padding:0;font-size:16px}
+.ed-q b{min-width:22px;text-align:center;font-size:15px}
+.ed-tot{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;flex:none}
+.ed-tot span{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:12px;color:var(--muted);font-weight:700}
+.ed-tot b{display:block;font-size:16px;color:var(--text,inherit)}
+.ed-paid{margin-top:6px;padding:7px 9px;border-radius:10px;background:rgba(217,119,6,.10);border:1px solid rgba(217,119,6,.35);font-size:12.5px;font-weight:700;color:#b45309;flex:none}
+.ed-rs,.ed-kt{margin-top:6px;flex:none;font-size:13px}
+.ed-act{flex:none;margin-top:8px}
+.ed-act .confbtn{margin:0}
+.ed-act2{display:flex;gap:6px;margin-top:6px}
+.ed-act2 .ac-b{flex:1;height:40px}
+.ed-pick{display:flex;flex-direction:column;min-height:0}
+.ed-pick .finp{flex:none;margin:0}
+.ed-box .ed-cats{flex-wrap:wrap;overflow:visible;white-space:normal;gap:6px;margin:8px 0;flex:none}
+.ed-box .ed-cats>*{margin:0}
+.ed-box .ed-cat{padding:8px 14px;font-size:14px}
+.ed-box .ed-grid{flex:1;min-height:0;max-height:none;overflow-y:auto;align-content:start;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));padding:2px}
+.ed-box .ed-it{min-height:64px;justify-content:center;font-size:14.5px;user-select:none;-webkit-user-select:none}
+.dscroll{overscroll-behavior:contain}
+.dscroll.dragging,.dscroll.dragging *{cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important}
+/* نافذة التعديل مفتوحة: بطاقات المكالمة والكابتن تنتقل يسار (فوك الأصناف) حتى ما تغطي الطلب وزر الحفظ */
+body.ed-open .calls{right:auto;left:16px}
+@media(max-width:720px){
+  .ed-box{height:94vh}
+  .ed-main{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}
+  .ed-order{max-height:38vh}
+}
+/* شاشة ضيقة أو قصيرة: الأقسام سطر واحد ينسحب للجنب حتى تبقى مساحة للأصناف */
+@media(max-width:720px),(max-height:680px){
+  .ed-box .ed-cats{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap;scrollbar-width:none;margin:6px 0}
+  .ed-box .ed-cats::-webkit-scrollbar{display:none}
+  .ed-box .ed-cat{flex:none;padding:7px 12px}
+  .ed-box .ed-it{min-height:54px}
+}
+@media(max-height:680px) and (min-width:721px){
+  .ed-main{grid-template-columns:minmax(250px,36%) 1fr}
+  .ed-box{height:96vh;max-height:96vh!important;padding:8px 10px!important}
+}
+/* ══ معلومات الزبون من رقم المكالمة ══ */
+#callInfoOv{z-index:7100}   /* فوك بطاقة المكالمة */
+.ci-box2{max-width:440px!important;width:100%;max-height:92vh;overflow-y:auto;text-align:right}
+.ci-num{font-size:26px;font-weight:900;text-align:center;letter-spacing:1px;margin:4px 0 2px}
+.ci-sub{text-align:center;color:var(--muted);font-size:13px;font-weight:700;margin-bottom:10px}
+#callInfoBody .dlbl{display:block;margin:8px 0 4px;font-weight:800;font-size:13px}
+#callInfoBody .dinp{width:100%;resize:vertical}
+.ci-box{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);font-size:13px;line-height:1.7}
+.ci-box b{display:block;font-size:12.5px;color:var(--muted)}
+#callInfoBody .confbtn{margin-top:12px}
+.ci-rep{width:100%;height:42px;margin-top:6px}
+.call-num{cursor:pointer;text-decoration:underline dotted;text-underline-offset:4px}
