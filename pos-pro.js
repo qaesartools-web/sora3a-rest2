@@ -1796,7 +1796,7 @@ const ordCancelCore = id=>{
     const m = $('dpMain'); if (m) m.innerHTML = dpOpt(list, m.value || c.main, '— الطابعة الافتراضية للويندوز —');
     secList().forEach((x) => { const sel = $('dpP_' + x.id); if (sel) sel.innerHTML = dpOpt(list, sel.value || (c.printers || {})[x.id] || '', '— نفس الطابعة الرئيسية —'); });
     const st = $('dpStatus');
-    if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}${p.kind === 'lan' && DESK.removePrinter ? ` <button type="button" class="dp-x" title="شيل الطابعة" onclick="dpRemoveNet(this.dataset.n)" data-n="${esc(p.name)}">✕</button>` : ''}</span>`).join('')
+    if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}${p.textOnly ? ' <small title="تعريف الطابعة نصي (Generic / Text Only) — البرنامج يطبعلها الورقة صورة حتى العربي يطلع صحيح">🖼️ تنطبع كصورة</small>' : ''}${p.kind === 'lan' && DESK.removePrinter ? ` <button type="button" class="dp-x" title="شيل الطابعة" onclick="dpRemoveNet(this.dataset.n)" data-n="${esc(p.name)}">✕</button>` : ''}</span>`).join('')
       : `<span class="ac-sub">${DESK.platform === 'android' ? 'ما لكينا طابعات — أضف طابعة شبكة تحت، أو اقرن طابعة البلوتوث من إعدادات الجهاز' : 'ما لكينا طابعات — عرّف الطابعة بالجهاز أولاً'}</span>`;
     if (!quiet) toast('🖨️ ' + toA(list.length) + ' طابعة بالحاسبة');
   };

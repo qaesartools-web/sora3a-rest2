@@ -4,7 +4,8 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, Menu, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { createPrinter, makeRenderer, makeVirtualRenderer } = require('./printer');
+const { createPrinter, makeRenderer, makeRawRenderer, makeAutoRenderer, makeVirtualRenderer } = require('./printer');
+const { createRaw } = require('./rawprint');
 const { createHub } = require('./lan');
 const { createFirewall } = require('./firewall');
 
@@ -187,9 +188,18 @@ app.whenReady().then(() => {
   testMode = !!readCfg().testMode;
   // أول تشغيل للنسخة المثبتة: يفتح وحده مع تشغيل الجهاز (يكدر الكاشير يطفيه من الإعدادات)
   if (app.isPackaged && !readCfg().autoStartSet) setAutoStart(true);
+  const getPrinters = () => (win && !win.isDestroyed() ? win.webContents.getPrintersAsync() : Promise.resolve([]));
+  // ويندوز: الطابعة المعرّفة بتعريف «Generic / Text Only» تنطبعلها الورقة صورة ESC/POS (العربي يطلع صحيح)
+  const raw = process.platform === 'win32' ? createRaw({ tmpDir: app.getPath('temp') }) : null;
+  const normal = makeRenderer(BrowserWindow, app.getPath('temp'));
   printer = createPrinter({
-    getPrinters: () => (win && !win.isDestroyed() ? win.webContents.getPrintersAsync() : Promise.resolve([])),
-    render: makeRenderer(BrowserWindow, app.getPath('temp')),
+    getPrinters,
+    isTextOnly: raw ? (n) => raw.isTextOnly(n) : null,
+    render: raw ? makeAutoRenderer({
+      normal, raw: makeRawRenderer(BrowserWindow, app.getPath('temp'), (n, b, t) => raw.send(n, b, t)),
+      isTextOnly: (n) => raw.isTextOnly(n),
+      defaultName: async () => ((await getPrinters()).find((p) => p.isDefault) || {}).name || '',
+    }) : normal,
     virtual: { enabled: () => testMode, render: makeVirtualRenderer(BrowserWindow, app.getPath('temp'), testDir(), onPaper) },
   });
   setupIpc();

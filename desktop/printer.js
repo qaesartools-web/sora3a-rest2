@@ -93,6 +93,46 @@ function makeRenderer(BrowserWindow, tmpDir) {
   };
 }
 
+// طباعة صورة ESC/POS (للطابعات المعرّفة بتعريف «Generic / Text Only» — هذا التعريف يطبع العربي رموز):
+// الورقة تترسم بنافذة مخفية بعرض نقاط الطابعة (80 ملم = 576 نقطة)، تتحول أبيض/أسود، وتروح للطابعة «خام» بدون التعريف
+function makeRawRenderer(BrowserWindow, tmpDir, send, escpos = require('./escpos')) {
+  return async function renderRaw(html, { printer, widthMm, copies, title }) {
+    const dots = escpos.dotsFor(widthMm);
+    let bytes = null;
+    await withPage(BrowserWindow, tmpDir, html, widthMm, { offscreen: true }, async (win, hPx, pxW) => {
+      const z = dots / pxW;
+      win.webContents.setZoomFactor(z);
+      const h = Math.min(Math.max(Math.ceil(hPx * z), 40), 30000);
+      win.setContentSize(dots, h);
+      if (win.webContents.invalidate) win.webContents.invalidate();
+      await new Promise((r) => setTimeout(r, 250));
+      let img = await win.webContents.capturePage({ x: 0, y: 0, width: dots, height: h });
+      if (img.isEmpty()) throw new Error('ما انرسمت الورقة');
+      if (img.getSize().width !== dots) img = img.resize({ width: dots, quality: 'best' });
+      const { width, height } = img.getSize();
+      const black = escpos.threshold(img.toBitmap(), width, height);
+      bytes = escpos.job(black, width, escpos.trimBottom(black, width, height), copies);
+    });
+    await send(printer, bytes, title);
+  };
+}
+
+// يختار وحده: طابعة بتعريف نصي ← صورة ESC/POS، وغيرها ← طباعة الويندوز العادية
+function makeAutoRenderer({ normal, raw, isTextOnly, defaultName }) {
+  return async function render(html, o) {
+    let name = o.printer;
+    if (!name && defaultName) name = await defaultName().catch(() => '');
+    let textOnly = false;
+    try { textOnly = !!(raw && name && await isTextOnly(name)); } catch (e) { textOnly = false; }
+    if (!textOnly) return normal(html, o);
+    try { return await raw(html, { ...o, printer: name }); }
+    catch (e) {
+      // الصورة ما انرسمت/ما وصلت ← نجرب الطباعة العادية مرة (أحسن من ما تطلع الورقة أبد)
+      try { return await normal(html, o); } catch (e2) { throw e; }
+    }
+  };
+}
+
 // الطابعة الوهمية: صورة الورقة للمحاكي + ملف PDF بمجلد التجربة
 function makeVirtualRenderer(BrowserWindow, tmpDir, outDir, onPaper) {
   return async function renderVirtual(html, { printer, widthMm, copies, title }) {
@@ -130,7 +170,7 @@ function cleanOpts(o) {
   };
 }
 
-function createPrinter({ getPrinters: getReal, render: renderReal, virtual = null, retries = 1, platform = process.platform }) {
+function createPrinter({ getPrinters: getReal, render: renderReal, virtual = null, retries = 1, platform = process.platform, isTextOnly = null }) {
   const testOn = () => !!(virtual && virtual.enabled());
   const getPrinters = async () => [...(await getReal().catch(() => [])), ...(testOn() ? VIRTUAL : [])];
   const render = (html, o) => (isVirtual(o.printer) ? virtual.render(html, o) : renderReal(html, o));
@@ -181,7 +221,9 @@ function createPrinter({ getPrinters: getReal, render: renderReal, virtual = nul
     print,
     async printers() {
       const list = await getPrinters().catch(() => []);
-      return list.map((p) => ({ name: p.name, displayName: p.displayName || p.name, isDefault: !!p.isDefault, ...describeStatus(p.status, isVirtual(p.name) ? 'win32' : platform) }));
+      const tx = isTextOnly ? await Promise.all(list.map((p) => (isVirtual(p.name) ? false : isTextOnly(p.name).catch(() => false)))) : [];
+      return list.map((p, i) => ({ name: p.name, displayName: p.displayName || p.name, isDefault: !!p.isDefault, ...describeStatus(p.status, isVirtual(p.name) ? 'win32' : platform),
+        ...(tx[i] ? { textOnly: true } : {}) }));
     },
     jobs: () => jobs.map(({ html, opts, ...j }) => ({ ...j, canReprint: !!html })),
     async reprint(id) {
@@ -192,4 +234,4 @@ function createPrinter({ getPrinters: getReal, render: renderReal, virtual = nul
   };
 }
 
-module.exports = { createPrinter, makeRenderer, makeVirtualRenderer, describeStatus, preparePage, cleanOpts, VIRTUAL, isVirtual };
+module.exports = { createPrinter, makeRenderer, makeRawRenderer, makeAutoRenderer, makeVirtualRenderer, describeStatus, preparePage, cleanOpts, VIRTUAL, isVirtual };

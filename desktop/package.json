@@ -29,6 +29,8 @@
       "main.js",
       "preload.js",
       "printer.js",
+      "escpos.js",
+      "rawprint.js",
       "lan.js",
       "firewall.js",
       "offline.html",
