@@ -110,7 +110,8 @@ function makeRawRenderer(BrowserWindow, tmpDir, send, escpos = require('./escpos
       if (img.isEmpty()) throw new Error('ما انرسمت الورقة');
       if (img.getSize().width !== dots) img = img.resize({ width: dots, quality: 'best' });
       const { width, height } = img.getSize();
-      const black = escpos.threshold(img.toBitmap(), width, height);
+      // حد أعلى شوية (190): أطراف الحروف الرمادية تصير سودة ← الخط أعرض وأوضح بالحرارية
+      const black = escpos.threshold(img.toBitmap(), width, height, 190);
       bytes = escpos.job(black, width, escpos.trimBottom(black, width, height), copies);
     });
     await send(printer, bytes, title);

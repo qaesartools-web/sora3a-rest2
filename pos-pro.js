@@ -751,15 +751,17 @@ function orderActionsCore(o){
     const sub_ = o.subtotal != null ? o.subtotal : items.reduce((s, i) => s + (i.price || 0) * i.qty, 0);
     const p = (pay && pay.payment) || o.payment || {};
     const W = settings.paper === 58 ? 210 : 300;
-    const css = `@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
-      *{margin:0;padding:0;}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:10px;width:${W}px;color:#000;}
-      .logo{text-align:center;font-size:18px;font-weight:900;}.sub{text-align:center;font-size:11px;color:#333;}
-      .div{border-top:1px dashed #000;margin:6px 0;}.num{text-align:center;font-size:28px;font-weight:900;}
-      .type{text-align:center;background:#000;color:#fff;padding:3px;font-size:13px;font-weight:700;margin:4px 0;}
-      .row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;gap:6px;}
-      .item{font-size:12px;margin-bottom:4px;}.item .l{display:flex;justify-content:space-between;gap:6px;}.item .n{font-size:10.5px;}
-      .total{display:flex;justify-content:space-between;font-size:16px;font-weight:900;margin-top:4px;padding-top:4px;border-top:2px solid #000;}
-      .foot{text-align:center;font-size:11px;margin-top:8px;}.kt .item{font-size:16px;font-weight:900;}.pb{page-break-before:always;}`;
+    // طابعة حرارية أسود وأبيض: الخط كبير وعريض وكله أسود صافي (بدون رمادي) حتى يقرا بسهولة
+    const f = settings.paper === 58 ? 0.82 : 1, z = (n) => Math.round(n * f * 10) / 10 + 'px';
+    const css = `@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800;900&display=swap');
+      *{margin:0;padding:0;color:inherit}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:8px 6px;width:${W}px;color:#000;font-weight:700;line-height:1.35}
+      .logo{text-align:center;font-size:${z(24)};font-weight:900;}.sub{text-align:center;font-size:${z(14)};font-weight:700;}
+      .div{border-top:2px dashed #000;margin:6px 0;}.num{text-align:center;font-size:${z(44)};font-weight:900;line-height:1.1}
+      .type{text-align:center;background:#000;color:#fff;padding:4px;font-size:${z(18)};font-weight:900;margin:4px 0;}
+      .row{display:flex;justify-content:space-between;font-size:${z(14.5)};font-weight:700;margin-bottom:3px;gap:6px;}
+      .item{font-size:${z(16.5)};font-weight:800;margin-bottom:5px;}.item .l{display:flex;justify-content:space-between;gap:6px;}.item .n{font-size:${z(14.5)};font-weight:700}
+      .total{display:flex;justify-content:space-between;font-size:${z(22)};font-weight:900;margin-top:4px;padding-top:4px;border-top:3px solid #000;}
+      .foot{text-align:center;font-size:${z(14.5)};font-weight:700;margin-top:8px;}.kt .item{font-size:${z(21)};font-weight:900;}.pb{page-break-before:always;}`;
     const rcpt = `<div class="logo">${esc(title)}</div>${subL ? `<div class="sub">${esc(subL)}</div>` : ''}${phone ? `<div class="sub">📞 ${esc(phone)}</div>` : ''}
       <div class="div"></div>${head}${pg}<div class="div"></div>
       <div class="row"><span>رقم الطلب</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div>
@@ -774,8 +776,8 @@ function orderActionsCore(o){
       ${o.service ? `<div class="row"><span>خدمة</span><span>${fmt(o.service)}</span></div>` : ''}
       ${o.tax ? `<div class="row"><span>ضريبة</span><span>${fmt(o.tax)}</span></div>` : ''}
       <div class="total"><span>الإجمالي</span><span>${fmt(o.value)} د.ع</span></div>
-      ${type === 'delivery' && o.fee ? `<div class="row"><span>أجور التوصيل</span><span>${fmt(o.fee)}</span></div><div class="row" style="font-weight:900;font-size:13px"><span>المطلوب من الزبون</span><span>${fmt((o.value || 0) + (o.fee || 0))} د.ع</span></div>` : ''}
-      ${type === 'delivery' && o.fee === 0 ? `<div class="row" style="font-weight:900"><span>🎁 التوصيل مجاني</span><span>0</span></div><div class="row" style="font-weight:900;font-size:13px"><span>المطلوب من الزبون</span><span>${fmt(o.value || 0)} د.ع</span></div>` : ''}
+      ${type === 'delivery' && o.fee ? `<div class="row"><span>أجور التوصيل</span><span>${fmt(o.fee)}</span></div><div class="row" style="font-weight:900;font-size:${z(17)}"><span>المطلوب من الزبون</span><span>${fmt((o.value || 0) + (o.fee || 0))} د.ع</span></div>` : ''}
+      ${type === 'delivery' && o.fee === 0 ? `<div class="row" style="font-weight:900"><span>🎁 التوصيل مجاني</span><span>0</span></div><div class="row" style="font-weight:900;font-size:${z(17)}"><span>المطلوب من الزبون</span><span>${fmt(o.value || 0)} د.ع</span></div>` : ''}
       ${p.method ? `<div class="div"></div><div class="row"><span>طريقة الدفع</span><span>${esc(PAY_AR[p.method] || p.method)}</span></div>` : ''}
       ${p.card && p.method === 'mixed' ? `<div class="row"><span>بطاقة</span><span>${fmt(p.card)}</span></div>` : ''}
       ${p.method === 'credit' && p.cust ? `<div class="row" style="font-weight:900"><span>على حساب</span><span>${esc(p.cust.name)}${p.cust.phone ? ' • ' + esc(p.cust.phone) : ''}</span></div>` : ''}
@@ -1712,7 +1714,7 @@ const ordCancelCore = id=>{
   }
   async function qzPrintHtml(printer, html) {
     const cfg = qz.configs.create(printer, { units: 'mm', size: { width: settings.paper === 58 ? 58 : 80 }, margins: 0, scaleContent: true });
-    await qz.print(cfg, [{ type: 'pixel', format: 'html', flavor: 'plain', data: html }]);
+    await qz.print(cfg, [{ type: 'pixel', format: 'html', flavor: 'plain', data: (window.posPrnClean || String)(html) }]);
   }
   // فتح درج الفلوس بعد ما تنطبع الفاتورة (الدرج موصول بالطابعة) — يشتغل بتطبيق الكاشير (أندرويد/سطح المكتب) وQZ Tray
   async function kickDrawer(printer) {
@@ -1752,6 +1754,11 @@ const ordCancelCore = id=>{
   // كل طابعة معرّفة بالويندوز تطلع بالقائمة، كل قسم لطابعته، طابور + إعادة محاولة،
   // وإذا طابعة قسم ما اشتغلت تنطبع تذكرته على الرئيسية حتى ما تضيع. الإعداد خاص بهالحاسبة.
   const DESK = window.SoraDesktop || null;
+  // الإيموجي بالطابعة الحرارية (أسود وأبيض) يطلع لطخة سودة — نشيله من الورق بس (الشاشة تبقى بيه)
+  const EMO = /(?:(?:\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}])\uFE0F?(?:\u200D(?:\p{Extended_Pictographic})\uFE0F?)*|[\uFE0F\u20E3])[ \u00A0]?/gu;
+  const prnClean = (html) => String(html || '').replace(EMO, '');
+  window.posPrnClean = prnClean;
+  if (!DESK && typeof printHTML === 'function') { const ph = printHTML; window.printHTML = printHTML = (h) => ph(prnClean(h)); }
   const WIN_APP_URL = 'https://github.com/qaesartools-web/sora3a-rest2/releases/latest/download/sora3a-cashier-setup.exe';
   const REL = 'https://github.com/qaesartools-web/sora3a-rest2/releases';
   // تطبيق الكاشير لكل نظام: ويندوز، ماك، لينكس، أندرويد (أجهزة الكاشير والتابلت)
@@ -1769,6 +1776,7 @@ const ordCancelCore = id=>{
   window.dpCfgGet = dpCfg;
   let dpWarnAt = 0;
   async function deskPrint(html, printer, title, copies) {
+    html = prnClean(html);
     const c = dpCfg();
     let r;
     try {
@@ -1986,8 +1994,29 @@ const ordCancelCore = id=>{
     const next = { ...c, main: ($('dpMain') || {}).value || '', receiptCopies: n('dpRc'), fallback: !!($('dpFb') || {}).checked, printers: {}, copies: {} };
     secList().forEach((x) => { const v = ($('dpP_' + x.id) || {}).value; if (v) next.printers[x.id] = v; const k = n('dpC_' + x.id); if (k > 1) next.copies[x.id] = k; });
     lsSet(dpKey(), next);
+    if (DESK && DESK.setPref) Promise.resolve(DESK.setPref(dpKey(), next)).catch(() => {});   // نسخة ببرنامج الكاشير نفسه
   }
   window.dpSave = dpSave;
+  // إعداد الطابعات محفوظ هم داخل برنامج الكاشير: إذا انمسحت ذاكرة الصفحة (أو تبدّل رابط الكاشير) يرجع وحده
+  let dpRestored = '';
+  function dpRestore() {
+    if (!DESK || !DESK.getPref || !restData || dpRestored === rid()) return;
+    dpRestored = rid();
+    if (lsGet(dpKey(), null)) { if (DESK.setPref) Promise.resolve(DESK.setPref(dpKey(), dpCfg())).catch(() => {}); return; }
+    Promise.resolve(DESK.getPref(dpKey())).then((v) => {
+      if (!v || typeof v !== 'object' || lsGet(dpKey(), null)) return;
+      lsSet(dpKey(), v);
+      if ($('dpMain')) dpFind(true);
+      toast('🖨️ رجعت الطابعات المحفوظة بهالحاسبة');
+    }).catch(() => {});
+  }
+  // اختيار الطابعة ينحفظ أول ما يتغيّر (قبل: ينحفظ بس بـ«حفظ الإعدادات»، وأي تحديث للإعدادات يرجّعه) — ويبقى لحد ما الكاشير يغيّره
+  document.addEventListener('change', (e) => {
+    const id = (e.target && e.target.id) || '';
+    if (!DESK || !/^dp(Main|P_|Rc$|C_|Fb$)/.test(id)) return;
+    dpSave();
+    toast(/^dp(Main|P_)/.test(id) ? '✅ انحفظت الطابعة «' + (e.target.value || 'الافتراضية') + '» — تبقى لحد ما تغيّرها' : '✅ انحفظ');
+  });
   window.qzFind = async () => {
     try { await qzReady(); const list = await qz.printers.find(); renderQzPrinters(list); toast('🖨️ وُجدت ' + toA(list.length) + ' طابعة'); }
     catch (e) { toast('❌ ما اتصل ببرنامج QZ Tray — تأكد أنه مثبت وشغّال'); }
@@ -2025,6 +2054,7 @@ const ordCancelCore = id=>{
     if ($('kdsLink')) $('kdsLink').style.display = kOff ? '' : 'none';
     if (kOff && $('kitchenScreen') && $('kitchenScreen').classList.contains('on')) goTab('cashier');
     renderPagers();
+    dpRestore();
     dpEnforceTest();
   }
   function listenRest() {

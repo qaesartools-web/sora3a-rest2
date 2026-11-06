@@ -124,6 +124,18 @@ function setupIpc() {
     return printer.print(html, opts);
   });
   ipcMain.handle('sora:jobs', (e) => (fromApp(e) ? printer.jobs() : []));
+  // إعدادات صغيرة تنحفظ بالبرنامج نفسه (اختيار الطابعات) — تبقى حتى لو انمسحت ذاكرة الصفحة
+  const prefKey = (k) => typeof k === 'string' && /^[\w:.-]{1,80}$/.test(k);
+  ipcMain.handle('sora:pref:get', (e, k) => (fromApp(e) && prefKey(k) ? ((readCfg().prefs || {})[k] ?? null) : null));
+  ipcMain.handle('sora:pref:set', (e, k, v) => {
+    if (!fromApp(e) || !prefKey(k)) return false;
+    let s; try { s = JSON.stringify(v); } catch (err) { return false; }
+    if (!s || s.length > 20000) return false;
+    const c = readCfg(), prefs = { ...(c.prefs || {}), [k]: JSON.parse(s) };
+    if (Object.keys(prefs).length > 50) return false;
+    writeCfg({ ...c, prefs });
+    return true;
+  });
   // «طباعة صورة» لطابعة معيّنة (ويندوز) — تنحفظ بهالحاسبة
   ipcMain.handle('sora:imagemode:set', (e, name, on) => {
     if (!fromApp(e) || process.platform !== 'win32' || typeof name !== 'string' || !name || name.length > 200) return false;
