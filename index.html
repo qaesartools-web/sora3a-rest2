@@ -429,7 +429,7 @@ html.store-mode .bnav .nb:not([data-tab="acc"]),html.store-mode .desktop-nav .dn
 html.store-mode .ac-ext{display:none!important}
 .store-note{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:rgba(176,122,74,.12);border:1px solid rgba(176,122,74,.35);color:#8a5a2b;font-size:13.5px;line-height:1.8}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=28">
+<link rel="stylesheet" href="pos-pro.css?v=29">
 <script src="device.js?v=2"></script>
 <script src="ask.js?v=2"></script>
 </head>
@@ -517,7 +517,7 @@ html.store-mode .ac-ext{display:none!important}
           <div class="hold-strip" id="holdStrip"></div>
           <div class="psearch"><input id="prodSearch" type="search" placeholder="🔍 ابحث عن صنف…" title="اختصار: /" autocomplete="off"></div>
           <div class="cats" id="cats"></div>
-          <div class="prods" id="prods"></div>
+          <div class="prods dscroll" id="prods"></div>
         </div>
         <div class="cside">
           <div class="chead" id="cartHead">
@@ -786,6 +786,12 @@ html.store-mode .ac-ext{display:none!important}
     <button class="cancel" onclick="acClose()">إلغاء</button>
   </div>
 </div>
+
+<!-- معلومات الزبون من رقم المكالمة -->
+<div class="cov" id="callInfoOv" onclick="if(event.target===this)callInfoClose()"><div class="cmodal ci-box2"><div class="ctit">👤 معلومات الزبون</div><div id="callInfoBody"></div></div></div>
+
+<!-- تعديل الطلب (نافذة وحدة على قد الشاشة) -->
+<div class="cov" id="edOv" onclick="if(event.target===this)edClose()"><div class="cmodal ed-box" id="edBox"></div></div>
 
 <!-- VIEW DIALOG -->
 <div class="cov" id="viewOv" onclick="if(event.target===this)viewClose()">
@@ -1763,7 +1769,8 @@ const allExp=()=>{const ids=new Set(accExp.map(e=>e.id));return accExp.concat(ac
 function ownerOnly(){if(isOwnerPOS())return true;toast('🔒 التعديل والحذف من صلاحية الإدارة فقط');return false;}
 const EXP_CATS=['رواتب','إيجار','كهرباء وماء','غاز / وقود','صيانة','تغليف','تسويق وإعلان','مشتريات أخرى','أخرى'];
 const CANCEL_REASONS=['الزبون غيّر رأيه','خطأ من الكاشير','الصنف نفد','تأخير بالتحضير أو التوصيل','طلب مكرر','الزبون ما حضر','أخرى'];
-const EDITABLE=['pending','accepted','pickup','preparing','ready'];
+// كل الطلبات تتعدّل من الكاشير (حتى المسلّم والمدفوع والكابتن بالطريق) — إلا الملغي
+const EDITABLE=['pending','accepted','pickup','preparing','ready','delivering','delivered','done'];
 // أنواع حركات المخزون (بالمصطلح المحاسبي)
 const MV={open:'رصيد افتتاحي',purchase:'وارد — مشتريات',sale:'صادر — منصرف للمبيعات',sale_return:'وارد — مردود مبيعات (رجوع للمخزن)',waste:'صادر — تالف / هالك',count:'تسوية جرد (عجز / زيادة)',purchase_return:'صادر — مرتجع للمورد'};
 
@@ -1971,7 +1978,7 @@ function acDialog(title,sub,fields,onOk,okText){
 function acClose(){document.getElementById('acOv').classList.remove('on');}
 window.acClose=acClose;
 function viewOpen(title,html){document.getElementById('viewTitle').textContent=title;document.getElementById('viewBody').innerHTML=html;document.getElementById('viewOv').classList.add('on');}
-window.viewClose=()=>{document.getElementById('viewOv').classList.remove('on');edState=null;ledView=null;};
+window.viewClose=()=>{document.getElementById('viewOv').classList.remove('on');const eo=document.getElementById('edOv');if(!eo||!eo.classList.contains('on'))edState=null;ledView=null;};
 
 // ── الفترة ──
 function rangeMs(r){
@@ -2812,27 +2819,49 @@ function edVals(st){
   const newValue=Math.max(0,(s.o.value||0)+orderTotalFromItems(s.work)-orderTotalFromItems(s.base));
   return{added,removed,newValue};
 }
+// نافذة تعديل الطلب: وحدة على قد الشاشة — بدون تمرير الصفحة ولا شريط تمرير داخل شريط
+//  الطلب (الصفحة الصغيرة) يم الأصناف بالحاسبة وفوكها بالتلفون، والأصناف تنزل بالسحب بالإصبع/الماوس (حتى شاشات اللمس اللي تشتغل مثل الماوس)
+const edPaid=o=>!!(o&&o.payment&&o.payment.method&&!['cod','later'].includes(o.payment.method));
+const edFin=o=>!!(o&&(['delivered','done'].includes(o.status)||o.servedAtMs));
+const edKitchenOk=o=>!!(o&&o.kitchen&&Date.now()-(o.createdAtMs||0)<20*3600000);   // شاشة المطبخ تعرض طلبات آخر يوم بس
 function renderEd(){
   const s=edState;if(!s)return;
-  const v=edVals(),p=s.pick;
-  if(!menu[p.ci]||!menu[p.ci].items[p.pi])s.pick={ci:0,pi:0,vi:0};
-  const onm=window.posONum?posONum(s.o):'';
-  viewOpen('✏️ تعديل الطلب '+(onm||'#'+s.o.id.substring(0,6).toUpperCase())+(onm?' ('+s.o.id.substring(0,6).toUpperCase()+')':''),`
-   <div class="ac-sub" style="margin-bottom:8px">${esc(s.o.customer||'')} • ${getOrderType(s.o)==='delivery'?'🏍️ دلفري':getOrderType(s.o)==='takeaway'?'🥡 سفري':'🪑 صالة'} — لو الزبون اتصل يريد يضيف أو ينقص</div>
-   ${s.work.map((i,idx)=>`<div class="ac-line${s.lastKey===i.name+'|'+i.variant?' ed-line-new':''}"><span>${esc(i.name)}${i.variant&&i.variant!=='وحدة'?' ('+esc(i.variant)+')':''}<div class="ac-sub">${fmt(i.price)} د.ع</div></span>
-     <span style="display:flex;gap:6px;align-items:center"><button class="ac-b" style="min-width:30px;flex:none" onclick="edQty(${idx},-1)">−</button><b>${toA(i.qty)}</b><button class="ac-b" style="min-width:30px;flex:none" onclick="edQty(${idx},1)">+</button><button class="ac-b del" style="min-width:30px;flex:none" onclick="edDel(${idx})">🗑</button></span></div>`).join('')}
-   <div class="rcard" style="margin-top:10px"><div class="rtitle">➕ إضافة صنف — دوس على الصنف وينضاف</div>
-    <input class="finp" id="edQ" placeholder="🔍 ابحث عن صنف" value="${esc(s.q||'')}" oninput="edState.q=this.value;edGrid()">
-    <div class="ed-cats" id="edCats"></div>
-    <div class="ed-grid" id="edGrid"></div></div>
-   <div class="ac-line"><span>المبلغ السابق</span><b>${fmt(s.o.value||0)} د.ع</b></div>
-   <div class="ac-line"><span>المبلغ الجديد</span><b class="${v.newValue>=(s.o.value||0)?'ac-pos':'ac-neg'}">${fmt(v.newValue)} د.ع</b></div>
-   ${v.removed.length&&s.o.inv?`<div class="dfield" style="margin-top:8px"><div class="dlbl">الأصناف المنقوصة (${v.removed.map(r=>esc(r.name)+' ×'+toA(r.qty)).join('، ')})</div>
-    <select class="dinp" onchange="edState.restock=this.value"><option value="return" ${s.restock==='return'?'selected':''}>لم تُحضَّر — رجّع المواد للمخزن</option><option value="waste" ${s.restock==='waste'?'selected':''}>اتحضّرت — سجّلها تالف</option></select></div>`:''}
-   <button class="confbtn" onclick="edSave()">💾 حفظ التعديل</button>
-   <button class="cancel" onclick="viewClose()">إغلاق</button>`);
-  edGrid();
+  const ov=document.getElementById('edOv'),box=document.getElementById('edBox');if(!ov||!box)return;
+  if(!menu[s.pick.ci]||!menu[s.pick.ci].items[s.pick.pi])s.pick={ci:0,pi:0,vi:0};
+  if(box.dataset.id!==s.id||!document.getElementById('edOrder')){
+    const onm=window.posONum?posONum(s.o):'',t=getOrderType(s.o);
+    box.dataset.id=s.id;
+    box.innerHTML=`<div class="ed-head"><div class="ed-tit">✏️ تعديل الطلب ${esc(onm||'#'+s.o.id.substring(0,6).toUpperCase())}<small>${esc(s.o.customer||'')}${s.o.customer?' • ':''}${t==='delivery'?'🏍️ دلفري':t==='takeaway'?'🥡 سفري':'🪑 صالة'}${s.o.status==='delivered'||s.o.status==='done'?' • ✅ مسلّم':s.o.status==='delivering'?' • 🛵 الكابتن بالطريق':''}</small></div>
+      <button type="button" class="ed-x" onclick="edClose()" aria-label="إغلاق">✕</button></div>
+     <div class="ed-main">
+      <div class="ed-order" id="edOrder"></div>
+      <div class="ed-pick">
+       <input class="finp" id="edQ" placeholder="🔍 ابحث عن صنف — أو اختار الفرع ودوس على الصنف وينضاف" value="${esc(s.q||'')}" oninput="edState.q=this.value;edGrid()">
+       <div class="ed-cats dscroll" id="edCats"></div>
+       <div class="ed-grid dscroll" id="edGrid"></div>
+      </div>
+     </div>`;
+    ov.classList.add('on');document.body.classList.add('ed-open');
+    edGrid();
+  }
+  edOrderDraw();
 }
+function edOrderDraw(){
+  const s=edState,el=document.getElementById('edOrder');if(!s||!el)return;
+  const v=edVals(),old=s.o.value||0,diff=v.newValue-old,paid=edPaid(s.o),pm=(s.o.payment||{}).method;
+  el.innerHTML=`<div class="ed-otit">🧾 الطلب <span>${toA(s.work.reduce((t,i)=>t+i.qty,0))} صنف</span></div>
+   <div class="ed-lines dscroll">${s.work.map((i,idx)=>`<div class="ed-line${s.lastKey===i.name+'|'+i.variant?' ed-line-new':''}">
+     <span class="ed-ln">${esc(i.name)}${i.variant&&i.variant!=='وحدة'?' ('+esc(i.variant)+')':''}<small>${fmt(i.price)} د.ع</small></span>
+     <span class="ed-q"><button type="button" class="ac-b" onclick="edQty(${idx},-1)" aria-label="أقل">−</button><b>${toA(i.qty)}</b><button type="button" class="ac-b" onclick="edQty(${idx},1)" aria-label="أكثر">+</button><button type="button" class="ac-b del" onclick="edDel(${idx})" aria-label="حذف">🗑</button></span></div>`).join('')||'<div class="ac-sub">ماكو أصناف — ضيف من الأصناف، أو ألغِ الطلب</div>'}</div>
+   <div class="ed-tot"><span>المبلغ السابق<b>${fmt(old)}</b></span><span>المبلغ الجديد<b class="${diff>=0?'ac-pos':'ac-neg'}">${fmt(v.newValue)}</b></span></div>
+   ${paid&&diff?`<div class="ed-paid">${diff>0?'💵 الطلب مدفوع — استلم من الزبون <b>'+fmt(diff)+' د.ع</b> زيادة':'💵 الطلب مدفوع — رجّع للزبون <b>'+fmt(-diff)+' د.ع</b>'}${pm==='credit'?' (ينحسب على دينه وحده)':''}</div>`:''}
+   ${v.added.length&&edFin(s.o)&&edKitchenOk(s.o)?`<select class="dinp ed-kt" onchange="edState.toKitchen=this.value==='k'"><option value="k" ${s.toKitchen!==false?'selected':''}>🍳 الطلب منتهي — الأصناف المضافة تروح للمطبخ تنطبخ</option><option value="n" ${s.toKitchen===false?'selected':''}>🧾 تصحيح حساب بس (الأصناف انطبخت وانسلّمت)</option></select>`:''}
+   ${v.removed.length&&s.o.inv?`<select class="dinp ed-rs" onchange="edState.restock=this.value"><option value="return" ${s.restock==='return'?'selected':''}>المنقوص ما تحضّر — رجّع مواده للمخزن</option><option value="waste" ${s.restock==='waste'?'selected':''}>المنقوص تحضّر — سجّله تالف</option></select>`:''}
+   <div class="ed-act"><button type="button" class="confbtn" onclick="edSave()">💾 حفظ التعديل</button>
+    <div class="ed-act2">${!window.posCanDo||posCanDo('cancel')?`<button type="button" class="ac-b del" onclick="edCancelOrder()">❌ إلغاء الطلب</button>`:''}<button type="button" class="ac-b" onclick="edClose()">إغلاق</button></div></div>`;
+}
+window.edClose=()=>{const ov=document.getElementById('edOv');if(ov)ov.classList.remove('on');document.body.classList.remove('ed-open');const b=document.getElementById('edBox');if(b){b.innerHTML='';b.dataset.id='';}edState=null;};
+window.edCancelOrder=()=>{const s=edState;if(!s)return;const id=s.id;edClose();ordCancel(id);};
 window.edPick=val=>{const [a,b]=val.split('-').map(Number);edState.pick={ci:a,pi:b,vi:0};renderEd();};
 window.edQty=(i,d)=>{const x=edState.work[i];if(!x)return;x.qty=Math.max(1,x.qty+d);renderEd();};
 window.edDel=i=>{edState.work.splice(i,1);renderEd();};
@@ -2878,21 +2907,32 @@ async function edCommit(s,by){
   if(o.kitchen){
     upd.kEdits=[...(o.kEdits||[]),kEdit].slice(-10);
     // الصنف المضاف لازم ينطبخ: الطلب يرجع للمطبخ إذا بعده ما انسلّم، وقسمه يرجع «قيد التحضير»
-    if(kEdit.add.length&&!['delivered','done','cancelled'].includes(o.status)&&!o.servedAtMs){
-      upd.kitchen='new';if(o.status==='ready')upd.status='preparing';
+    //  الطلب المنتهي (مسلّم/مقدّم): الكاشير يختار — الأصناف المضافة تروح للمطبخ، أو تصحيح حساب بس (انطبخت قبل)
+    const fin=edFin(o);
+    if(kEdit.add.length&&o.status!=='cancelled'&&(!fin||(s.toKitchen!==false&&edKitchenOk(o)))){
+      upd.kitchen='new';if(o.status==='ready'&&!o.servedAtMs)upd.status='preparing';
       if(o.kSec){const ks=JSON.parse(JSON.stringify(o.kSec));kEdit.add.forEach(a=>{if(!a.sec)return;const x=ks[a.sec]||(ks[a.sec]={n:0,readyAt:0});x.n=(+x.n||0)+(+a.qty||1);x.readyAt=0;});upd.kSec=ks;}
     }
   }
   if(o.captainId&&getOrderType(o)==='delivery')upd.commission=Math.round(v.newValue*.1);
+  // طلب مدفوع: الفرق ينضاف أو ينطرح من الدفع نفسه (نقد/بطاقة)، والدين يتعدّل بدفتر الزبون
+  const diff=v.newValue-(o.value||0);let paidMsg='';
+  if(diff&&edPaid(o)){const p=Object.assign({},o.payment);
+    if(p.method==='card')p.card=Math.max(0,(Number(p.card)||(o.value||0))+diff);
+    else if(p.method!=='credit')p.cash=Math.max(0,(p.cash!=null?Number(p.cash)||0:(o.value||0)-(Number(p.card)||0))+diff);
+    upd.payment=p;paidMsg=diff>0?'استلم من الزبون '+fmt(diff)+' د.ع':'رجّع للزبون '+fmt(-diff)+' د.ع';}
   const txt='تعديل الطلب'+(by?' (من '+by+')':'')+(v.added.length?' | أُضيف: '+v.added.map(a=>a.name+'×'+a.qty).join('، '):'')+(v.removed.length?' | نُقص: '+v.removed.map(a=>a.name+'×'+a.qty).join('، '):'');
   await orderUpdate(id,upd,txt);
+  if(diff&&o.payment&&o.payment.method==='credit'&&o.payment.cust&&typeof ledAdd==='function')try{const c=o.payment.cust;
+    ledAdd('ad_'+id+'_'+Date.now().toString(36),{kind:'cust',type:diff>0?'charge':'void',party:c.key,partyName:c.name,phone:c.phone||'',amount:r2(Math.abs(diff)),orderId:id,note:'تعديل الطلب'+(window.kNum?' #'+kNum(o):'')});}catch(e){}
+  if(getOrderType(o)==='delivery'&&diff)syncTracking(id,{status:o.status,value:v.newValue,fee:o.fee});
   if(o.inv){
     if(v.added.length)consumeItems(v.added,'sale',id,'إضافة للطلب');
     if(v.removed.length){if(s.restock==='return')consumeItems(v.removed,'sale_return',id,'تخفيض الطلب');else wasteItems(v.removed,id,'تخفيض الطلب — حُضّر');}
     saveAcc();saveMenu();renderMenu();
   }
   if(v.added.length)printSlip('➕ إضافة على الطلب #'+id.substring(0,6).toUpperCase()+(by?' — '+by:''),o,v.added.map(a=>({name:a.name,variant:a.variant,qty:a.qty,price:variantPrice(a.name,a.variant)})),v.newValue);
-  return{ok:true,v,value:v.newValue,items:newItems};
+  return{ok:true,v,value:v.newValue,items:newItems,paidMsg};
 }
 window.edSave=async()=>{
   const s=edState;if(!s)return;
@@ -2900,9 +2940,9 @@ window.edSave=async()=>{
   // منو عدّل: اسم الكاشير (يبين بالمطبخ والمجهز ويا شنو انضاف)
   const pu=window.posUser||{},by=String(pu.name||(pu.role==='owner'?'صاحب المطعم':'الكاشير')).slice(0,60);
   let r;try{r=await edCommit(s,by);}catch(e){toast('❌ '+e.message);return;}
-  if(r.none){viewClose();return;}
-  toast('✅ تم تعديل الطلب');
-  viewClose();
+  if(r.none){edClose();return;}
+  toast(r.paidMsg?'✅ تم تعديل الطلب — '+r.paidMsg:'✅ تم تعديل الطلب');
+  edClose();
 };
 // طلب تعديل من الويتر: الكاشير يطبّقه وحده (نفس مسار نافذة التعديل: المطبخ يشوف شنو انضاف، المخزون، وتذكرة الإضافة)
 window.posApplyEdit=async(o,items,by)=>{
@@ -3046,7 +3086,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=77"></script>
+<script src="pos-pro.js?v=78"></script>
 <script type="module">
 // «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
 if (window.STORE_MODE) {
