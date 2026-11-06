@@ -495,7 +495,9 @@ function lanUi() {
 }
 
 // بقسم: الطلب يبين إذا بيه أصناف لهذا القسم وبعده ما خلص (نفس شاشة المطبخ بالكاشير)
-const inSec = (o) => !SEC || (o.kSec ? !!(o.kSec[SEC] && !o.kSec[SEC].readyAt) : (o.items || []).some((i) => i.sec === SEC));
+// الصنف يكدر يكون بأكثر من قسم (secs) — القديم sec بس
+const itIn = (i, sid) => i.sec === sid || (Array.isArray(i.secs) && i.secs.includes(sid));
+const inSec = (o) => !SEC || (o.kSec ? !!(o.kSec[SEC] && !o.kSec[SEC].readyAt) : (o.items || []).some((i) => itIn(i, SEC)));
 // المطبخ (قسم): أصناف قسمه اللي ما خلصت. المجهز: الطلبات اللي خلصها المطبخ (أو كلها إذا شاشة المطبخ مطفية)
 const inKitchen = (o) => o.kitchen === 'new' && o.status !== 'cancelled' && Date.now() - (o.createdAtMs || 0) < 86400000;
 // ضغطات «جاهز» اللي بعدها توصل: الطلب يختفي فوراً، وإذا ما انحفظ خلال 20 ثانية يرجع
@@ -520,14 +522,14 @@ const ACK_K = 'kds_ack_v1';
 let ack = {};
 try { ack = JSON.parse(localStorage.getItem(ACK_K) || '{}') || {}; } catch (e) { ack = {}; }
 function ackSave() { const lim = Date.now() - 3 * 86400000; Object.keys(ack).forEach((k) => { if ((+ack[k] || 0) < lim && k.charAt(0) === 'c') delete ack[k]; }); try { localStorage.setItem(ACK_K, JSON.stringify(ack)); } catch (e) {} }
-const relevant = (list) => (list || []).filter((i) => i && (!SEC || !i.sec || i.sec === SEC));
+const relevant = (list) => (list || []).filter((i) => i && (!SEC || !i.sec || itIn(i, SEC)));
 const editsOf = (o) => (o.kEdits || []).filter((e) => e && e.at > (+ack['e:' + o.id] || 0) && Date.now() - e.at < 6 * 3600000 && (relevant(e.add).length || relevant(e.rem).length));
 // انلغى وهو بالمطبخ (بعده ما صار جاهز) — خلال آخر 30 دقيقة
 const cancList = () => orders.filter((o) => o.status === 'cancelled' && o.kitchen === 'new' && inSec(o) && !ack['c:' + o.id] && Date.now() - (o.cancelledAt || o.createdAtMs || 0) < 30 * 60000)
   .sort((a, b) => (b.cancelledAt || 0) - (a.cancelledAt || 0));
 const itLine = (i) => `<div class="it"><span class="q">${toA(i.qty || 1)}×</span><span class="nm">${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' <small class="sec">(' + esc(i.variant) + ')</small>' : ''}</span></div>`;
 function cancCard(o) {
-  const items = (o.items || []).filter((i) => !SEC || i.sec === SEC).map(itLine).join('');
+  const items = (o.items || []).filter((i) => !SEC || itIn(i, SEC)).map(itLine).join('');
   return `<div class="card canc" data-id="${esc(o.id)}"><div class="canc-h">❌ ملغي — لا تحضّره</div><div class="ch"><div><div class="cnum">#${esc(kNum(o))}</div><div class="clbl">${typeLabel(o)}</div></div></div>
     <div class="items">${items || '<div class="it">—</div>'}</div>${o.cancelReason ? `<div class="canc-why">السبب: ${esc(o.cancelReason)}</div>` : ''}
     <button type="button" class="ack-b" data-ack-c="${esc(o.id)}">👌 شفته — شيله من الشاشة</button></div>`;
@@ -583,7 +585,7 @@ $('undoB').onclick = async () => {
 // مجموع الأصناف بالطلبات اللي على الشاشة
 function totals(list) {
   const m = new Map();
-  list.forEach((o) => (o.items || []).filter((i) => !SEC || i.sec === SEC).forEach((i) => { const k = i.name + (i.variant && i.variant !== 'وحدة' ? ' (' + i.variant + ')' : ''); m.set(k, (m.get(k) || 0) + (+i.qty || 1)); }));
+  list.forEach((o) => (o.items || []).filter((i) => !SEC || itIn(i, SEC)).forEach((i) => { const k = i.name + (i.variant && i.variant !== 'وحدة' ? ' (' + i.variant + ')' : ''); m.set(k, (m.get(k) || 0) + (+i.qty || 1)); }));
   return [...m.entries()].sort((a, b) => b[1] - a[1]);
 }
 
@@ -622,7 +624,7 @@ function render() {
     const label = typeLabel(o);
     // المجهز: الأقسام للعلم (المطبخ هو اللي يعلّمها) — وإذا شاشة المطبخ مطفية المجهز يعلّمها بنفسه
     const secChips = !SEC && o.kSec ? `<div class="secs">${Object.entries(o.kSec).map(([sid, v]) => { const sc = secById(sid); return `<button type="button" class="sec ${v.readyAt ? 'done' : ''}"${assemble ? ' disabled' : ` data-sec="${esc(o.id)}|${esc(sid)}"`}>${v.readyAt ? '✅' : '⏳'} ${esc(sc.emoji || '')} ${esc(sc.name)}</button>`; }).join('')}</div>` : '';
-    const items = (o.items || []).filter((i) => !SEC || i.sec === SEC).map((i) => `<div class="it${addSet.has(i.name + '|' + (i.variant || '')) ? ' it-add' : ''}"><span class="q">${toA(i.qty || 1)}×</span><span class="nm">${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' <small class="sec">(' + esc(i.variant) + ')</small>' : ''}${!SEC && i.sec && sections.length ? ' <small class="sec">' + esc((secById(i.sec).emoji) || '') + '</small>' : ''}${i.note ? `<span class="note">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('');
+    const items = (o.items || []).filter((i) => !SEC || itIn(i, SEC)).map((i) => `<div class="it${addSet.has(i.name + '|' + (i.variant || '')) ? ' it-add' : ''}"><span class="q">${toA(i.qty || 1)}×</span><span class="nm">${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' <small class="sec">(' + esc(i.variant) + ')</small>' : ''}${!SEC && i.sec && sections.length ? ' <small class="sec">' + esc((secById(i.sec).emoji) || '') + '</small>' : ''}${i.note ? `<span class="note">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('');
     // بقسم: «جاهز» يعلّم هذا القسم بس، ولما تخلص كل الأقسام الطلب يصير جاهز وحده
     const btn = SEC && o.kSec ? `<button class="done-b" data-sec="${esc(o.id)}|${esc(SEC)}">✅ ${esc(secById(SEC).name)} جاهز</button>`
       : `<button class="done-b" data-done="${esc(o.id)}">${t === 'delivery' ? '✅ تم التجهيز — يرجع لكاشير الدلفري' : '✅ تم التجهيز — جاهز للزبون'}</button>`;

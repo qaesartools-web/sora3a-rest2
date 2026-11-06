@@ -429,7 +429,7 @@ html.store-mode .bnav .nb:not([data-tab="acc"]),html.store-mode .desktop-nav .dn
 html.store-mode .ac-ext{display:none!important}
 .store-note{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:rgba(176,122,74,.12);border:1px solid rgba(176,122,74,.35);color:#8a5a2b;font-size:13.5px;line-height:1.8}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=32">
+<link rel="stylesheet" href="pos-pro.css?v=33">
 <script src="device.js?v=2"></script>
 <script src="ask.js?v=2"></script>
 </head>
@@ -2900,10 +2900,10 @@ async function edCommit(s,by){
   const merged={};s.work.forEach(i=>{const k=i.name+'|'+i.variant;if(merged[k])merged[k].qty+=i.qty;else merged[k]={...i};});
   const newItems=Object.values(merged);
   // كل صنف ياخذ قسمه بالمطبخ (حتى الصنف الجديد)
-  if(window.kSecOf)newItems.forEach(i=>{if(!i.sec){const sc=window.kSecOf(i.name);if(sc)i.sec=sc;}});
+  if(window.kSecsOf)newItems.forEach(i=>{if(!i.sec){const ss=window.kSecsOf(i.name);if(ss.length){i.sec=ss[0];if(ss.length>1)i.secs=ss;}}});
   const upd={items:newItems,notes:notesOf(newItems),value:v.newValue,modifiedAt:Date.now()};
   // شاشة المطبخ: شنو انضاف وشنو انشال (تبين للطباخ لحد ما يضغط «شفته»)
-  const edLine=a=>({name:a.name,variant:a.variant||'',qty:a.qty,sec:(window.kSecOf&&window.kSecOf(a.name))||''});
+  const edLine=a=>{const ss=(window.kSecsOf&&window.kSecsOf(a.name))||[];return {name:a.name,variant:a.variant||'',qty:a.qty,sec:ss[0]||'',...(ss.length>1?{secs:ss}:{})};};
   const kEdit={at:Date.now(),add:v.added.map(edLine),rem:v.removed.map(edLine)};
   if(by)kEdit.by=String(by).slice(0,60);
   if(o.kitchen){
@@ -2913,7 +2913,7 @@ async function edCommit(s,by){
     const fin=edFin(o);
     if(kEdit.add.length&&o.status!=='cancelled'&&(!fin||(s.toKitchen!==false&&edKitchenOk(o)))){
       upd.kitchen='new';if(o.status==='ready'&&!o.servedAtMs)upd.status='preparing';
-      if(o.kSec){const ks=JSON.parse(JSON.stringify(o.kSec));kEdit.add.forEach(a=>{if(!a.sec)return;const x=ks[a.sec]||(ks[a.sec]={n:0,readyAt:0});x.n=(+x.n||0)+(+a.qty||1);x.readyAt=0;});upd.kSec=ks;}
+      if(o.kSec){const ks=JSON.parse(JSON.stringify(o.kSec));kEdit.add.forEach(a=>{(a.secs||(a.sec?[a.sec]:[])).forEach(sid=>{const x=ks[sid]||(ks[sid]={n:0,readyAt:0});x.n=(+x.n||0)+(+a.qty||1);x.readyAt=0;});});upd.kSec=ks;}
     }
   }
   if(o.captainId&&getOrderType(o)==='delivery')upd.commission=Math.round(v.newValue*.1);
@@ -3090,7 +3090,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=81"></script>
+<script src="pos-pro.js?v=82"></script>
 <script type="module">
 // «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
 if (window.STORE_MODE) {

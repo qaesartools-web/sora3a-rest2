@@ -58,7 +58,7 @@
     defaultFee: 5000, feePresets: [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000], taxPct: 0, servicePct: 0, tables: 0, pagers: 10,
     printKitchen: false, quickAdd: true, paper: 80, drawer: false,
     // أقسام المطبخ: كل قسم يستلم أصنافه فقط، ورقم الطلب يوحّدها
-    kSecOn: false, catSection: {},
+    kSecOn: false, catSection: {}, itemSec: {},
     sections: [{ id: 'k1', name: 'الشاورما', emoji: '🌯' }, { id: 'k2', name: 'الكنتاكي', emoji: '🍗' }, { id: 'k3', name: 'البرغر', emoji: '🍔' },
       { id: 'k4', name: 'البيتزا', emoji: '🍕' }, { id: 'k5', name: '', emoji: '🍽️' }, { id: 'k6', name: '', emoji: '🥗' }],
     quickNotes: ['بدون بصل', 'بدون صوص', 'حار', 'زيادة جبن', 'بدون مخلل'],
@@ -1191,10 +1191,10 @@ function orderActionsCore(o){
       // شرائح الأقسام: الضغط يعلّم القسم جاهزاً، واكتمال كل الأقسام = الطلب جاهز
       const chips = o.kSec ? `<div class="kds-secs">${Object.entries(o.kSec).map(([sid, v]) => { const sc = secById(sid) || { name: sid, emoji: '🍽️' };
         return `<button type="button" class="kds-sec ${v.readyAt ? 'done' : ''}" onclick="kSecDone('${esc(o.id)}','${esc(sid)}')">${v.readyAt ? '✅' : '⏳'} ${esc(sc.emoji || '')} ${esc(sc.name)} <small>${toA(v.n || 0)}</small></button>`; }).join('')}</div>` : '';
-      const items = (o.items || []).map((it, k) => ({ ...orderItemsFull(o)[k], note: it.note, sec: it.sec })).filter((i) => !kdsSec || i.sec === kdsSec);
+      const items = (o.items || []).map((it, k) => ({ ...orderItemsFull(o)[k], note: it.note, sec: it.sec, secs: it.secs })).filter((i) => !kdsSec || itSecs(i).includes(kdsSec));
       return `<div class="kds-card ${cls}"><div class="kds-top"><div><div class="kds-num">#${esc(kNum(o))} <span class="kds-lbl">${esc(label)}</span></div><div class="kds-type">${esc(t12(o.createdAt))}${o.pager ? ` • <b class="kds-pager">📟 ${toA(o.pager)}</b>` : ''}</div></div>
         <div class="kds-time">⏱ ${toA(m)} د</div></div>${kdsSec ? '' : chips}
-        <div class="kds-items">${items.map((i) => `<div class="kds-it"><span class="q">${toA(i.qty)}×</span><span>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${!kdsSec && i.sec && secById(i.sec) ? ` <small class="kds-isec">${esc(secById(i.sec).emoji || '')}</small>` : ''}${i.note ? `<span class="n">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('')}</div>
+        <div class="kds-items">${items.map((i) => `<div class="kds-it"><span class="q">${toA(i.qty)}×</span><span>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${!kdsSec && itSecs(i).some(secById) ? ` <small class="kds-isec">${esc(itSecs(i).map(secById).filter(Boolean).map((x) => x.emoji || '').join(''))}</small>` : ''}${i.note ? `<span class="n">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('')}</div>
         ${o.note ? `<div class="kds-note">📝 ${esc(o.note)}</div>` : ''}
         ${kdsSec ? `<button class="kds-done" onclick="kSecDone('${esc(o.id)}','${esc(kdsSec)}')">✅ ${esc((secById(kdsSec) || {}).name || '')} جاهز</button>`
           : `<button class="kds-done" onclick="kdsDone('${esc(o.id)}')">✅ اكتمل الطلب — نادِ الزبون</button>`}</div>`;
@@ -1331,9 +1331,9 @@ const showMTabCore = tab=>{
         <div class="flbl">⏱️ شاشة المطبخ: الطلب يصير أصفر بعد كم دقيقة، وأحمر (متأخر) بعد كم دقيقة</div>
         <div class="set-row"><div><input class="finp" id="stKWarn" type="number" min="1" max="120" value="${esc(s.kWarn || 10)}" placeholder="أصفر"></div><div><input class="finp" id="stKLate" type="number" min="2" max="240" value="${esc(s.kLate || 20)}" placeholder="أحمر"></div></div>
         <div class="flbl">الأقسام (اترك الاسم فارغاً لإلغاء القسم)</div>
-        <div id="secRows">${part(() => secArr(s.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join(''))}</div>
+        <div id="secRows">${part(() => secArr(s.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div class="sec-nm"><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم">${x.name && x.id ? secItBtn(x.id) : ''}</div></div>`).join(''))}</div>
         <button type="button" class="btn-soft" style="width:100%;margin-top:6px" onclick="secAddRow()">➕ إضافة قسم (طابعة ثانية)</button>
-        <div class="ac-sub" style="margin-top:4px;line-height:1.7">كل قسم إله طابعته (تختارها تحت). تكدر تضيف لحد ٣٠ قسم — اكتب الاسم واضغط «حفظ»، بعدها يطلع بقائمة الفئات والطابعات.</div>
+        <div class="ac-sub" style="margin-top:4px;line-height:1.7">كل قسم إله طابعته (تختارها تحت). تكدر تضيف لحد ٣٠ قسم — اكتب الاسم واضغط «حفظ»، بعدها يطلع بقائمة الفئات والطابعات. زر «🍔 الأصناف» يم كل قسم: تأشّر الأصناف اللي تنطبع على طابعته (الصنف يكدر يروح لأكثر من قسم).</div>
         <div class="flbl" style="margin-top:10px">كل فئة بالمنيو تابعة لأي قسم؟</div>
         ${part(() => (Array.isArray(menu) ? menu : []).filter((c) => c && c.cat).map((c, i) => `<div class="set-row"><div class="sec-cat">${esc(c.emoji || '')} ${esc(c.cat)}</div><div><select class="fsel" id="stCat${i}" data-cat="${esc(c.cat)}"><option value="">— بدون قسم (لا تُطبع بالمطبخ) —</option>${secArr(s.sections || []).filter((x) => x.name).map((x) => `<option value="${esc(x.id)}" ${(s.catSection || {})[c.cat] === x.id ? 'selected' : ''}>${esc(x.emoji || '')} ${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<div class="ac-sub">أضف فئات للمنيو أولاً</div>')}
         <div id="secHealth" class="sec-health"></div>
@@ -1395,6 +1395,7 @@ const showMTabCore = tab=>{
       kWarn: Math.round(clamp($('stKWarn').value || 10, 1, 120)), kLate: Math.max(Math.round(clamp($('stKWarn').value || 10, 1, 120)) + 1, Math.round(clamp($('stKLate').value || 20, 2, 240))),
       sections: secArr(settings.sections).map((x, i) => ({ id: x.id || 'sec' + (i + 1), emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
       catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
+      itemSec: settings.itemSec && typeof settings.itemSec === 'object' ? settings.itemSec : {},
       quickAdd: $('stQuick').checked, quickNotes: list($('stNotes').value).slice(0, 10).map((x) => x.slice(0, 30)),
       bizHours: settings.bizHours || null,
       halls: Array.isArray(settings.halls) ? settings.halls : [],
@@ -1627,11 +1628,18 @@ const ordCancelCore = id=>{
   };
   function secById(id) { return secList().find((x) => x.id === id); }
   const secOn = () => !!settings.kSecOn && secList().length > 0;
-  function secOfItem(name) {
-    const c = menu.find((c) => (c.items || []).some((i) => i.name === name));
-    const sid = c ? (settings.catSection || {})[c.cat] : '';
-    return sid && secById(sid) ? sid : '';
+  // أقسام الصنف: اختيار الصنف نفسه (itemSec — يكدر يروح لأكثر من قسم/طابعة) وإلا قسم فئته
+  const catSecOf = (name) => { const c = (Array.isArray(menu) ? menu : []).find((c) => (c.items || []).some((i) => i.name === name)); const sid = c ? (settings.catSection || {})[c.cat] : ''; return sid ? [sid] : []; };
+  function secsOfItem(name, map) {
+    const m = map || settings.itemSec || {};
+    const l = Object.prototype.hasOwnProperty.call(m, name) && Array.isArray(m[name]) ? m[name] : catSecOf(name);
+    return [...new Set(l)].filter((sid) => secById(sid));
   }
+  function secOfItem(name) { return secsOfItem(name)[0] || ''; }
+  // أقسام صنف بطلب: secs (أكثر من قسم) أو sec (قسم واحد — الطلبات القديمة)
+  const itSecs = (i) => (Array.isArray(i.secs) && i.secs.length ? i.secs : i.sec ? [i.sec] : []);
+  const setItSecs = (it, ss, ks) => { if (!ss.length) return; it.sec = ss[0]; if (ss.length > 1) it.secs = ss; else delete it.secs; if (ks) ss.forEach((sid) => { (ks[sid] = ks[sid] || { n: 0, readyAt: 0 }).n += it.qty; }); };
+  window.posItSecs = itSecs; window.kSecsOf = (n) => secsOfItem(n);
   // رقم يومي يتسلسل لكل الطلبات (يظهر كبيراً على تذاكر الأقسام والبيجر و«طلبك جاهز»)
   // رقم واحد لكل المطعم حتى لو أكثر من كاشير يشتغلون سوا: كل جهاز يحجز من السيرفر دفعة صغيرة أرقام مقدماً
   // (restaurants/{rid}/counters/tickets) فالطلب ينطبع فوراً بدون انتظار؛ وبدون إنترنت نرجع للعدّ المحلي.
@@ -1716,7 +1724,7 @@ const ordCancelCore = id=>{
     o.ticketNo = nextTicket();
     if (!secOn()) return;
     const ks = {};
-    (o.items || []).forEach((it) => { const sid = secOfItem(it.name); if (sid) { it.sec = sid; (ks[sid] = ks[sid] || { n: 0, readyAt: 0 }).n += it.qty; } });
+    (o.items || []).forEach((it) => setItSecs(it, secsOfItem(it.name), ks));
     if (Object.keys(ks).length) o.kSec = ks;
   }
   window.kSecDone = async (id, sid) => {
@@ -1744,7 +1752,7 @@ const ordCancelCore = id=>{
   // ── تذكرة القسم: رقم الطلب كبير + أصناف القسم فقط
   function secTicketBody(o, sid) {
     const sc = secById(sid) || { name: sid, emoji: '' };
-    const items = (o.items || []).filter((i) => i.sec === sid);
+    const items = (o.items || []).filter((i) => itSecs(i).includes(sid));
     const others = Object.keys(o.kSec || {}).filter((x) => x !== sid).map((x) => (secById(x) || {}).name).filter(Boolean);
     return kTicketHTML(o, items, { bar: 'قسم ' + sc.name, others: others.join('، ') });
   }
@@ -1944,6 +1952,51 @@ const ordCancelCore = id=>{
     if (on && !v && android) { toast('⚠️ اسمح للتطبيق «بالظهور فوق التطبيقات» وارجع — بعدها يفتح وحده مع تشغيل الجهاز'); return; }
     toast(v ? (android ? '✅ الكاشير يفتح وحده مع تشغيل الجهاز' : '✅ البرنامج يشتغل وحده مع تشغيل الحاسبة') : 'تمام — ما يشتغل وحده');
   };
+  // ── أصناف كل قسم (طابعة): مربعات صح. الصنف يكدر ينطبع بأكثر من قسم؛ اللي ما تغيّر ياخذ قسم فئته ──
+  const secItCount = (sid) => (Array.isArray(menu) ? menu : []).reduce((n, c) => n + (c.items || []).filter((i) => i && i.name && secsOfItem(i.name).includes(sid)).length, 0);
+  function secItBtn(sid) { return `<button type="button" class="btn-soft sec-it" data-secit="${esc(sid)}" onclick="secItems('${esc(sid)}')" title="الأصناف اللي تنطبع على هالطابعة">🍔 الأصناف <b>${toA(secItCount(sid))}</b></button>`; }
+  const secItRefresh = () => document.querySelectorAll('[data-secit]').forEach((b) => { const v = b.querySelector('b'); if (v) v.textContent = toA(secItCount(b.dataset.secit)); });
+  window.secItems = (sid) => {
+    const sc = secById(sid); if (!sc) { toast('⚠️ احفظ القسم أول (اكتب اسمه واضغط «حفظ»)'); return; }
+    const cats = (Array.isArray(menu) ? menu : []).filter((c) => c && c.cat && (c.items || []).some((i) => i && i.name));
+    if (!cats.length) { toast('⚠️ المنيو فارغ — أضف أصناف من لوحة الإدارة أول'); return; }
+    let ov = $('secItOv');
+    if (!ov) { ov = document.createElement('div'); ov.id = 'secItOv'; ov.className = 'cov'; ov.onclick = (e) => { if (e.target === ov) ov.classList.remove('on'); }; document.body.appendChild(ov); }
+    const on = (n) => secsOfItem(n).includes(sid);
+    ov.innerHTML = `<div class="cmodal sit-box"><div class="ctit">${esc(sc.emoji || '')} ${esc(sc.name)} — الأصناف اللي تنطبع هنا</div>
+      <div class="csub">أشّر الأصناف. الصنف المؤشّر بأكثر من قسم ينطبع بكل طابعاتهم. <span class="sit-n"></span></div>
+      <input class="dinp sit-q" placeholder="🔎 دوّر على صنف" oninput="secItFilter(this.value)">
+      <div class="sit-list">${cats.map((c, ci) => `<div class="sit-cat" data-ci="${ci}"><label class="sit-ch sit-all"><input type="checkbox" data-sit-all="${ci}"> <b>${esc(c.emoji || '')} ${esc(c.cat)}</b> <small>(كل الفئة)</small></label>
+        ${(c.items || []).filter((i) => i && i.name).map((i) => { const ss = secsOfItem(i.name).filter((x) => x !== sid).map(secById).filter(Boolean);
+          return `<label class="sit-ch" data-nm="${esc(i.name)}"><input type="checkbox" data-sit="${esc(i.name)}" data-ci="${ci}" ${on(i.name) ? 'checked' : ''}> <span>${esc(i.name)}</span>${ss.length ? `<small class="sit-o">${esc(ss.map((x) => (x.emoji || '') + ' ' + x.name).join('، '))}</small>` : ''}</label>`; }).join('')}</div>`).join('')}</div>
+      <button class="confbtn" type="button" id="secItOk">✅ حفظ</button><button class="cancel" type="button" onclick="document.getElementById('secItOv').classList.remove('on')">إلغاء</button></div>`;
+    const boxes = () => [...ov.querySelectorAll('[data-sit]')];
+    const sync = () => { ov.querySelectorAll('[data-sit-all]').forEach((a) => { const l = boxes().filter((b) => b.dataset.ci === a.dataset.sitAll); a.checked = l.length > 0 && l.every((b) => b.checked); a.indeterminate = !a.checked && l.some((b) => b.checked); });
+      ov.querySelector('.sit-n').textContent = '(' + toA(boxes().filter((b) => b.checked).length) + ' صنف)'; };
+    ov.onchange = (e) => { const a = e.target.closest('[data-sit-all]'); if (a) boxes().filter((b) => b.dataset.ci === a.dataset.sitAll && !b.closest('.sit-ch').hidden).forEach((b) => { b.checked = a.checked; }); sync(); };
+    sync();
+    $('secItOk').onclick = async () => {
+      const m = JSON.parse(JSON.stringify(settings.itemSec && typeof settings.itemSec === 'object' ? settings.itemSec : {}));
+      boxes().forEach((b) => {
+        const n = b.dataset.sit, cur = secsOfItem(n, m), has = cur.includes(sid);
+        if (b.checked === has) return;
+        const next = b.checked ? [...cur, sid] : cur.filter((x) => x !== sid), def = catSecOf(n).filter((x) => secById(x));
+        if (JSON.stringify(next) === JSON.stringify(def)) delete m[n]; else m[n] = next;
+      });
+      settings = { ...settings, itemSec: m };
+      lsSet(setKey(), settings);
+      ov.classList.remove('on'); secItRefresh();
+      try { await fb().setDoc(sub('settings', 'main'), { ...settings, updatedAtMs: Date.now() }); toast('✅ انحفظت أصناف «' + sc.name + '» لكل أجهزة المطعم'); }
+      catch (e) { toast('⚠️ انحفظت على هذا الجهاز فقط — تحقق من الإنترنت'); }
+    };
+    ov.classList.add('on');
+    const q = ov.querySelector('.sit-q'); if (q && !('ontouchstart' in window)) q.focus();
+  };
+  window.secItFilter = (v) => {
+    const q = String(v || '').trim(), ov = $('secItOv'); if (!ov) return;
+    ov.querySelectorAll('.sit-ch[data-nm]').forEach((l) => { l.hidden = !!q && !l.dataset.nm.includes(q); });
+    ov.querySelectorAll('.sit-cat').forEach((c) => { c.hidden = !!q && !c.querySelector('.sit-ch[data-nm]:not([hidden])'); });
+  };
   function dpSettingsHtml(s) {
     const c = dpCfg(), secs = secArr(s.sections || []).filter((x) => x.name);
     const cp = (id, v) => `<input class="finp" type="number" min="1" max="5" id="${id}" value="${v || 1}" title="عدد النسخ" style="width:64px;text-align:center">`;
@@ -1956,7 +2009,7 @@ const ordCancelCore = id=>{
       <div id="dpStatus" class="dp-status"><span class="ac-sub">⏳ نجيب الطابعات…</span></div>
       <button type="button" class="btn-soft" style="width:100%;margin-top:6px" onclick="dpFind()">🔄 تحديث قائمة الطابعات</button>
       <div class="set-row" style="margin-top:8px"><div class="sec-cat">🧾 الفاتورة (الطابعة الرئيسية)</div><div style="display:flex;gap:6px"><select class="fsel" id="dpMain" style="flex:1"><option value="${esc(c.main)}" selected>${esc(c.main || '— الطابعة الافتراضية للويندوز —')}</option></select>${cp('dpRc', c.receiptCopies)}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('main')">🧪</button></div></div>
-      ${secs.map((x) => `<div class="set-row" style="margin-top:8px"><div class="sec-cat">${esc(x.emoji || '')} ${esc(x.name)}</div><div style="display:flex;gap:6px"><select class="fsel" id="dpP_${esc(x.id)}" style="flex:1"><option value="${esc((c.printers || {})[x.id] || '')}" selected>${esc((c.printers || {})[x.id] || '— نفس الطابعة الرئيسية —')}</option></select>${cp('dpC_' + esc(x.id), (c.copies || {})[x.id])}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('${esc(x.id)}')">🧪</button></div></div>`).join('')}
+      ${secs.map((x) => `<div class="set-row" style="margin-top:8px"><div class="sec-cat">${esc(x.emoji || '')} ${esc(x.name)}</div><div style="display:flex;gap:6px"><select class="fsel" id="dpP_${esc(x.id)}" style="flex:1"><option value="${esc((c.printers || {})[x.id] || '')}" selected>${esc((c.printers || {})[x.id] || '— نفس الطابعة الرئيسية —')}</option></select>${cp('dpC_' + esc(x.id), (c.copies || {})[x.id])}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('${esc(x.id)}')">🧪</button>${secItBtn(x.id)}</div></div>`).join('')}
       <label class="set-check" style="margin-top:8px"><input type="checkbox" id="dpFb" ${c.fallback !== false ? 'checked' : ''}> إذا طابعة قسم ما اشتغلت (مطفية / خلص الورق)، اطبع تذكرتها على الطابعة الرئيسية حتى ما تضيع</label>
       ${DESK.canAddNetwork ? `<div class="dp-net"><div class="flbl">➕ إضافة طابعة شبكة (LAN / Wi-Fi)</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap"><input class="finp" id="dpNetName" placeholder="الاسم (مثلاً: مطبخ الشاورما)" style="flex:2;min-width:140px">
@@ -2060,7 +2113,7 @@ const ordCancelCore = id=>{
     o.ticketNo = 99; // ما ناخذ رقم من تسلسل اليوم
     if (secOn()) {
       const ks = {};
-      items.forEach((it) => { const sid = secOfItem(it.name); if (sid) { it.sec = sid; (ks[sid] = ks[sid] || { n: 0, readyAt: 0 }).n += it.qty; } });
+      items.forEach((it) => setItSecs(it, secsOfItem(it.name), ks));
       if (Object.keys(ks).length) o.kSec = ks;
     }
     await printOrderAll(o, receiptHTML(o, null, { payment: { method: 'cash', cash: total, card: 0 } }, settings.printKitchen && !o.kSec));
@@ -2743,7 +2796,7 @@ const ordCancelCore = id=>{
   const lanOrder = (o) => {
     const x = { id: o.id };
     LAN_F.forEach((k) => { if (o[k] !== undefined && o[k] !== null) x[k] = o[k]; });
-    x.items = (o.items || []).map((i) => ({ name: i.name, qty: i.qty, variant: i.variant, note: i.note, sec: i.sec }));
+    x.items = (o.items || []).map((i) => ({ name: i.name, qty: i.qty, variant: i.variant, note: i.note, sec: i.sec, ...(Array.isArray(i.secs) ? { secs: i.secs } : {}) }));
     return x;
   };
   const lanList = () => orders.filter((o) => Date.now() - (o.createdAtMs || 0) < 36 * 3600000).map(lanOrder);
