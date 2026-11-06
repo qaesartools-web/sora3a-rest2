@@ -6,15 +6,19 @@ const { createHub, createClient, hmac, macEvent } = require('../lan');
 
 const KEY = 'a'.repeat(64), RID = 'R1';
 const port = () => 41000 + Math.floor(Math.random() * 9000);
-const wait = (ev, name, ms = 4000) => new Promise((res, rej) => {
+// المهلة أطول شوية: أجهزة البناء البطيئة (ماك) تتأخر بالاكتشاف — قبل: انتهت المهلة بـ4 ثواني والاختبار علك
+const wait = (ev, name, ms = 10000) => new Promise((res, rej) => {
   const t = setTimeout(() => rej(new Error('timeout ' + name)), ms);
   ev.on(name, function h(v) { clearTimeout(t); ev.off(name, h); res(v); });
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-function rig() {
-  const u = port();
+// كل اختبار يسكّر الكاشير والأجهزة حتى لو فشل (قبل: فشل واحد يخلي المنافذ مفتوحة وكل الاختبارات تعلك لحد ما تنلغي)
+function rig(t) {
+  const u = port(), made = [];
   const hub = createHub({ udpPort: u, tcpPort: 0, host: '127.0.0.1', bcast: ['127.0.0.1'] });
-  const mk = (role, cfg) => { const c = createClient({ role, udpPort: u, targets: ['127.0.0.1'] }); c.cfg = { rid: RID, key: KEY, dev: role + '-1', name: role, ...cfg }; return c; };
+  made.push(hub);
+  const mk = (role, cfg) => { const c = createClient({ role, udpPort: u, targets: ['127.0.0.1'] }); c.cfg = { rid: RID, key: KEY, dev: role + '-1', name: role, ...cfg }; made.push(c); return c; };
+  if (t && t.after) t.after(() => { for (const x of made) { try { x.stop(); } catch (e) {} } });
   return { hub, mk, up: u };
 }
 
@@ -23,8 +27,8 @@ test('HMAC vectors match the Android implementation (LanProtoTest.java)', () => 
   assert.equal(macEvent('0123456789abcdef0123456789abcdef', 'R1', 'D1', 'id1', 1700000000000, '{"t":"call"}'), '0976c10eed9d2c5f19118e3aa0923d5c98d5214ada829d5f45fcc03380535431');
 });
 
-test('a kitchen finds the cashier, both sides prove the key, and messages flow both ways', async () => {
-  const { hub, mk } = rig();
+test('a kitchen finds the cashier, both sides prove the key, and messages flow both ways', async (t) => {
+  const { hub, mk } = rig(t);
   const st = await hub.start({ rid: RID, key: KEY, dev: 'hub-1', name: 'كاشير 1' });
   assert.equal(st.on, true); assert.ok(st.port > 0);
   const k = mk('kitchen');
@@ -53,8 +57,8 @@ test('a kitchen finds the cashier, both sides prove the key, and messages flow b
   s.stop(); hub.stop();
 });
 
-test('a device with the wrong key or another restaurant never gets in', async () => {
-  const { hub, mk } = rig();
+test('a device with the wrong key or another restaurant never gets in', async (t) => {
+  const { hub, mk } = rig(t);
   await hub.start({ rid: RID, key: KEY, dev: 'hub-1', name: 'كاشير' });
   let joins = 0; hub.on('join', () => joins++);
   const bad = mk('kitchen', { key: 'b'.repeat(64) });
@@ -68,8 +72,8 @@ test('a device with the wrong key or another restaurant never gets in', async ()
   bad.stop(); other.stop(); hub.stop();
 });
 
-test('signed broadcast events reach the cashier once; forged or replayed ones are dropped', async () => {
-  const { hub, mk, up } = rig();
+test('signed broadcast events reach the cashier once; forged or replayed ones are dropped', async (t) => {
+  const { hub, mk, up } = rig(t);
   await hub.start({ rid: RID, key: KEY, dev: 'hub-1', name: 'كاشير' });
   const line = mk('line');
   await line.start(line.cfg);
@@ -95,8 +99,8 @@ test('signed broadcast events reach the cashier once; forged or replayed ones ar
   line.stop(); forger.stop(); hub.stop();
 });
 
-test('the kitchen reconnects by itself when the cashier program restarts', async () => {
-  const { hub, mk } = rig();
+test('the kitchen reconnects by itself when the cashier program restarts', async (t) => {
+  const { hub, mk } = rig(t);
   const cfg = { rid: RID, key: KEY, dev: 'hub-1', name: 'كاشير' };
   await hub.start(cfg);
   const k = mk('kitchen');
@@ -105,7 +109,7 @@ test('the kitchen reconnects by itself when the cashier program restarts', async
   const left = wait(k, 'leave');
   hub.stop();
   await left;
-  const back = wait(k, 'join', 8000);
+  const back = wait(k, 'join', 20000);
   await hub.start(cfg);
   assert.equal((await back).id, 'hub-1');
   k.stop(); hub.stop();

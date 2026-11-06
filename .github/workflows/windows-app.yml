@@ -26,6 +26,7 @@ jobs:
           - os: ubuntu-latest
             args: --linux AppImage deb
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: desktop
