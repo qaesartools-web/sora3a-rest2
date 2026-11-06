@@ -221,6 +221,16 @@ html.xs-prepNumFg .prep .n{color:var(--x-prepNumFg)!important}
 html.xs-footFg .foot,html.xs-footFg .foot b,html.xs-footFg .foot .tip{color:var(--x-footFg)!important}
 html.xs-emptyBg .empty{background:var(--x-emptyBg)!important;border-radius:20px}
 html.xs-emptyFg .empty{color:var(--x-emptyFg)!important;opacity:1!important}
+/* شفافية كل جزء (البرج: screenTheme.op) — الكتابات تخف، والخلفيات تصير لون شفاف (تنحسب بالكود) */
+html.op-nameFg .nm,html.op-nameFg .live{opacity:var(--op-nameFg)!important}
+html.op-clockFg .clk,html.op-clockFg .dt{opacity:var(--op-clockFg)!important}
+html.op-readyFg .ready .hd h2{opacity:var(--op-readyFg)!important}
+html.op-prepFg .prep .hd h2{opacity:var(--op-prepFg)!important}
+html.op-footFg .foot .tip{opacity:var(--op-footFg)!important}
+html.op-emptyFg .empty{opacity:var(--op-emptyFg)!important}
+html.op-readyNumBg .ready .n,html.op-prepNumBg .prep .n{box-shadow:none!important}
+/* خط الشاشة (البرج: screenTheme.font) — بدون نت يرجع لخط التصميم */
+html.ff .top,html.ff .top *,html.ff .cols,html.ff .cols *,html.ff .cols *::before,html.ff .cols *::after,html.ff .foot .tip{font-family:var(--ff)!important}
 
 /* ── قائمة الإعدادات (تشتغل بالريموت) ── */
 .menu{position:fixed;top:84px;left:24px;z-index:30;width:300px;max-height:calc(100% - 100px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
@@ -596,6 +606,21 @@ const rgbOf = (c) => [1, 3, 5].map((i) => parseInt(c.substr(i, 2), 16));
 const mixC = (a, b, t) => { const x = rgbOf(a), y = rgbOf(b); return '#' + x.map((v, i) => Math.round(v * (1 - t) + y[i] * t).toString(16).padStart(2, '0')).join(''); };
 const lumC = (c) => { const [r, g, b] = rgbOf(c).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
 const onC = (c) => (lumC(c) > 0.45 ? '#1A1206' : '#FFFFFF');
+// خطوط عربية يختارها البرج للشاشة (نفس القائمة بالبرج) — [اسم الخط، رابط جوجل]
+const SCR_FONTS = { cairo: ['Cairo', 'Cairo:wght@600;800'], tajawal: ['Tajawal', 'Tajawal:wght@500;800'], almarai: ['Almarai', 'Almarai:wght@700;800'], changa: ['Changa', 'Changa:wght@600;800'],
+  lalezar: ['Lalezar', 'Lalezar'], reem: ['Reem Kufi', 'Reem+Kufi:wght@600;700'], messiri: ['El Messiri', 'El+Messiri:wght@600;700'], amiri: ['Amiri', 'Amiri:wght@700'], marhey: ['Marhey', 'Marhey:wght@600;700'],
+  kufi: ['Noto Kufi Arabic', 'Noto+Kufi+Arabic:wght@600;800'], rakkas: ['Rakkas', 'Rakkas'], ruqaa: ['Aref Ruqaa', 'Aref+Ruqaa:wght@700'], readex: ['Readex Pro', 'Readex+Pro:wght@600;700'], lemonada: ['Lemonada', 'Lemonada:wght@600;700'] };
+// شفافية الأجزاء: الكتابات بـ opacity، والخلفيات وأرقام المربعات بلون شفاف (لون البرج، أو لون التصميم إذا ما مختار)
+const OP_TXT = ['nameFg', 'clockFg', 'readyFg', 'prepFg', 'footFg', 'emptyFg'], OP_COL = ['colBg', 'readyNumBg', 'readyNumFg', 'prepNumBg', 'prepNumFg', 'emptyBg'];
+function opDefault(design, k, c1, c2, custom) {
+  const d = {
+    classic: { colBg: '#ffffff', readyNumBg: custom ? c2 : '#16a34a', readyNumFg: custom ? onC(c2) : '#ffffff', prepNumBg: '#fff4e6', prepNumFg: '#9a3412' },
+    board: { colBg: '#1e1a13', readyNumBg: '#27221a', readyNumFg: c2, prepNumBg: '#211d16', prepNumFg: '#cfc6b2' },
+    tickets: { readyNumBg: c2, readyNumFg: onC(c2), prepNumBg: '#fffdf6', prepNumFg: '#4a4033' },
+    whiteboard: { readyNumFg: c2, prepNumFg: '#1f2a44' } }[design] || {};
+  return d[k] || '';
+}
+const opOf = (v) => { v = +v; return v > 0 && v < 1 ? Math.max(0.05, Math.round(v * 100) / 100) : 1; };
 let thKey = '', logoUrl = '', unsubLogo = null, wmCfg = null, qrCfg = {};
 // مربع الباركود (يم الكود): البرج يختار لونه ولون كتابته وكتابته — screenTheme.qr = {bg, fg, t1, t2, sub}. الكود نفسه ما يتغير
 function qrStyle() {
@@ -628,7 +653,8 @@ function applyTheme(th) {
   const design = TH[th.design] ? th.design : 'classic', diff = (c, d) => hexOk(c) && c.toLowerCase() !== d.toLowerCase();
   const custom = diff(th.c1, TH[design][0]) || diff(th.c2, TH[design][1]);   // ألوان التصميم نفسها = مو ألوان خاصة
   const x = th.x || {}, xk = XS.map((k) => (hexOk(x[k]) ? x[k] : '')).join(',');
-  const c1 = hexOk(th.c1) ? th.c1 : TH[design][0], c2 = hexOk(th.c2) ? th.c2 : TH[design][1], key = design + c1 + c2 + custom + xk;
+  const op = th.op && typeof th.op === 'object' ? th.op : {}, opk = OP_TXT.concat(OP_COL).map((k) => opOf(op[k])).join(','), ff = SCR_FONTS[th.font] ? th.font : '';
+  const c1 = hexOk(th.c1) ? th.c1 : TH[design][0], c2 = hexOk(th.c2) ? th.c2 : TH[design][1], key = design + c1 + c2 + custom + xk + '|' + opk + '|' + ff;
   if (key === thKey) return;
   thKey = key;
   const H = document.documentElement, set = (k, v) => H.style.setProperty(k, v);
@@ -642,10 +668,24 @@ function applyTheme(th) {
     set('--t1', mixC(c2, '#FFFFFF', 0.18)); set('--t2', c2); set('--tfg', onC(c2)); set('--neon', c2);
     set('--neon-rgb', rgbOf(c2).join(',')); set('--t-rgb', rgbOf(mixC(c2, '#000000', 0.2)).join(','));
   }
+  // شفافية كل جزء
+  OP_TXT.forEach((k) => { const v = opOf(op[k]); H.classList.toggle('op-' + k, v < 1); if (v < 1) set('--op-' + k, String(v)); else H.style.removeProperty('--op-' + k); });
+  OP_COL.forEach((k) => {
+    const v = opOf(op[k]), col = v < 1 ? (hexOk(x[k]) ? x[k] : opDefault(design, k, c1, c2, custom)) : '';
+    H.classList.toggle('op-' + k, !!col);
+    if (col) { H.classList.add('xs-' + k); set('--x-' + k, 'rgba(' + rgbOf(col).join(',') + ',' + v + ')'); }
+  });
   // خط التصميم (من جوجل — بدون نت يرجع للخط العادي)
-  const f = TH_FONT[design], old = document.getElementById('thFont');
-  if (old && old.dataset.f !== (f || '')) old.remove();
-  if (f && !document.getElementById('thFont')) { const l = document.createElement('link'); l.id = 'thFont'; l.rel = 'stylesheet'; l.dataset.f = f; l.href = 'https://fonts.googleapis.com/css2?family=' + f + '&display=swap'; document.head.appendChild(l); }
+  const fontLink = (id, f) => {
+    const old = document.getElementById(id);
+    if (old && old.dataset.f !== (f || '')) old.remove();
+    if (f && !document.getElementById(id)) { const l = document.createElement('link'); l.id = id; l.rel = 'stylesheet'; l.dataset.f = f; l.href = 'https://fonts.googleapis.com/css2?family=' + f + '&display=swap'; document.head.appendChild(l); }
+  };
+  fontLink('thFont', TH_FONT[design]);
+  // خط يختاره البرج لكل الشاشة
+  fontLink('ffFont', ff ? SCR_FONTS[ff][1] : '');
+  H.classList.toggle('ff', !!ff);
+  if (ff) set('--ff', "'" + SCR_FONTS[ff][0] + "',var(--font)"); else H.style.removeProperty('--ff');
 }
 function setLogo(url) {
   logoUrl = /^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(url || '') ? url : '';

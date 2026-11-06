@@ -312,6 +312,8 @@ function start() {
     useTables();
   }, () => renderTables()));
   // طلباتي اليوم (وأمس للي يشتغلون بعد نص الليل)
+  // الكاشير اللي تروحله طلبات هالويتر (يختاره صاحب المطعم من لوحة الإدارة) — يتحدث وحده
+  unsubs.push(onSnapshot(doc(db, 'screens', me.uid), (s) => { if (s.exists()) me.screen = { ...(me.screen || {}), ...s.data() }; }, () => {}));
   unsubs.push(onSnapshot(query(collection(db, 'webOrders'), where('restaurantId', '==', me.rid), where('waiterUid', '==', me.uid), where('day', 'in', [bagDay(), bagDay(Date.now() - 86400000)])), { includeMetadataChanges: true }, (s) => {
     fsLive = !s.metadata.fromCache;
     mineFs = s.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -524,6 +526,9 @@ async function send() {
   const data = { restaurantId: me.rid, source: 'waiter', mode: 'table', table: String(table).slice(0, 10), status: 'new', createdAtMs: Date.now(), day: bagDay(),
     waiter: String(me.name || 'الويتر').slice(0, 60), waiterUid: me.uid, total: total(), items: lines() };
   if (note) data.note = note.slice(0, 500);
+  // طلب الويتر يروح لكاشيره بس (إذا صاحب المطعم ربطه بكاشير)
+  const toC = ((me.screen && me.screen.cashiers) || []).filter((x) => typeof x === 'string' && x).slice(0, 30);
+  if (toC.length) data.toCashiers = toC;
   sending = true; renderCart();
   const t = table;
   // بنفس الوقت: السيرفر (ينحفظ بالتلفون ويترفع وحده من يرجع النت) + الكاشير على الواي فاي مباشرة — نفس المعرّف، فما يتكرر

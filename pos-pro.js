@@ -54,11 +54,11 @@
 
   // ══════════ الإعدادات ══════════
   const DEFAULTS = {
-    receiptTitle: '', receiptSub: '', receiptPhone: '', receiptFooter: 'شكراً لزيارتكم ❤️',
+    receiptTitle: '', receiptSub: '', receiptPhone: '', receiptFooter: 'شكراً لزيارتكم ❤️', receiptLogo: true,
     defaultFee: 5000, feePresets: [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000], taxPct: 0, servicePct: 0, tables: 0, pagers: 10,
     printKitchen: false, quickAdd: true, paper: 80, drawer: false,
     // أقسام المطبخ: كل قسم يستلم أصنافه فقط، ورقم الطلب يوحّدها
-    kSecOn: false, catSection: {},
+    kSecOn: false, catSection: {}, itemSec: {},
     sections: [{ id: 'k1', name: 'الشاورما', emoji: '🌯' }, { id: 'k2', name: 'الكنتاكي', emoji: '🍗' }, { id: 'k3', name: 'البرغر', emoji: '🍔' },
       { id: 'k4', name: 'البيتزا', emoji: '🍕' }, { id: 'k5', name: '', emoji: '🍽️' }, { id: 'k6', name: '', emoji: '🥗' }],
     quickNotes: ['بدون بصل', 'بدون صوص', 'حار', 'زيادة جبن', 'بدون مخلل'],
@@ -93,6 +93,8 @@
 
   // ══════════ حالة الكاشير ══════════
   let disc = { type: 'amt', value: 0, reason: '' };
+  // ملاحظة عامة على الطلب كله (الكاشير يكتبها من بداية دك الطلب) — تطلع بتذكرة المطبخ والفاتورة
+  let orderNote = '';
   let prodQuery = '';
   let shift = null;           // الوردية المفتوحة
   let lastSaved = null;       // آخر طلب انحفظ من finalOrder (رقمه لدين الزبون)
@@ -353,9 +355,18 @@ const openVarCore = (ci,ii)=>{
     $('sendBtn').disabled = cart.length === 0;
     $('discBtn').classList.toggle('on', !!t.disc);
     $('discBtn').style.display = can('discount') ? '' : 'none';
+    const on = $('ordNote');
+    if (on) on.innerHTML = orderNote
+      ? `<div class="on-chip" onclick="ordNoteEdit()" title="تعديل">📝 <b>ملاحظة الطلب:</b> ${esc(orderNote)}</div><button type="button" class="on-x" onclick="ordNoteClear()" aria-label="شيل الملاحظة">✕</button>`
+      : `<button type="button" class="on-add" onclick="ordNoteEdit()">📝 ملاحظة على الطلب كله</button>`;
     renderCurCust();
     renderPagers();
   };
+  window.ordNoteEdit = () => {
+    acDialog('📝 ملاحظة على الطلب كله', 'تطلع بتذكرة المطبخ والفاتورة' + (notesArr(settings.quickNotes).length ? ' — ' + notesArr(settings.quickNotes).join(' • ') : ''),
+      [{ id: 'n', label: 'الملاحظة', value: orderNote, ph: 'مثال: الزبون مستعجل / كل شي بدون بصل', list: notesArr(settings.quickNotes) }], (v) => { orderNote = String(v.n || '').trim().slice(0, 200); renderCart(); }, '✅ حفظ');
+  };
+  window.ordNoteClear = () => { orderNote = ''; renderCart(); };
   window.cNote = (i) => {
     const c = cart[i]; if (!c) return;
     acDialog('📝 ملاحظة: ' + c.name, notesArr(settings.quickNotes).join(' • '), [{ id: 'n', label: 'الملاحظة', value: c.note || '' }], (v) => {
@@ -366,9 +377,9 @@ const openVarCore = (ci,ii)=>{
     }, '✅ حفظ');
   };
   window.clearCart = async () => {
-    if (!cart.length && !disc.value) return;
+    if (!cart.length && !disc.value && !orderNote) return;
     if (cart.length && !(await askOk('تفريغ السلة؟'))) return;
-    cart = []; disc = { type: 'amt', value: 0, reason: '' }; renderCart();
+    cart = []; disc = { type: 'amt', value: 0, reason: '' }; orderNote = ''; renderCart();
   };
   window.openDiscount = () => {
     if (!can('discount')) { deny(); return; }
@@ -461,12 +472,13 @@ function openDelivModalCore(){
       day: bagDay(),             // يوم الطلب بتوقيت بغداد (لشاشة «طلبك جاهز» بدون فهارس إضافية)
     };
     if (t.disc) { o.discountInfo = { type: disc.type, value: disc.value, reason: disc.reason || '' }; if (disc.loyalty) o.discountInfo.loyalty = true; }
+    if (orderNote) o.note = orderNote;
     // طلب من المنيو الأونلاين أو الويتر
     if (webAttach) {
       o.webId = webAttach.id; o.source = webAttach.source === 'waiter' ? 'waiter' : 'qr';
       if (webAttach.waiter) o.waiter = String(webAttach.waiter).slice(0, 60);
       if (webAttach.waiterUid) o.waiterUid = String(webAttach.waiterUid).slice(0, 128);
-      if (webAttach.note) o.note = String(webAttach.note).slice(0, 500);
+      if (webAttach.note) o.note = [String(webAttach.note), orderNote].filter(Boolean).join(' — ').slice(0, 500);
     }
     applySections(o);
     return o;
@@ -518,7 +530,7 @@ function openDelivModalCore(){
     else printOrderAll({ id: ref.id, ...o }, receiptHTML({ id: ref.id, ...o }, captain, pay, settings.printKitchen && !o.kSec));
     const names = { salon: '🪑 ' + o.customer, takeaway: '🛍️ سفري فوري', delivery: later ? '🏍️ دلفري قيد التحضير — لما يجهز حوّله للكابتن' : '🏍️ دلفري — ' + (captain ? captain.name : '') };
     toast('✅ تم — ' + names[type] + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : '') + (pay && pay.payment.change ? ' • الباقي ' + money(pay.payment.change) : ''));
-    cart = cart.filter((c) => !sold.includes(c)); if (disc === discUsed) disc = { type: 'amt', value: 0, reason: '' }; renderCart();
+    cart = cart.filter((c) => !sold.includes(c)); if (disc === discUsed) disc = { type: 'amt', value: 0, reason: '' }; orderNote = ''; renderCart();
     lastSaved = { id: ref.id, ...o };
     return ref.id;
   };
@@ -531,7 +543,7 @@ function openDelivModalCore(){
     const f = fb(), ref = f.doc(f.collection(f.db, 'orders'));
     const o = baseOrder('takeaway', t, items);
     const num_ = o.ticketNo;          // نفس رقم الطلب اللي يطلع بشاشة المجهز و«طلبك جاهز» (مو عدّاد خاص بالجهاز)
-    Object.assign(o, { held: true, holdNum: num_, customer: info.name || ('سفري #' + num_), phone: info.phone || '', note: info.note || '',
+    Object.assign(o, { held: true, holdNum: num_, customer: info.name || ('سفري #' + num_), phone: info.phone || '', note: [o.note, info.note].filter(Boolean).join(' — ').slice(0, 500),
       status: 'preparing', timeline: [{ status: 'preparing', time: now, text: 'تم إنشاء الطلب — قيد التحضير' }] });
     if (pagerSel && feat('pager')) { o.pager = pagerSel; pagerSel = 0; }
     f.setDoc(ref, o).catch((e) => toast('❌ تعذر حفظ الطلب: ' + (e.code || e.message)));
@@ -540,9 +552,9 @@ function openDelivModalCore(){
     curCust = null;
     applySaleToStock(sold.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
     if (o.kSec) printOrderAll({ id: ref.id, ...o }, null);
-    else printSlip('🍳 تذكرة مطبخ #' + num_, { customer: o.customer, phone: o.phone }, items.map((i) => ({ ...i, name: i.name + (i.note ? ' [' + i.note + ']' : '') })), t.total, 'المجموع', o.note);
+    else printSlip('🍳 تذكرة مطبخ #' + num_, { id: ref.id, ...o }, items, t.total, 'المجموع', o.note);
     toast('🍳 حُفظ الطلب #' + num_ + ' — قيد التحضير' + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : ''));
-    cart = cart.filter((c) => !sold.includes(c)); disc = { type: 'amt', value: 0, reason: '' }; renderCart();
+    cart = cart.filter((c) => !sold.includes(c)); disc = { type: 'amt', value: 0, reason: '' }; orderNote = ''; renderCart();
   };
 
   // التسليم للزبون: يطلب الدفع إن لم يُدفع
@@ -735,58 +747,120 @@ function orderActionsCore(o){
 
   // ══════════ الفاتورة ══════════
   const PAY_AR = { cash: 'نقداً', card: 'بطاقة', mixed: 'مختلط', later: 'آجل — لم يُدفع', cod: 'عند الاستلام (الكابتن)', credit: 'دين — على حساب الزبون' };
+  // ══════════ تصميم الورق (فاتورة الكاشير وتذكرة المطبخ) — أسود وأبيض للطابعة الحرارية ══════════
+  //  الفاتورة: الشعار يسار والاسم والأرقام يمين، معلومات بعمودين بمربعات، جدول أصناف بحدود، ومربع «الصافي»
+  //  تذكرة المطبخ: مربعات بعمودين (نوع الطلب، التسلسل، البيجر، رقم الفاتورة، التاريخ، الوقت) + جدول الصنف والكمية والملاحظات
+  const rLogoKey = () => 'pos_rlogo_' + rid();
+  const rLogo = () => { const v = lsGet(rLogoKey(), ''); return /^data:image\/(png|jpeg|webp);base64,/.test(v) ? v : ''; };
+  window.posReceiptLogo = rLogo;
+  const rLogoPv = () => { const l = rLogo(); return l ? `<img src="${l}" alt="">` : '<span class="ac-sub">ماكو شعار — يتحط من برج سرعة (المطعم ← الفاتورة)</span>'; };
+  const prnW = () => (settings.paper === 58 ? 210 : 300);
+  // قياسات الفاتورة (يحددها برج سرعة لكل مطعم: restaurants/{id}/theme/receipt.cfg) — حتى المطعم يقلل الورق
+  const RCFG0 = { scale: 100, kScale: 100, logo: 120, logoW: 40, num: 24, gap: 100, border: 1.6, show: { sub: true, phones: true, inv: true, pager: true, pay: true, footer: true, brand: true } };
+  const clampN = (v, a, b, d) => { v = Number(v); return Number.isFinite(v) ? Math.min(b, Math.max(a, v)) : d; };
+  const rCfg = () => {
+    const c = lsGet('pos_rcfg_' + rid(), null) || {};
+    const sh = { ...RCFG0.show, ...(c.show && typeof c.show === 'object' ? c.show : {}) };
+    return { scale: clampN(c.scale, 60, 150, 100), kScale: clampN(c.kScale, 60, 160, 100), logo: clampN(c.logo, 0, 220, 120), logoW: clampN(c.logoW, 20, 60, 40),
+      num: clampN(c.num, 14, 56, 24), gap: clampN(c.gap, 30, 160, 100), border: clampN(c.border, 0.8, 3, 1.6), show: sh };
+  };
+  window.posReceiptCfg = rCfg;
+  const paperF = () => (settings.paper === 58 ? 0.8 : 1);
+  const prnZ = (n) => Math.round(n * paperF() * rCfg().scale / 100 * 10) / 10 + 'px';
+  const prnK = (n) => Math.round(n * paperF() * rCfg().kScale / 100 * 10) / 10 + 'px';
+  const prnG = (n) => Math.round(n * rCfg().gap / 100 * 10) / 10 + 'px';
+  const prnFont = "@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800;900&display=swap');";
+  const prnDate = (o) => { const d = new Date(o.createdAtMs || Date.now()); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate(); };
+  const prnTime = (o) => { if (o.createdAt && /^\d{1,2}:\d{2}$/.test(String(o.createdAt).trim())) return t12(o.createdAt); const d = new Date(o.createdAtMs || Date.now()); return t12(d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0')); };
+  const prnType = (o, captain) => { const t = getOrderType(o); return t === 'salon' ? 'صالة' + (o.tableNo ? ' — طاولة ' + o.tableNo : '') : t === 'takeaway' ? 'سفري' : 'دلفري' + ((o.captainName || (captain && captain.name)) ? ' — ' + (o.captainName || captain.name) : ''); };
+  const prnInv = (o) => String(o.id || '').substring(0, 6).toUpperCase();
+  // خانة: عنوان + قيمة (bx = مربع، big = رقم كبير)
+  const fld = (label, val, cls) => `<div class="f"><div class="l">${esc(label)}</div><div class="v ${cls || ''}">${val}</div></div>`;
+  function kTicketCss(W) {
+    const z = prnK, g = prnG, bw = rCfg().border + 0.2 + 'px';
+    return `.kt2{font-family:'Tajawal',Arial,sans-serif;direction:rtl;width:${W}px;padding:${g(6)} 4px;color:#000;font-weight:800;line-height:1.3;box-sizing:border-box}
+      .kt2 *{margin:0;padding:0;box-sizing:border-box;color:inherit}
+      .kt2 .bar{background:#000;color:#fff;text-align:center;font-size:${z(18)};font-weight:900;padding:${g(4)};margin-bottom:${g(6)}}
+      .kt2 .ttl{text-align:center;font-size:${z(17)};font-weight:900;border:${bw} solid #000;padding:${g(3)};margin-bottom:${g(6)}}
+      .kt2 .grid{display:grid;grid-template-columns:1fr 1fr;gap:${g(5)} 10px}
+      .kt2 .f .l{font-size:${z(14)};font-weight:800;margin-bottom:2px}
+      .kt2 .f .v{border:${bw} solid #000;text-align:center;font-size:${z(16)};font-weight:900;padding:${g(3)} 4px;min-height:${z(28)}}
+      .kt2 .f .v.big{font-size:${z(26)};line-height:1.1}
+      .kt2 .nt{margin-top:${g(6)};font-size:${z(15)};font-weight:800}
+      .kt2 table{width:100%;border-collapse:collapse;margin-top:${g(8)}}
+      .kt2 th,.kt2 td{border:${bw} solid #000;padding:${g(4)} 4px;font-size:${z(16)};font-weight:900;vertical-align:middle}
+      .kt2 th{font-size:${z(14.5)}}
+      .kt2 td.q{text-align:center;width:16%;font-size:${z(19)}}
+      .kt2 td.m{width:30%;font-size:${z(13.5)};font-weight:800}
+      .kt2 .oth{margin-top:${g(6)};font-size:${z(13)};font-weight:700}`;
+  }
+  // تذكرة المطبخ (لكل قسم، أو كاملة، أو ورقة «إضافة على الطلب»)
+  function kTicketHTML(o, items, opt = {}) {
+    const W = prnW();
+    const pager = o.pager ? esc(String(o.pager)) : '';
+    const rows = items.map((i) => `<tr><td>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}</td><td class="q">${esc(String(i.qty))}</td><td class="m">${esc(i.note || '')}</td></tr>`).join('');
+    const note = opt.note != null ? opt.note : o.note;
+    return `<style>${kTicketCss(W)}</style><div class="kt2">
+      ${opt.bar ? `<div class="bar">${esc(opt.bar)}</div>` : ''}${opt.title ? `<div class="ttl">${esc(opt.title)}</div>` : ''}
+      <div class="grid">${fld('نوع الطلب:', esc(prnType(o)))}${fld('التسلسل:', '#' + esc(String(kNum(o))), 'big')}
+        ${fld('رقم البيجر:', pager)}${fld('رقم الفاتورة:', esc(prnInv(o)))}
+        ${fld('التاريخ:', esc(prnDate(o)))}${fld('الوقت:', esc(prnTime(o)))}</div>
+      ${note ? `<div class="nt">الملاحظة: ${esc(note)}</div>` : ''}
+      <table><tr><th>الصنف</th><th>الكمية</th><th>الملاحظات</th></tr>${rows}</table>
+      ${opt.others ? `<div class="oth">يكتمل مع: ${esc(opt.others)}</div>` : ''}
+      ${opt.total != null ? `<table><tr><th>${esc(opt.totalLabel || 'المجموع')}</th><td class="q">${fmt(opt.total)} د.ع</td></tr></table>` : ''}
+    </div>`;
+  }
+  window.posKitchenTicket = (o, items, opt) => `<html><head><meta charset="UTF-8"><style>${prnFont}body{margin:0}</style></head><body>${kTicketHTML(o, items, opt)}</body></html>`;
   function receiptHTML(o, captain, pay, withKitchen) {
     const items = orderItemsFull(o).map((i, k) => ({ ...i, note: (o.items && o.items[k] && o.items[k].note) || i.note }));
     const title = settings.receiptTitle || restData.name || 'سرعة';
     const subL = settings.receiptSub || restData.area || '';
-    const phone = settings.receiptPhone || restData.phone || '';
-    const d = new Date(o.createdAtMs || Date.now());
-    const type = o.orderType || 'delivery';
-    // رقم الطلب الكبير = نفس الرقم بشاشة المجهز وشاشة «طلبك جاهز»
-    const big = `<div class="num">#${esc(kNum(o))}</div>`;
-    const head = type === 'salon' ? `${big}<div class="type">🪑 صالة${o.tableNo ? ' — طاولة ' + esc(o.tableNo) : ''}</div>`
-      : type === 'takeaway' ? `${big}<div class="type">🥡 سفري</div>`
-      : `${big}<div class="type">🏍️ دلفري${(o.captainName || (captain && captain.name)) ? ' — ' + esc(o.captainName || captain.name) : ''}</div>`;
-    const pg = o.pager ? `<div class="type" style="font-size:18px">📟 بيجر رقم ${esc(o.pager)}</div>` : '';
+    // أكثر من رقم: كل رقم بسطر (افصلهن بفاصلة أو /)
+    const phones = String(settings.receiptPhone || restData.phone || '').split(/[,،\/|]|\s{2,}/).map((x) => x.trim()).filter(Boolean).slice(0, 3);
+    const type = getOrderType(o);
     const sub_ = o.subtotal != null ? o.subtotal : items.reduce((s, i) => s + (i.price || 0) * i.qty, 0);
     const p = (pay && pay.payment) || o.payment || {};
-    const W = settings.paper === 58 ? 210 : 300;
-    // طابعة حرارية أسود وأبيض: الخط كبير وعريض وكله أسود صافي (بدون رمادي) حتى يقرا بسهولة
-    const f = settings.paper === 58 ? 0.82 : 1, z = (n) => Math.round(n * f * 10) / 10 + 'px';
-    const css = `@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800;900&display=swap');
-      *{margin:0;padding:0;color:inherit}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:8px 6px;width:${W}px;color:#000;font-weight:700;line-height:1.35}
-      .logo{text-align:center;font-size:${z(24)};font-weight:900;}.sub{text-align:center;font-size:${z(14)};font-weight:700;}
-      .div{border-top:2px dashed #000;margin:6px 0;}.num{text-align:center;font-size:${z(44)};font-weight:900;line-height:1.1}
-      .type{text-align:center;background:#000;color:#fff;padding:4px;font-size:${z(18)};font-weight:900;margin:4px 0;}
-      .row{display:flex;justify-content:space-between;font-size:${z(14.5)};font-weight:700;margin-bottom:3px;gap:6px;}
-      .item{font-size:${z(16.5)};font-weight:800;margin-bottom:5px;}.item .l{display:flex;justify-content:space-between;gap:6px;}.item .n{font-size:${z(14.5)};font-weight:700}
-      .total{display:flex;justify-content:space-between;font-size:${z(22)};font-weight:900;margin-top:4px;padding-top:4px;border-top:3px solid #000;}
-      .foot{text-align:center;font-size:${z(14.5)};font-weight:700;margin-top:8px;}.kt .item{font-size:${z(21)};font-weight:900;}.pb{page-break-before:always;}`;
-    const rcpt = `<div class="logo">${esc(title)}</div>${subL ? `<div class="sub">${esc(subL)}</div>` : ''}${phone ? `<div class="sub">📞 ${esc(phone)}</div>` : ''}
-      <div class="div"></div>${head}${pg}<div class="div"></div>
-      <div class="row"><span>رقم الطلب</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div>
-      <div class="row"><span>التاريخ</span><span>${esc(d.toLocaleDateString('ar-IQ-u-nu-latn'))} ${esc(t12(o.createdAt))}</span></div>
-      ${o.customer && type === 'delivery' ? `<div class="row"><span>الزبون</span><span>${esc(o.customer)}</span></div>` : ''}
-      ${o.phone ? `<div class="row"><span>الهاتف</span><span>${esc(o.phone)}</span></div>` : ''}
-      ${o.address && type === 'delivery' ? `<div class="row"><span>العنوان</span><span>${esc(o.address)}</span></div>` : ''}
-      <div class="div"></div>
-      ${items.map((i) => `<div class="item"><div class="l"><span>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''} ×${i.qty}</span><span>${fmt((i.price || 0) * i.qty)}</span></div>${i.note ? `<div class="n">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}
-      <div class="div"></div>
+    const W = prnW(), z = prnZ, g = prnG, C = rCfg(), sh = C.show, bw = C.border + 'px', bw2 = C.border + 0.4 + 'px';
+    const logo = settings.receiptLogo === false || !C.logo ? '' : rLogo();
+    const css = `${prnFont}
+      *{margin:0;padding:0;box-sizing:border-box;color:inherit}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:${g(6)} 4px;width:${W}px;color:#000;font-weight:700;line-height:1.3}
+      .hd{display:flex;align-items:center;gap:8px;margin-bottom:${g(6)}}.hd .nm{flex:1;text-align:center}
+      .hd .nm b{display:block;font-size:${z(logo ? 21 : 24)};font-weight:900;line-height:1.15}.hd .nm .ph{display:block;font-size:${z(16)};font-weight:800;direction:ltr}
+      .hd .nm .sb{display:block;font-size:${z(13.5)};font-weight:700}.hd .lg{width:${C.logoW}%;flex:none;text-align:center}.hd .lg img{max-width:100%;max-height:${C.logo}px}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:${g(5)} 10px;margin:${g(4)} 0 ${g(2)}}
+      .f .l{font-size:${z(13.5)};font-weight:800;margin-bottom:1px}.f .v{font-size:${z(15)};font-weight:800;text-align:center}
+      .f .v.bx{border:${bw2} solid #000;padding:${g(2)} 4px;min-height:${z(26)}}.f .v.big{font-size:${Math.round(C.num * paperF() * C.scale / 100)}px;font-weight:900;line-height:1.1}
+      .wide{font-size:${z(14)};font-weight:800;margin-top:${g(3)}}
+      table.it{width:100%;border-collapse:collapse;margin-top:${g(8)}}table.it th,table.it td{border:${bw} solid #000;padding:${g(3)} 4px;font-size:${z(14.5)};font-weight:800;vertical-align:middle}
+      table.it th{font-weight:900}table.it td.q,table.it td.p{text-align:center;white-space:nowrap}table.it td.q{width:15%}table.it td.p{width:25%}
+      table.it td small{display:block;font-size:${z(12.5)};font-weight:700}
+      .row{display:flex;justify-content:space-between;font-size:${z(14)};font-weight:800;margin:${g(3)} 2px 0;gap:6px}
+      .tot{display:flex;width:86%;margin:${g(8)} auto 0;border:${bw2} solid #000}.tot span{flex:1;text-align:center;padding:${g(4)};font-size:${z(20)};font-weight:900}.tot span+span{border-right:${bw2} solid #000}
+      .foot{text-align:center;font-size:${z(14)};font-weight:800;margin-top:${g(8)}}.pb{page-break-before:always}`;
+    const deliv = type === 'delivery';
+    const due = deliv && o.fee ? (o.value || 0) + (o.fee || 0) : (o.value || 0);
+    const rcpt = `<div class="hd"><div class="nm"><b>${esc(title)}</b>${sh.phones ? phones.map((x) => `<span class="ph">${esc(x)}</span>`).join('') : ''}${subL && sh.sub ? `<span class="sb">${esc(subL)}</span>` : ''}</div>${logo ? `<div class="lg"><img src="${logo}" alt=""></div>` : ''}</div>
+      <div class="grid">${fld('نوع الطلب:', esc(prnType(o, captain)))}${fld('رقم الطلب:', '#' + esc(String(kNum(o))), 'bx big')}
+        ${fld('التاريخ:', esc(prnDate(o)))}${fld('الوقت:', esc(prnTime(o)))}
+        ${sh.inv ? fld('رقم الفاتورة:', esc(prnInv(o))) : ''}${sh.pager && (o.pager || Number(settings.pagers) > 0) ? fld('رقم البيجر:', esc(String(o.pager || '')), 'bx') : o.byName && sh.inv ? fld('الكاشير:', esc(o.byName)) : sh.inv ? '<div></div>' : ''}</div>
+      ${o.customer && deliv ? `<div class="wide">الزبون: ${esc(o.customer)}</div>` : ''}${o.phone ? `<div class="wide">الهاتف: <span dir="ltr">${esc(o.phone)}</span></div>` : ''}
+      ${o.address && deliv ? `<div class="wide">العنوان: ${esc(o.address)}</div>` : ''}${o.note ? `<div class="wide">ملاحظة: ${esc(o.note)}</div>` : ''}
+      <table class="it"><tr><th>اسم الصنف</th><th>الكمية</th><th>السعر</th></tr>
+        ${items.map((i) => `<tr><td>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<small>${esc(i.note)}</small>` : ''}</td><td class="q">${esc(String(i.qty))}</td><td class="p">${fmt((i.price || 0) * i.qty)}</td></tr>`).join('')}</table>
       ${o.discount ? `<div class="row"><span>المجموع</span><span>${fmt(sub_)}</span></div><div class="row"><span>خصم${o.discountInfo && o.discountInfo.reason ? ' (' + esc(o.discountInfo.reason) + ')' : ''}</span><span>-${fmt(o.discount)}</span></div>` : ''}
       ${o.service ? `<div class="row"><span>خدمة</span><span>${fmt(o.service)}</span></div>` : ''}
       ${o.tax ? `<div class="row"><span>ضريبة</span><span>${fmt(o.tax)}</span></div>` : ''}
-      <div class="total"><span>الإجمالي</span><span>${fmt(o.value)} د.ع</span></div>
-      ${type === 'delivery' && o.fee ? `<div class="row"><span>أجور التوصيل</span><span>${fmt(o.fee)}</span></div><div class="row" style="font-weight:900;font-size:${z(17)}"><span>المطلوب من الزبون</span><span>${fmt((o.value || 0) + (o.fee || 0))} د.ع</span></div>` : ''}
-      ${type === 'delivery' && o.fee === 0 ? `<div class="row" style="font-weight:900"><span>🎁 التوصيل مجاني</span><span>0</span></div><div class="row" style="font-weight:900;font-size:${z(17)}"><span>المطلوب من الزبون</span><span>${fmt(o.value || 0)} د.ع</span></div>` : ''}
-      ${p.method ? `<div class="div"></div><div class="row"><span>طريقة الدفع</span><span>${esc(PAY_AR[p.method] || p.method)}</span></div>` : ''}
+      ${deliv && o.fee ? `<div class="row"><span>الطلب</span><span>${fmt(o.value)}</span></div><div class="row"><span>أجور التوصيل</span><span>${fmt(o.fee)}</span></div>` : ''}
+      ${deliv && o.fee === 0 ? `<div class="row"><span>التوصيل</span><span>مجاني</span></div>` : ''}
+      <div class="tot"><span>${deliv ? 'المطلوب' : 'الصافي'}</span><span>${fmt(due)}</span></div>
+      ${p.method && sh.pay ? `<div class="row" style="margin-top:${g(6)}"><span>طريقة الدفع</span><span>${esc(PAY_AR[p.method] || p.method)}</span></div>` : ''}
       ${p.card && p.method === 'mixed' ? `<div class="row"><span>بطاقة</span><span>${fmt(p.card)}</span></div>` : ''}
-      ${p.method === 'credit' && p.cust ? `<div class="row" style="font-weight:900"><span>على حساب</span><span>${esc(p.cust.name)}${p.cust.phone ? ' • ' + esc(p.cust.phone) : ''}</span></div>` : ''}
-      ${p.received && (p.method === 'cash' || p.method === 'mixed') ? `<div class="row"><span>المستلم نقداً</span><span>${fmt(p.received)}</span></div><div class="row"><span>الباقي</span><span>${fmt(p.change || 0)}</span></div>` : ''}
-      <div class="div"></div><div class="foot">${esc(settings.receiptFooter || 'شكراً لزيارتكم ❤️')}</div>
-      ${window.SB ? SB.receipt() : ''}`;
-    const kt = withKitchen ? `<div class="pb kt"><div class="logo">🍳 تذكرة مطبخ</div><div class="div"></div>${head}${pg}
-      <div class="row"><span>${esc(t12(o.createdAt))}</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div><div class="div"></div>
-      ${items.map((i) => `<div class="item">${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<div class="n">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}</div>` : '';
+      ${p.method === 'credit' && p.cust ? `<div class="row"><span>على حساب</span><span>${esc(p.cust.name)}${p.cust.phone ? ' • ' + esc(p.cust.phone) : ''}</span></div>` : ''}
+      ${sh.pay && p.received && (p.method === 'cash' || p.method === 'mixed') ? `<div class="row"><span>المستلم نقداً</span><span>${fmt(p.received)}</span></div><div class="row"><span>الباقي</span><span>${fmt(p.change || 0)}</span></div>` : ''}
+      ${settings.receiptFooter && sh.footer ? `<div class="foot">${esc(settings.receiptFooter)}</div>` : ''}
+      ${window.SB && sh.brand ? SB.receipt() : ''}`;
+    const kt = withKitchen ? `<div class="pb">${kTicketHTML(o, items)}</div>` : '';
     return `<html><head><meta charset="UTF-8"><style>${css}</style></head><body>${rcpt}${kt}</body></html>`;
   }
   window.printOrderReceipt = function (o, type, captain) { printHTML(receiptHTML(o, captain, null, false)); };
@@ -1117,10 +1191,10 @@ function orderActionsCore(o){
       // شرائح الأقسام: الضغط يعلّم القسم جاهزاً، واكتمال كل الأقسام = الطلب جاهز
       const chips = o.kSec ? `<div class="kds-secs">${Object.entries(o.kSec).map(([sid, v]) => { const sc = secById(sid) || { name: sid, emoji: '🍽️' };
         return `<button type="button" class="kds-sec ${v.readyAt ? 'done' : ''}" onclick="kSecDone('${esc(o.id)}','${esc(sid)}')">${v.readyAt ? '✅' : '⏳'} ${esc(sc.emoji || '')} ${esc(sc.name)} <small>${toA(v.n || 0)}</small></button>`; }).join('')}</div>` : '';
-      const items = (o.items || []).map((it, k) => ({ ...orderItemsFull(o)[k], note: it.note, sec: it.sec })).filter((i) => !kdsSec || i.sec === kdsSec);
+      const items = (o.items || []).map((it, k) => ({ ...orderItemsFull(o)[k], note: it.note, sec: it.sec, secs: it.secs })).filter((i) => !kdsSec || itSecs(i).includes(kdsSec));
       return `<div class="kds-card ${cls}"><div class="kds-top"><div><div class="kds-num">#${esc(kNum(o))} <span class="kds-lbl">${esc(label)}</span></div><div class="kds-type">${esc(t12(o.createdAt))}${o.pager ? ` • <b class="kds-pager">📟 ${toA(o.pager)}</b>` : ''}</div></div>
         <div class="kds-time">⏱ ${toA(m)} د</div></div>${kdsSec ? '' : chips}
-        <div class="kds-items">${items.map((i) => `<div class="kds-it"><span class="q">${toA(i.qty)}×</span><span>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${!kdsSec && i.sec && secById(i.sec) ? ` <small class="kds-isec">${esc(secById(i.sec).emoji || '')}</small>` : ''}${i.note ? `<span class="n">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('')}</div>
+        <div class="kds-items">${items.map((i) => `<div class="kds-it"><span class="q">${toA(i.qty)}×</span><span>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${!kdsSec && itSecs(i).some(secById) ? ` <small class="kds-isec">${esc(itSecs(i).map(secById).filter(Boolean).map((x) => x.emoji || '').join(''))}</small>` : ''}${i.note ? `<span class="n">📝 ${esc(i.note)}</span>` : ''}</span></div>`).join('')}</div>
         ${o.note ? `<div class="kds-note">📝 ${esc(o.note)}</div>` : ''}
         ${kdsSec ? `<button class="kds-done" onclick="kSecDone('${esc(o.id)}','${esc(kdsSec)}')">✅ ${esc((secById(kdsSec) || {}).name || '')} جاهز</button>`
           : `<button class="kds-done" onclick="kdsDone('${esc(o.id)}')">✅ اكتمل الطلب — نادِ الزبون</button>`}</div>`;
@@ -1243,9 +1317,11 @@ const showMTabCore = tab=>{
       <div class="sh-card"><div class="sh-title">🧾 الفاتورة</div>
         <div class="flbl">اسم المطعم على الفاتورة</div><input class="finp" id="stTitle" maxlength="60" value="${esc(s.receiptTitle)}" placeholder="${esc(restData.name || '')}">
         <div class="flbl">السطر الثاني (العنوان)</div><input class="finp" id="stSub" maxlength="80" value="${esc(s.receiptSub)}" placeholder="${esc(restData.area || '')}">
-        <div class="set-row"><div><div class="flbl">رقم الهاتف</div><input class="finp" id="stPhone" maxlength="30" value="${esc(s.receiptPhone)}" placeholder="${esc(restData.phone || '')}"></div>
+        <div class="set-row"><div><div class="flbl">رقم الهاتف (رقمين؟ افصلهن بفاصلة)</div><input class="finp" id="stPhone" maxlength="60" dir="ltr" value="${esc(s.receiptPhone)}" placeholder="${esc(restData.phone || '07xx, 07xx')}"></div>
           <div><div class="flbl">عرض ورق الطابعة</div><select class="fsel" id="stPaper"><option value="80" ${s.paper !== 58 ? 'selected' : ''}>80 ملم</option><option value="58" ${s.paper === 58 ? 'selected' : ''}>58 ملم</option></select></div></div>
         <div class="flbl">نص أسفل الفاتورة</div><input class="finp" id="stFooter" maxlength="120" value="${esc(s.receiptFooter)}">
+        <div class="flbl">شعار الفاتورة</div><div id="stLogoPv" class="st-logo">${rLogoPv()}</div>
+        <label class="set-check"><input type="checkbox" id="stRLogo" ${s.receiptLogo !== false ? 'checked' : ''}> اطبع الشعار فوق الفاتورة</label>
         <label class="set-check"><input type="checkbox" id="stKitchen" ${s.printKitchen ? 'checked' : ''}> طباعة تذكرة مطبخ مع كل فاتورة</label>
         <label class="set-check"><input type="checkbox" id="stDrawer" ${s.drawer ? 'checked' : ''}> 💵 درج الفلوس ينفتح وحده مع كل فاتورة</label>
         <div class="ac-sub" style="line-height:1.8">إذا عندك درج فلوس موصول بطابعة الفواتير بالكيبل: شغّلها، وكل ما تطبع فاتورة الدرج ينفتح وحده. ما عندك درج؟ خليها مطفية.</div>
@@ -1255,7 +1331,9 @@ const showMTabCore = tab=>{
         <div class="flbl">⏱️ شاشة المطبخ: الطلب يصير أصفر بعد كم دقيقة، وأحمر (متأخر) بعد كم دقيقة</div>
         <div class="set-row"><div><input class="finp" id="stKWarn" type="number" min="1" max="120" value="${esc(s.kWarn || 10)}" placeholder="أصفر"></div><div><input class="finp" id="stKLate" type="number" min="2" max="240" value="${esc(s.kLate || 20)}" placeholder="أحمر"></div></div>
         <div class="flbl">الأقسام (اترك الاسم فارغاً لإلغاء القسم)</div>
-        ${part(() => secArr(s.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم"></div></div>`).join(''))}
+        <div id="secRows">${part(() => secArr(s.sections).map((x, i) => `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="${esc(x.emoji || '')}" style="text-align:center"></div><div class="sec-nm"><input class="finp" id="stSecN${i}" maxlength="20" value="${esc(x.name || '')}" placeholder="اسم القسم">${x.name && x.id ? secItBtn(x.id) : ''}</div></div>`).join(''))}</div>
+        <button type="button" class="btn-soft" style="width:100%;margin-top:6px" onclick="secAddRow()">➕ إضافة قسم (طابعة ثانية)</button>
+        <div class="ac-sub" style="margin-top:4px;line-height:1.7">كل قسم إله طابعته (تختارها تحت). تكدر تضيف لحد ٣٠ قسم — اكتب الاسم واضغط «حفظ»، بعدها يطلع بقائمة الفئات والطابعات. زر «🍔 الأصناف» يم كل قسم: تأشّر الأصناف اللي تنطبع على طابعته (الصنف يكدر يروح لأكثر من قسم).</div>
         <div class="flbl" style="margin-top:10px">كل فئة بالمنيو تابعة لأي قسم؟</div>
         ${part(() => (Array.isArray(menu) ? menu : []).filter((c) => c && c.cat).map((c, i) => `<div class="set-row"><div class="sec-cat">${esc(c.emoji || '')} ${esc(c.cat)}</div><div><select class="fsel" id="stCat${i}" data-cat="${esc(c.cat)}"><option value="">— بدون قسم (لا تُطبع بالمطبخ) —</option>${secArr(s.sections || []).filter((x) => x.name).map((x) => `<option value="${esc(x.id)}" ${(s.catSection || {})[c.cat] === x.id ? 'selected' : ''}>${esc(x.emoji || '')} ${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<div class="ac-sub">أضف فئات للمنيو أولاً</div>')}
         <div id="secHealth" class="sec-health"></div>
@@ -1309,7 +1387,7 @@ const showMTabCore = tab=>{
     const clamp = (v, a, b) => Math.max(a, Math.min(b, num(v)));
     const next = {
       receiptTitle: $('stTitle').value.trim(), receiptSub: $('stSub').value.trim(), receiptPhone: $('stPhone').value.trim(), receiptFooter: $('stFooter').value.trim(),
-      paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked, drawer: $('stDrawer').checked,
+      paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked, drawer: $('stDrawer').checked, receiptLogo: $('stRLogo') ? $('stRLogo').checked : true,
       // ما إلها خانات بالإعدادات بعد: تبقى مثل ما هي (أجرة التوصيل الافتراضية تنحط بالطلب وبالمنيو الأونلاين)
       defaultFee: settings.defaultFee ?? DEFAULTS.defaultFee, feePresets: settings.feePresets || DEFAULTS.feePresets, taxPct: settings.taxPct || 0, servicePct: settings.servicePct || 0,
       tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
@@ -1317,6 +1395,7 @@ const showMTabCore = tab=>{
       kWarn: Math.round(clamp($('stKWarn').value || 10, 1, 120)), kLate: Math.max(Math.round(clamp($('stKWarn').value || 10, 1, 120)) + 1, Math.round(clamp($('stKLate').value || 20, 2, 240))),
       sections: secArr(settings.sections).map((x, i) => ({ id: x.id || 'sec' + (i + 1), emoji: (($('stSecE' + i) || {}).value || '').trim().slice(0, 4), name: (($('stSecN' + i) || {}).value || '').trim().slice(0, 20) })),
       catSection: Object.fromEntries([...document.querySelectorAll('[id^="stCat"]')].filter((el) => el.value).map((el) => [el.dataset.cat, el.value])),
+      itemSec: settings.itemSec && typeof settings.itemSec === 'object' ? settings.itemSec : {},
       quickAdd: $('stQuick').checked, quickNotes: list($('stNotes').value).slice(0, 10).map((x) => x.slice(0, 30)),
       bizHours: settings.bizHours || null,
       halls: Array.isArray(settings.halls) ? settings.halls : [],
@@ -1536,13 +1615,31 @@ const ordCancelCore = id=>{
   // ══════════ أقسام المطبخ (شاورما، كنتاكي، برغر، بيتزا...) ══════════
   // كل صنف يتبع قسم فئته بالمنيو. الطلب يتقسم: كل قسم يطبع أصنافه فقط، ورقم الطلب يوحّد الكل.
   const secList = () => secArr(settings.sections || []).filter((x) => x.name);
+  // قسم جديد (طابعة جديدة): صف فارغ ينحفظ ويا الإعدادات — لحد ٣٠ قسم
+  window.secAddRow = () => {
+    const arr = secArr(settings.sections || []);
+    if (arr.length >= 30) { toast('⚠️ الحد ٣٠ قسم'); return; }
+    let k = arr.length + 1; while (arr.some((x) => x.id === 'k' + k)) k++;
+    arr.push({ id: 'k' + k, name: '', emoji: '🍽️' });
+    settings.sections = arr;
+    const i = arr.length - 1, box = $('secRows'); if (!box) return;
+    box.insertAdjacentHTML('beforeend', `<div class="set-row sec-row"><div><input class="finp" id="stSecE${i}" maxlength="4" value="🍽️" style="text-align:center"></div><div><input class="finp" id="stSecN${i}" maxlength="20" value="" placeholder="اسم القسم"></div></div>`);
+    const n = $('stSecN' + i); if (n) n.focus();
+  };
   function secById(id) { return secList().find((x) => x.id === id); }
   const secOn = () => !!settings.kSecOn && secList().length > 0;
-  function secOfItem(name) {
-    const c = menu.find((c) => (c.items || []).some((i) => i.name === name));
-    const sid = c ? (settings.catSection || {})[c.cat] : '';
-    return sid && secById(sid) ? sid : '';
+  // أقسام الصنف: اختيار الصنف نفسه (itemSec — يكدر يروح لأكثر من قسم/طابعة) وإلا قسم فئته
+  const catSecOf = (name) => { const c = (Array.isArray(menu) ? menu : []).find((c) => (c.items || []).some((i) => i.name === name)); const sid = c ? (settings.catSection || {})[c.cat] : ''; return sid ? [sid] : []; };
+  function secsOfItem(name, map) {
+    const m = map || settings.itemSec || {};
+    const l = Object.prototype.hasOwnProperty.call(m, name) && Array.isArray(m[name]) ? m[name] : catSecOf(name);
+    return [...new Set(l)].filter((sid) => secById(sid));
   }
+  function secOfItem(name) { return secsOfItem(name)[0] || ''; }
+  // أقسام صنف بطلب: secs (أكثر من قسم) أو sec (قسم واحد — الطلبات القديمة)
+  const itSecs = (i) => (Array.isArray(i.secs) && i.secs.length ? i.secs : i.sec ? [i.sec] : []);
+  const setItSecs = (it, ss, ks) => { if (!ss.length) return; it.sec = ss[0]; if (ss.length > 1) it.secs = ss; else delete it.secs; if (ks) ss.forEach((sid) => { (ks[sid] = ks[sid] || { n: 0, readyAt: 0 }).n += it.qty; }); };
+  window.posItSecs = itSecs; window.kSecsOf = (n) => secsOfItem(n);
   // رقم يومي يتسلسل لكل الطلبات (يظهر كبيراً على تذاكر الأقسام والبيجر و«طلبك جاهز»)
   // رقم واحد لكل المطعم حتى لو أكثر من كاشير يشتغلون سوا: كل جهاز يحجز من السيرفر دفعة صغيرة أرقام مقدماً
   // (restaurants/{rid}/counters/tickets) فالطلب ينطبع فوراً بدون انتظار؛ وبدون إنترنت نرجع للعدّ المحلي.
@@ -1627,7 +1724,7 @@ const ordCancelCore = id=>{
     o.ticketNo = nextTicket();
     if (!secOn()) return;
     const ks = {};
-    (o.items || []).forEach((it) => { const sid = secOfItem(it.name); if (sid) { it.sec = sid; (ks[sid] = ks[sid] || { n: 0, readyAt: 0 }).n += it.qty; } });
+    (o.items || []).forEach((it) => setItSecs(it, secsOfItem(it.name), ks));
     if (Object.keys(ks).length) o.kSec = ks;
   }
   window.kSecDone = async (id, sid) => {
@@ -1655,21 +1752,11 @@ const ordCancelCore = id=>{
   // ── تذكرة القسم: رقم الطلب كبير + أصناف القسم فقط
   function secTicketBody(o, sid) {
     const sc = secById(sid) || { name: sid, emoji: '' };
-    const t = getOrderType(o), W = settings.paper === 58 ? 210 : 300;
-    const label = t === 'salon' ? '🪑 صالة' + (o.tableNo ? ' — طاولة ' + o.tableNo : '') : t === 'takeaway' ? '🥡 سفري' : '🏍️ دلفري';
-    const items = (o.items || []).filter((i) => i.sec === sid);
+    const items = (o.items || []).filter((i) => itSecs(i).includes(sid));
     const others = Object.keys(o.kSec || {}).filter((x) => x !== sid).map((x) => (secById(x) || {}).name).filter(Boolean);
-    return `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;width:${W}px;padding:8px;color:#000">
-      <div style="text-align:center;font-size:20px;font-weight:900;background:#000;color:#fff;padding:4px">${esc(sc.emoji || '')} قسم ${esc(sc.name)}</div>
-      <div style="text-align:center;font-size:56px;font-weight:900;line-height:1.1;margin-top:4px">#${esc(kNum(o))}</div>
-      <div style="text-align:center;font-size:14px;font-weight:700">${esc(label)}${o.pager ? ' • 📟 بيجر ' + esc(o.pager) : ''} • ${esc(t12(o.createdAt))}</div>
-      <div style="border-top:2px dashed #000;margin:6px 0"></div>
-      ${items.map((i) => `<div style="font-size:20px;font-weight:900;margin:4px 0">${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<div style="font-size:15px;font-weight:700">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}
-      ${o.note ? `<div style="border-top:1px dashed #000;margin-top:6px;padding-top:4px;font-size:15px;font-weight:700">📝 ${esc(o.note)}</div>` : ''}
-      ${others.length ? `<div style="border-top:1px dashed #000;margin-top:6px;padding-top:4px;font-size:13px">يكتمل مع: ${esc(others.join('، '))}</div>` : ''}
-    </div>`;
+    return kTicketHTML(o, items, { bar: 'قسم ' + sc.name, others: others.join('، ') });
   }
-  const docOf = (body) => `<html><head><meta charset="UTF-8"></head><body style="margin:0">${body}</body></html>`;
+  const docOf = (body) => `<html><head><meta charset="UTF-8"><style>${prnFont}</style></head><body style="margin:0">${body}</body></html>`;
   window.secTicketBody = secTicketBody;
 
   // ── الطباعة: QZ Tray يرسل كل تذكرة لطابعة قسمها، وإلا كل التذاكر بنفس الطابعة (كل تذكرة بورقة)
@@ -1729,6 +1816,7 @@ const ordCancelCore = id=>{
       if (receipt) jobs.push(deskPrint(receipt, c.main, '🧾 فاتورة #' + kNum(o), c.receiptCopies));
       for (const sid of secs) {
         const sc = secById(sid) || { name: sid };
+        if ((c.printers || {})[sid] === DP_NONE) continue;   // الكاشير اختار «لا تطبع هالقسم»
         jobs.push(deskPrint(docOf(secTicketBody(o, sid)), (c.printers || {})[sid] || c.main, '👨‍🍳 ' + sc.name + ' #' + kNum(o), (c.copies || {})[sid]));
       }
       await Promise.all(jobs);
@@ -1806,7 +1894,8 @@ const ordCancelCore = id=>{
   setInterval(() => {
     if (deskUpdV && DESK && DESK.installUpdate && deskIdle() && Date.now() - deskAct > (window.deskIdleMs || 5 * 60000)) { deskAct = Date.now(); Promise.resolve(DESK.installUpdate()).catch(() => {}); }
   }, window.deskTickMs || 60000);
-  const dpOpt = (list, cur, emptyLabel) => '<option value="">' + emptyLabel + '</option>' + [...new Set([...list.map((p) => p.name), cur].filter(Boolean))]
+  const DP_NONE = '__none';   // قسم بدون طباعة (بدل ما ينطبع على الطابعة الرئيسية)
+  const dpOpt = (list, cur, emptyLabel, none) => '<option value="">' + emptyLabel + '</option>' + (none ? `<option value="${DP_NONE}" ${cur === DP_NONE ? 'selected' : ''}>— لا تطبع هالقسم —</option>` : '') + [...new Set([...list.map((p) => p.name), cur].filter((x) => x && x !== DP_NONE))]
     .map((n) => { const p = list.find((x) => x.name === n); const st = !p ? ' — ❓ مو موجودة' : p.ok ? '' : ' — ⚠️ ' + p.statusText;
       return `<option value="${esc(n)}" ${n === cur ? 'selected' : ''}>${esc(n)}${p && p.isDefault ? ' (الافتراضية)' : ''}${st}</option>`; }).join('');
   window.dpFind = async (quiet) => {
@@ -1814,7 +1903,7 @@ const ordCancelCore = id=>{
     const list = await DESK.printers().catch(() => []);
     const c = dpCfg();
     const m = $('dpMain'); if (m) m.innerHTML = dpOpt(list, m.value || c.main, '— الطابعة الافتراضية للويندوز —');
-    secList().forEach((x) => { const sel = $('dpP_' + x.id); if (sel) sel.innerHTML = dpOpt(list, sel.value || (c.printers || {})[x.id] || '', '— نفس الطابعة الرئيسية —'); });
+    secList().forEach((x) => { const sel = $('dpP_' + x.id); if (sel) sel.innerHTML = dpOpt(list, sel.value || (c.printers || {})[x.id] || '', '— نفس الطابعة الرئيسية —', true); });
     const st = $('dpStatus');
     if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}${p.textOnly ? ' <small title="تعريف الطابعة نصي (Generic / Text Only) — البرنامج يطبعلها الورقة صورة حتى العربي يطلع صحيح">🖼️ تنطبع كصورة</small>'
         : DESK.canImageMode && DESK.setImageMode ? ` <button type="button" class="dp-img${p.image ? ' on' : ''}" data-n="${esc(p.name)}" data-on="${p.image ? '' : '1'}" onclick="dpImg(this.dataset.n, !!this.dataset.on)" title="إذا الفاتورة تطلع غلط أو تضيّع ورق بتعريف هالطابعة: البرنامج يطبعها صورة مباشرة">${p.image ? '🖼️ تنطبع كصورة ✓' : '🖼️ اطبع كصورة'}</button>` : ''}${p.kind === 'lan' && DESK.removePrinter ? ` <button type="button" class="dp-x" title="شيل الطابعة" onclick="dpRemoveNet(this.dataset.n)" data-n="${esc(p.name)}">✕</button>` : ''}</span>`).join('')
@@ -1863,6 +1952,51 @@ const ordCancelCore = id=>{
     if (on && !v && android) { toast('⚠️ اسمح للتطبيق «بالظهور فوق التطبيقات» وارجع — بعدها يفتح وحده مع تشغيل الجهاز'); return; }
     toast(v ? (android ? '✅ الكاشير يفتح وحده مع تشغيل الجهاز' : '✅ البرنامج يشتغل وحده مع تشغيل الحاسبة') : 'تمام — ما يشتغل وحده');
   };
+  // ── أصناف كل قسم (طابعة): مربعات صح. الصنف يكدر ينطبع بأكثر من قسم؛ اللي ما تغيّر ياخذ قسم فئته ──
+  const secItCount = (sid) => (Array.isArray(menu) ? menu : []).reduce((n, c) => n + (c.items || []).filter((i) => i && i.name && secsOfItem(i.name).includes(sid)).length, 0);
+  function secItBtn(sid) { return `<button type="button" class="btn-soft sec-it" data-secit="${esc(sid)}" onclick="secItems('${esc(sid)}')" title="الأصناف اللي تنطبع على هالطابعة">🍔 الأصناف <b>${toA(secItCount(sid))}</b></button>`; }
+  const secItRefresh = () => document.querySelectorAll('[data-secit]').forEach((b) => { const v = b.querySelector('b'); if (v) v.textContent = toA(secItCount(b.dataset.secit)); });
+  window.secItems = (sid) => {
+    const sc = secById(sid); if (!sc) { toast('⚠️ احفظ القسم أول (اكتب اسمه واضغط «حفظ»)'); return; }
+    const cats = (Array.isArray(menu) ? menu : []).filter((c) => c && c.cat && (c.items || []).some((i) => i && i.name));
+    if (!cats.length) { toast('⚠️ المنيو فارغ — أضف أصناف من لوحة الإدارة أول'); return; }
+    let ov = $('secItOv');
+    if (!ov) { ov = document.createElement('div'); ov.id = 'secItOv'; ov.className = 'cov'; ov.onclick = (e) => { if (e.target === ov) ov.classList.remove('on'); }; document.body.appendChild(ov); }
+    const on = (n) => secsOfItem(n).includes(sid);
+    ov.innerHTML = `<div class="cmodal sit-box"><div class="ctit">${esc(sc.emoji || '')} ${esc(sc.name)} — الأصناف اللي تنطبع هنا</div>
+      <div class="csub">أشّر الأصناف. الصنف المؤشّر بأكثر من قسم ينطبع بكل طابعاتهم. <span class="sit-n"></span></div>
+      <input class="dinp sit-q" placeholder="🔎 دوّر على صنف" oninput="secItFilter(this.value)">
+      <div class="sit-list">${cats.map((c, ci) => `<div class="sit-cat" data-ci="${ci}"><label class="sit-ch sit-all"><input type="checkbox" data-sit-all="${ci}"> <b>${esc(c.emoji || '')} ${esc(c.cat)}</b> <small>(كل الفئة)</small></label>
+        ${(c.items || []).filter((i) => i && i.name).map((i) => { const ss = secsOfItem(i.name).filter((x) => x !== sid).map(secById).filter(Boolean);
+          return `<label class="sit-ch" data-nm="${esc(i.name)}"><input type="checkbox" data-sit="${esc(i.name)}" data-ci="${ci}" ${on(i.name) ? 'checked' : ''}> <span>${esc(i.name)}</span>${ss.length ? `<small class="sit-o">${esc(ss.map((x) => (x.emoji || '') + ' ' + x.name).join('، '))}</small>` : ''}</label>`; }).join('')}</div>`).join('')}</div>
+      <button class="confbtn" type="button" id="secItOk">✅ حفظ</button><button class="cancel" type="button" onclick="document.getElementById('secItOv').classList.remove('on')">إلغاء</button></div>`;
+    const boxes = () => [...ov.querySelectorAll('[data-sit]')];
+    const sync = () => { ov.querySelectorAll('[data-sit-all]').forEach((a) => { const l = boxes().filter((b) => b.dataset.ci === a.dataset.sitAll); a.checked = l.length > 0 && l.every((b) => b.checked); a.indeterminate = !a.checked && l.some((b) => b.checked); });
+      ov.querySelector('.sit-n').textContent = '(' + toA(boxes().filter((b) => b.checked).length) + ' صنف)'; };
+    ov.onchange = (e) => { const a = e.target.closest('[data-sit-all]'); if (a) boxes().filter((b) => b.dataset.ci === a.dataset.sitAll && !b.closest('.sit-ch').hidden).forEach((b) => { b.checked = a.checked; }); sync(); };
+    sync();
+    $('secItOk').onclick = async () => {
+      const m = JSON.parse(JSON.stringify(settings.itemSec && typeof settings.itemSec === 'object' ? settings.itemSec : {}));
+      boxes().forEach((b) => {
+        const n = b.dataset.sit, cur = secsOfItem(n, m), has = cur.includes(sid);
+        if (b.checked === has) return;
+        const next = b.checked ? [...cur, sid] : cur.filter((x) => x !== sid), def = catSecOf(n).filter((x) => secById(x));
+        if (JSON.stringify(next) === JSON.stringify(def)) delete m[n]; else m[n] = next;
+      });
+      settings = { ...settings, itemSec: m };
+      lsSet(setKey(), settings);
+      ov.classList.remove('on'); secItRefresh();
+      try { await fb().setDoc(sub('settings', 'main'), { ...settings, updatedAtMs: Date.now() }); toast('✅ انحفظت أصناف «' + sc.name + '» لكل أجهزة المطعم'); }
+      catch (e) { toast('⚠️ انحفظت على هذا الجهاز فقط — تحقق من الإنترنت'); }
+    };
+    ov.classList.add('on');
+    const q = ov.querySelector('.sit-q'); if (q && !('ontouchstart' in window)) q.focus();
+  };
+  window.secItFilter = (v) => {
+    const q = String(v || '').trim(), ov = $('secItOv'); if (!ov) return;
+    ov.querySelectorAll('.sit-ch[data-nm]').forEach((l) => { l.hidden = !!q && !l.dataset.nm.includes(q); });
+    ov.querySelectorAll('.sit-cat').forEach((c) => { c.hidden = !!q && !c.querySelector('.sit-ch[data-nm]:not([hidden])'); });
+  };
   function dpSettingsHtml(s) {
     const c = dpCfg(), secs = secArr(s.sections || []).filter((x) => x.name);
     const cp = (id, v) => `<input class="finp" type="number" min="1" max="5" id="${id}" value="${v || 1}" title="عدد النسخ" style="width:64px;text-align:center">`;
@@ -1875,7 +2009,7 @@ const ordCancelCore = id=>{
       <div id="dpStatus" class="dp-status"><span class="ac-sub">⏳ نجيب الطابعات…</span></div>
       <button type="button" class="btn-soft" style="width:100%;margin-top:6px" onclick="dpFind()">🔄 تحديث قائمة الطابعات</button>
       <div class="set-row" style="margin-top:8px"><div class="sec-cat">🧾 الفاتورة (الطابعة الرئيسية)</div><div style="display:flex;gap:6px"><select class="fsel" id="dpMain" style="flex:1"><option value="${esc(c.main)}" selected>${esc(c.main || '— الطابعة الافتراضية للويندوز —')}</option></select>${cp('dpRc', c.receiptCopies)}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('main')">🧪</button></div></div>
-      ${secs.map((x) => `<div class="set-row" style="margin-top:8px"><div class="sec-cat">${esc(x.emoji || '')} ${esc(x.name)}</div><div style="display:flex;gap:6px"><select class="fsel" id="dpP_${esc(x.id)}" style="flex:1"><option value="${esc((c.printers || {})[x.id] || '')}" selected>${esc((c.printers || {})[x.id] || '— نفس الطابعة الرئيسية —')}</option></select>${cp('dpC_' + esc(x.id), (c.copies || {})[x.id])}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('${esc(x.id)}')">🧪</button></div></div>`).join('')}
+      ${secs.map((x) => `<div class="set-row" style="margin-top:8px"><div class="sec-cat">${esc(x.emoji || '')} ${esc(x.name)}</div><div style="display:flex;gap:6px"><select class="fsel" id="dpP_${esc(x.id)}" style="flex:1"><option value="${esc((c.printers || {})[x.id] || '')}" selected>${esc((c.printers || {})[x.id] || '— نفس الطابعة الرئيسية —')}</option></select>${cp('dpC_' + esc(x.id), (c.copies || {})[x.id])}<button type="button" class="btn-soft" style="padding:8px 10px" onclick="dpTest('${esc(x.id)}')">🧪</button>${secItBtn(x.id)}</div></div>`).join('')}
       <label class="set-check" style="margin-top:8px"><input type="checkbox" id="dpFb" ${c.fallback !== false ? 'checked' : ''}> إذا طابعة قسم ما اشتغلت (مطفية / خلص الورق)، اطبع تذكرتها على الطابعة الرئيسية حتى ما تضيع</label>
       ${DESK.canAddNetwork ? `<div class="dp-net"><div class="flbl">➕ إضافة طابعة شبكة (LAN / Wi-Fi)</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap"><input class="finp" id="dpNetName" placeholder="الاسم (مثلاً: مطبخ الشاورما)" style="flex:2;min-width:140px">
@@ -1979,7 +2113,7 @@ const ordCancelCore = id=>{
     o.ticketNo = 99; // ما ناخذ رقم من تسلسل اليوم
     if (secOn()) {
       const ks = {};
-      items.forEach((it) => { const sid = secOfItem(it.name); if (sid) { it.sec = sid; (ks[sid] = ks[sid] || { n: 0, readyAt: 0 }).n += it.qty; } });
+      items.forEach((it) => setItSecs(it, secsOfItem(it.name), ks));
       if (Object.keys(ks).length) o.kSec = ks;
     }
     await printOrderAll(o, receiptHTML(o, null, { payment: { method: 'cash', cash: total, card: 0 } }, settings.printKitchen && !o.kSec));
@@ -2058,6 +2192,14 @@ const ordCancelCore = id=>{
     dpEnforceTest();
   }
   function listenRest() {
+    // شعار الفاتورة (يحطه برج سرعة) — ينحفظ بالجهاز حتى ينطبع حتى بدون نت
+    unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', rid(), 'theme', 'receipt'), (s) => {
+      const v = s.exists() ? String(s.data().data || '') : '';
+      if (/^data:image\/(png|jpeg|webp);base64,/.test(v)) lsSet(rLogoKey(), v); else if (!s.metadata.fromCache) lsSet(rLogoKey(), '');
+      const cf = s.exists() ? s.data().cfg : null;
+      if (cf && typeof cf === 'object') lsSet('pos_rcfg_' + rid(), cf); else if (!s.metadata.fromCache) lsSet('pos_rcfg_' + rid(), null);
+      const pv = $('stLogoPv'); if (pv) pv.innerHTML = rLogoPv();
+    }, () => {}));
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', rid()), (s) => {
       if (!s.exists() || !restData) return;
       const before = JSON.stringify([restData.features || {}, restData.svcOff || {}]), beforeH = JSON.stringify(restData.hours || null);
@@ -2085,10 +2227,15 @@ const ordCancelCore = id=>{
   const extUntil = (u) => (u.hoursExt && Number(u.hoursExt.untilMs)) || 0;
   const extOn = (u) => extUntil(u) > Date.now();
   const bagMinOf = (ms) => (Math.floor(ms / 60000) + 180) % 1440;
-  // نهاية اليوم بتوقيت بغداد: نص الليل (وإذا هسه بعد نص الليل: ٥ الصبح)
+  // «لنهاية اليوم» = نهاية دوام المطعم (وقت الإغلاق من الإعدادات أو برج سرعة) — حتى لو بعد نص الليل
+  //  قبل: نص الليل ثابت، فإذا دوام الكاشير يخلص قرب ١٢ تختفي «ساعة / ساعتين / ٣» لأنها تعدّي نص الليل
+  //  بدون وقت إغلاق للمطعم: لحد ٥ الصبح. والسيرفر يسمح لحد ٢٠ ساعة قدام
   function endOfDayMs() {
-    const now = Date.now(), m = bagMinOf(now), target = m < 300 ? 300 : 1440;
-    return now - (now % 60000) + (target - m) * 60000;
+    const now = Date.now(), m = bagMinOf(now), base = now - (now % 60000), cap = now + 19.5 * 3600000;
+    const h = bizHours();
+    if (h) { const d = (h.close - m + 1440) % 1440; if (d > 0 && d <= 16 * 60) return Math.min(base + d * 60000, cap); }
+    const target = m < 300 ? 300 : 1440 + 300;
+    return Math.min(base + (target - m) * 60000, cap);
   }
   // نفس شرط السيرفر: من نص ساعة قبل نهاية الدوام لحد ساعة بعدها، أو خلال تمديد (أو خلص قبل أقل من ساعة)
   function canExtend(u) {
@@ -2153,7 +2300,7 @@ const ordCancelCore = id=>{
   const extBtns = () => {
     const eod = endOfDayMs(), opts = [[1, '⏱️ ساعة'], [2, '⏱️ ساعتين'], [3, '⏱️ ٣ ساعات']].filter(([n]) => Date.now() + n * 3600000 < eod);
     return `<div class="ext-grid">${opts.map(([n, l]) => `<button type="button" class="ext-b" onclick="dutyExtend(${n})">${l}</button>`).join('')}
-      <button type="button" class="ext-b eod" onclick="dutyExtend('day')">🌙 لنهاية اليوم <small>لغاية ${hm(bagMinOf(eod))}</small></button></div>`;
+      <button type="button" class="ext-b eod" onclick="dutyExtend('day')">🌙 ${bizHours() ? 'لنهاية دوام المطعم' : 'لنهاية اليوم'} <small>لغاية ${hm(bagMinOf(eod))}</small></button></div>`;
   };
   function askExtend() {
     extAsk = true;
@@ -2231,6 +2378,7 @@ const ordCancelCore = id=>{
     const m = new Map();
     orders.forEach((o) => {
       if (!o.pager || o.pagerDone || o.status === 'cancelled' || Date.now() - (o.createdAtMs || 0) > 12 * 3600000) return;
+      if (!ordMine(o)) return;   // البيجر لكل كاشير: كل كاشير يشوف ويرن على بيجرات طلباته بس (أجهزة البيجر اللي عنده)
       const prev = m.get(o.pager); if (!prev || (o.createdAtMs || 0) > (prev.createdAtMs || 0)) m.set(o.pager, o);
     });
     return m;
@@ -2648,7 +2796,7 @@ const ordCancelCore = id=>{
   const lanOrder = (o) => {
     const x = { id: o.id };
     LAN_F.forEach((k) => { if (o[k] !== undefined && o[k] !== null) x[k] = o[k]; });
-    x.items = (o.items || []).map((i) => ({ name: i.name, qty: i.qty, variant: i.variant, note: i.note, sec: i.sec }));
+    x.items = (o.items || []).map((i) => ({ name: i.name, qty: i.qty, variant: i.variant, note: i.note, sec: i.sec, ...(Array.isArray(i.secs) ? { secs: i.secs } : {}) }));
     return x;
   };
   const lanList = () => orders.filter((o) => Date.now() - (o.createdAtMs || 0) < 36 * 3600000).map(lanOrder);
@@ -3113,7 +3261,14 @@ const ordCancelCore = id=>{
   // كل كاشير يشوف الطلبات الأونلاين اللي من اختصاصه: التوصيل لكاشير الدلفري، الطاولات (QR والويتر) لكاشير الصالة، الاستلام لسفري قيد التحضير
   //   (الويتر وQR الطاولة ← الصالة؛ QR الاستلام (منها شاشة «طلبك جاهز») ← السفري)
   //  الطاولة: بس طاولات صالة هذا الكاشير (إذا المطعم بيه صالات وصاحب المطعم حدد صالته)
-  const webMine = (w) => (w.mode === 'delivery' ? myPerm('oDeliv') : w.mode === 'table' ? myPerm('oSalon') && hallOk(w.table) : myPerm('oHold') || myPerm('oTake'));
+  // طلب ويتر مربوط بكاشير (من لوحة الإدارة): يطلع لكاشيره بس — وإذا ما استلمه ٣ دقايق يطلع للكل حتى ما يضيع
+  const WEB_TO_ALL = () => window.__webToAll || 3 * 60000;
+  const webToMe = (w) => {
+    const to = Array.isArray(w.toCashiers) ? w.toCashiers.filter(Boolean) : [];
+    if (!to.length || !isCashierRole()) return true;
+    return to.includes((window.posUser && window.posUser.uid) || '') || Date.now() - (w.createdAtMs || Date.now()) > WEB_TO_ALL();
+  };
+  const webMine = (w) => webToMe(w) && (w.mode === 'delivery' ? myPerm('oDeliv') : w.mode === 'table' ? myPerm('oSalon') && hallOk(w.table) : myPerm('oHold') || myPerm('oTake'));
   const webVisible = () => [...webs.values()].filter(webMine);
   // كل طلبات الباركود (الطاولة وشاشة «طلبك جاهز») والويتر تمر على الكاشير أول — ما في طلب يدخل للمطبخ بدون قبوله
   const webAutoOk = () => false;
@@ -3369,8 +3524,7 @@ const ordCancelCore = id=>{
   // طلب الطاولة الأونلاين: تذكرة المطبخ فقط (الفاتورة عند الحساب)
   function webKitchenPrint(o, items, total) {
     if (o.kSec) { printOrderAll(o, null); return; }
-    printSlip('🍳 ' + (o.source === 'waiter' ? 'ويتر' : 'QR') + ' — ' + o.customer + ' #' + kNum(o), { customer: o.customer + (o.waiter ? ' • ' + o.waiter : '') },
-      items.map((i) => ({ ...i, name: i.name + (i.note ? ' [' + i.note + ']' : '') })), total, 'المجموع', o.note);
+    printSlip('🍳 تذكرة مطبخ — ' + (o.source === 'waiter' ? 'ويتر' + (o.waiter ? ' ' + o.waiter : '') : 'QR'), o, items, total, 'المجموع', o.note);
   }
   // مرحلة الطلب تنعكس على تلفون الزبون
   function webStageOf(o) {

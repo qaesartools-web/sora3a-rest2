@@ -429,7 +429,7 @@ html.store-mode .bnav .nb:not([data-tab="acc"]),html.store-mode .desktop-nav .dn
 html.store-mode .ac-ext{display:none!important}
 .store-note{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:rgba(176,122,74,.12);border:1px solid rgba(176,122,74,.35);color:#8a5a2b;font-size:13.5px;line-height:1.8}
 </style>
-<link rel="stylesheet" href="pos-pro.css?v=30">
+<link rel="stylesheet" href="pos-pro.css?v=33">
 <script src="device.js?v=2"></script>
 <script src="ask.js?v=2"></script>
 </head>
@@ -527,6 +527,7 @@ html.store-mode .ac-ext{display:none!important}
           </div>
           <div class="shift-warn" id="shiftWarn" onclick="goTab('shift')">⚠️ لا توجد وردية مفتوحة — اضغط لفتح وردية</div>
           <div class="cur-cust" id="curCust"></div>
+          <div class="ord-note" id="ordNote"></div>
           <div class="clist" id="cartList"><div class="cempty">السلة فارغة</div></div>
           <div class="cfoot">
             <div id="cartBreak"></div>
@@ -2899,10 +2900,10 @@ async function edCommit(s,by){
   const merged={};s.work.forEach(i=>{const k=i.name+'|'+i.variant;if(merged[k])merged[k].qty+=i.qty;else merged[k]={...i};});
   const newItems=Object.values(merged);
   // كل صنف ياخذ قسمه بالمطبخ (حتى الصنف الجديد)
-  if(window.kSecOf)newItems.forEach(i=>{if(!i.sec){const sc=window.kSecOf(i.name);if(sc)i.sec=sc;}});
+  if(window.kSecsOf)newItems.forEach(i=>{if(!i.sec){const ss=window.kSecsOf(i.name);if(ss.length){i.sec=ss[0];if(ss.length>1)i.secs=ss;}}});
   const upd={items:newItems,notes:notesOf(newItems),value:v.newValue,modifiedAt:Date.now()};
   // شاشة المطبخ: شنو انضاف وشنو انشال (تبين للطباخ لحد ما يضغط «شفته»)
-  const edLine=a=>({name:a.name,variant:a.variant||'',qty:a.qty,sec:(window.kSecOf&&window.kSecOf(a.name))||''});
+  const edLine=a=>{const ss=(window.kSecsOf&&window.kSecsOf(a.name))||[];return {name:a.name,variant:a.variant||'',qty:a.qty,sec:ss[0]||'',...(ss.length>1?{secs:ss}:{})};};
   const kEdit={at:Date.now(),add:v.added.map(edLine),rem:v.removed.map(edLine)};
   if(by)kEdit.by=String(by).slice(0,60);
   if(o.kitchen){
@@ -2912,7 +2913,7 @@ async function edCommit(s,by){
     const fin=edFin(o);
     if(kEdit.add.length&&o.status!=='cancelled'&&(!fin||(s.toKitchen!==false&&edKitchenOk(o)))){
       upd.kitchen='new';if(o.status==='ready'&&!o.servedAtMs)upd.status='preparing';
-      if(o.kSec){const ks=JSON.parse(JSON.stringify(o.kSec));kEdit.add.forEach(a=>{if(!a.sec)return;const x=ks[a.sec]||(ks[a.sec]={n:0,readyAt:0});x.n=(+x.n||0)+(+a.qty||1);x.readyAt=0;});upd.kSec=ks;}
+      if(o.kSec){const ks=JSON.parse(JSON.stringify(o.kSec));kEdit.add.forEach(a=>{(a.secs||(a.sec?[a.sec]:[])).forEach(sid=>{const x=ks[sid]||(ks[sid]={n:0,readyAt:0});x.n=(+x.n||0)+(+a.qty||1);x.readyAt=0;});});upd.kSec=ks;}
     }
   }
   if(o.captainId&&getOrderType(o)==='delivery')upd.commission=Math.round(v.newValue*.1);
@@ -2952,6 +2953,8 @@ window.posApplyEdit=async(o,items,by)=>{
   return edCommit(s,by);
 };
 function printSlip(title,o,items,total,label,note){
+  // نفس تصميم تذكرة المطبخ (مربعات + جدول)
+  if(window.posKitchenTicket){const kit=/مطبخ/.test(title||'');printHTML(posKitchenTicket(o,items.map(i=>({name:i.name,variant:i.variant,qty:i.qty,note:i.note||''})),{title:String(title||'').replace(/#[^—]*/,'').replace(/\s+—\s*$/,'').trim(),note:note||'',...(kit?{}:{total,totalLabel:label||'المبلغ الجديد للطلب'})}));return;}
   printHTML(`<html><head><meta charset="UTF-8"><style>body{font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:12px;width:300px;}
   h3{text-align:center;font-size:15px;margin-bottom:4px}.row{display:flex;justify-content:space-between;font-size:12px;margin:3px 0}.div{border-top:1px dashed #000;margin:6px 0}.tot{font-weight:900;font-size:14px}</style></head><body>
   <h3>${esc(title)}</h3><div class="row"><span>الزبون:</span><span>${esc(o.customer||'')}</span></div>${o.phone?`<div class="row"><span>الهاتف:</span><span>${esc(o.phone)}</span></div>`:''}<div class="div"></div>
@@ -3087,7 +3090,7 @@ document.addEventListener('click',function(e){
   },600);
 },true);
 </script>
-<script src="pos-pro.js?v=79"></script>
+<script src="pos-pro.js?v=82"></script>
 <script type="module">
 // «إدارة المخزن»: الجهاز ينربط برمز من لوحة الإدارة (نفس شاشات المطبخ)، وبعدين يفتح المخزون بس
 if (window.STORE_MODE) {
