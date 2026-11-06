@@ -751,15 +751,17 @@ function orderActionsCore(o){
     const sub_ = o.subtotal != null ? o.subtotal : items.reduce((s, i) => s + (i.price || 0) * i.qty, 0);
     const p = (pay && pay.payment) || o.payment || {};
     const W = settings.paper === 58 ? 210 : 300;
-    const css = `@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
-      *{margin:0;padding:0;}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:10px;width:${W}px;color:#000;}
-      .logo{text-align:center;font-size:18px;font-weight:900;}.sub{text-align:center;font-size:11px;color:#333;}
-      .div{border-top:1px dashed #000;margin:6px 0;}.num{text-align:center;font-size:28px;font-weight:900;}
-      .type{text-align:center;background:#000;color:#fff;padding:3px;font-size:13px;font-weight:700;margin:4px 0;}
-      .row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;gap:6px;}
-      .item{font-size:12px;margin-bottom:4px;}.item .l{display:flex;justify-content:space-between;gap:6px;}.item .n{font-size:10.5px;}
-      .total{display:flex;justify-content:space-between;font-size:16px;font-weight:900;margin-top:4px;padding-top:4px;border-top:2px solid #000;}
-      .foot{text-align:center;font-size:11px;margin-top:8px;}.kt .item{font-size:16px;font-weight:900;}.pb{page-break-before:always;}`;
+    // طابعة حرارية أسود وأبيض: الخط كبير وعريض وكله أسود صافي (بدون رمادي) حتى يقرا بسهولة
+    const f = settings.paper === 58 ? 0.82 : 1, z = (n) => Math.round(n * f * 10) / 10 + 'px';
+    const css = `@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800;900&display=swap');
+      *{margin:0;padding:0;color:inherit}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:8px 6px;width:${W}px;color:#000;font-weight:700;line-height:1.35}
+      .logo{text-align:center;font-size:${z(24)};font-weight:900;}.sub{text-align:center;font-size:${z(14)};font-weight:700;}
+      .div{border-top:2px dashed #000;margin:6px 0;}.num{text-align:center;font-size:${z(44)};font-weight:900;line-height:1.1}
+      .type{text-align:center;background:#000;color:#fff;padding:4px;font-size:${z(18)};font-weight:900;margin:4px 0;}
+      .row{display:flex;justify-content:space-between;font-size:${z(14.5)};font-weight:700;margin-bottom:3px;gap:6px;}
+      .item{font-size:${z(16.5)};font-weight:800;margin-bottom:5px;}.item .l{display:flex;justify-content:space-between;gap:6px;}.item .n{font-size:${z(14.5)};font-weight:700}
+      .total{display:flex;justify-content:space-between;font-size:${z(22)};font-weight:900;margin-top:4px;padding-top:4px;border-top:3px solid #000;}
+      .foot{text-align:center;font-size:${z(14.5)};font-weight:700;margin-top:8px;}.kt .item{font-size:${z(21)};font-weight:900;}.pb{page-break-before:always;}`;
     const rcpt = `<div class="logo">${esc(title)}</div>${subL ? `<div class="sub">${esc(subL)}</div>` : ''}${phone ? `<div class="sub">📞 ${esc(phone)}</div>` : ''}
       <div class="div"></div>${head}${pg}<div class="div"></div>
       <div class="row"><span>رقم الطلب</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div>
@@ -774,8 +776,8 @@ function orderActionsCore(o){
       ${o.service ? `<div class="row"><span>خدمة</span><span>${fmt(o.service)}</span></div>` : ''}
       ${o.tax ? `<div class="row"><span>ضريبة</span><span>${fmt(o.tax)}</span></div>` : ''}
       <div class="total"><span>الإجمالي</span><span>${fmt(o.value)} د.ع</span></div>
-      ${type === 'delivery' && o.fee ? `<div class="row"><span>أجور التوصيل</span><span>${fmt(o.fee)}</span></div><div class="row" style="font-weight:900;font-size:13px"><span>المطلوب من الزبون</span><span>${fmt((o.value || 0) + (o.fee || 0))} د.ع</span></div>` : ''}
-      ${type === 'delivery' && o.fee === 0 ? `<div class="row" style="font-weight:900"><span>🎁 التوصيل مجاني</span><span>0</span></div><div class="row" style="font-weight:900;font-size:13px"><span>المطلوب من الزبون</span><span>${fmt(o.value || 0)} د.ع</span></div>` : ''}
+      ${type === 'delivery' && o.fee ? `<div class="row"><span>أجور التوصيل</span><span>${fmt(o.fee)}</span></div><div class="row" style="font-weight:900;font-size:${z(17)}"><span>المطلوب من الزبون</span><span>${fmt((o.value || 0) + (o.fee || 0))} د.ع</span></div>` : ''}
+      ${type === 'delivery' && o.fee === 0 ? `<div class="row" style="font-weight:900"><span>🎁 التوصيل مجاني</span><span>0</span></div><div class="row" style="font-weight:900;font-size:${z(17)}"><span>المطلوب من الزبون</span><span>${fmt(o.value || 0)} د.ع</span></div>` : ''}
       ${p.method ? `<div class="div"></div><div class="row"><span>طريقة الدفع</span><span>${esc(PAY_AR[p.method] || p.method)}</span></div>` : ''}
       ${p.card && p.method === 'mixed' ? `<div class="row"><span>بطاقة</span><span>${fmt(p.card)}</span></div>` : ''}
       ${p.method === 'credit' && p.cust ? `<div class="row" style="font-weight:900"><span>على حساب</span><span>${esc(p.cust.name)}${p.cust.phone ? ' • ' + esc(p.cust.phone) : ''}</span></div>` : ''}
@@ -1098,7 +1100,7 @@ function orderActionsCore(o){
     if (!$('kitchenScreen').classList.contains('on')) return;
     $('kdsSub').textContent = list.length ? toA(list.length) + ' طلب قيد التحضير' : '';
     // الجاهز اللي ينتظر الزبون (هو اللي يطلع بـ«جاهز» على التلفزيون): «تم التسليم» يشيله من الشاشة
-    const rdy = orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready') && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < (window.posReadyKeep ? posReadyKeep() : 10 * 60000))
+    const rdy = orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready') && (!window.posOrdMine || posOrdMine(o)) && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < (window.posReadyKeep ? posReadyKeep() : 10 * 60000))
       .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
     const kr = $('kdsReady');
     if (kr) {
@@ -1139,7 +1141,10 @@ function orderActionsCore(o){
 
   // تحديث الشاشات عند وصول الطلبات
   // الأساس (كان بـ index.html) — نفس الكود
+// الكاشير يشوف طلباته بس (صاحب المطعم يشوف الكل)
+function ordersMine(){return window.posOrdMine?orders.filter(o=>posOrdMine(o)):orders;}
 function renderOrdersCore(){
+  const orders=ordersMine();
   const salon=orders.filter(o=>getOrderType(o)==='salon');
   const take=orders.filter(o=>getOrderType(o)==='takeaway');
   const deliv=orders.filter(o=>getOrderType(o)==='delivery');
@@ -1407,6 +1412,15 @@ const showMTabCore = tab=>{
   const TABS = ['cashier', 'orders', 'capPay', 'kitchen', 'shift', 'reports', 'menu', 'acc'];
   const TAB_PERM = { reports: 'reports', acc: 'inventory' };
   const isCashierRole = () => !!(window.posUser && window.posUser.role === 'cashier');
+  // كل كاشير يشوف طلباته بس (اللي سجّلها هو بحسابه): الطلبات، «جاهز للزبون»، المعلّقة، الكابتن ما رد — صاحب المطعم يشوف الكل
+  //  الطلب القديم اللي ما بيه منو سجّله: حسب الجهاز اللي انسجّل منه
+  const ordMine = (o) => {
+    if (!o || !isCashierRole()) return true;
+    const u = window.posUser.uid || '';
+    if (o.byUid) return !u || o.byUid === u;
+    return !o.device || o.device === deviceId;
+  };
+  window.posOrdMine = ordMine;
   // التقارير والأرباح والمبيعات الشهرية: للمالك فقط (الكاشير يطبع تقرير اليوم من الوردية)
   const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'kitchen' ? !featOn('kitchen') : t === 'capPay' ? feat('captain') && myPerm('oDeliv') : t === 'menu' ? can('settings') : (!TAB_PERM[t] || can(TAB_PERM[t]));
   // التحديث التلقائي ينتظر لحد ما الكاشير يكون فاضي: سلة فارغة، لا نافذة مفتوحة، لا مكالمة
@@ -1700,7 +1714,7 @@ const ordCancelCore = id=>{
   }
   async function qzPrintHtml(printer, html) {
     const cfg = qz.configs.create(printer, { units: 'mm', size: { width: settings.paper === 58 ? 58 : 80 }, margins: 0, scaleContent: true });
-    await qz.print(cfg, [{ type: 'pixel', format: 'html', flavor: 'plain', data: html }]);
+    await qz.print(cfg, [{ type: 'pixel', format: 'html', flavor: 'plain', data: (window.posPrnClean || String)(html) }]);
   }
   // فتح درج الفلوس بعد ما تنطبع الفاتورة (الدرج موصول بالطابعة) — يشتغل بتطبيق الكاشير (أندرويد/سطح المكتب) وQZ Tray
   async function kickDrawer(printer) {
@@ -1740,6 +1754,11 @@ const ordCancelCore = id=>{
   // كل طابعة معرّفة بالويندوز تطلع بالقائمة، كل قسم لطابعته، طابور + إعادة محاولة،
   // وإذا طابعة قسم ما اشتغلت تنطبع تذكرته على الرئيسية حتى ما تضيع. الإعداد خاص بهالحاسبة.
   const DESK = window.SoraDesktop || null;
+  // الإيموجي بالطابعة الحرارية (أسود وأبيض) يطلع لطخة سودة — نشيله من الورق بس (الشاشة تبقى بيه)
+  const EMO = /(?:(?:\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}])\uFE0F?(?:\u200D(?:\p{Extended_Pictographic})\uFE0F?)*|[\uFE0F\u20E3])[ \u00A0]?/gu;
+  const prnClean = (html) => String(html || '').replace(EMO, '');
+  window.posPrnClean = prnClean;
+  if (!DESK && typeof printHTML === 'function') { const ph = printHTML; window.printHTML = printHTML = (h) => ph(prnClean(h)); }
   const WIN_APP_URL = 'https://github.com/qaesartools-web/sora3a-rest2/releases/latest/download/sora3a-cashier-setup.exe';
   const REL = 'https://github.com/qaesartools-web/sora3a-rest2/releases';
   // تطبيق الكاشير لكل نظام: ويندوز، ماك، لينكس، أندرويد (أجهزة الكاشير والتابلت)
@@ -1757,6 +1776,7 @@ const ordCancelCore = id=>{
   window.dpCfgGet = dpCfg;
   let dpWarnAt = 0;
   async function deskPrint(html, printer, title, copies) {
+    html = prnClean(html);
     const c = dpCfg();
     let r;
     try {
@@ -1796,7 +1816,8 @@ const ordCancelCore = id=>{
     const m = $('dpMain'); if (m) m.innerHTML = dpOpt(list, m.value || c.main, '— الطابعة الافتراضية للويندوز —');
     secList().forEach((x) => { const sel = $('dpP_' + x.id); if (sel) sel.innerHTML = dpOpt(list, sel.value || (c.printers || {})[x.id] || '', '— نفس الطابعة الرئيسية —'); });
     const st = $('dpStatus');
-    if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}${p.kind === 'lan' && DESK.removePrinter ? ` <button type="button" class="dp-x" title="شيل الطابعة" onclick="dpRemoveNet(this.dataset.n)" data-n="${esc(p.name)}">✕</button>` : ''}</span>`).join('')
+    if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}${p.textOnly ? ' <small title="تعريف الطابعة نصي (Generic / Text Only) — البرنامج يطبعلها الورقة صورة حتى العربي يطلع صحيح">🖼️ تنطبع كصورة</small>'
+        : DESK.canImageMode && DESK.setImageMode ? ` <button type="button" class="dp-img${p.image ? ' on' : ''}" data-n="${esc(p.name)}" data-on="${p.image ? '' : '1'}" onclick="dpImg(this.dataset.n, !!this.dataset.on)" title="إذا الفاتورة تطلع غلط أو تضيّع ورق بتعريف هالطابعة: البرنامج يطبعها صورة مباشرة">${p.image ? '🖼️ تنطبع كصورة ✓' : '🖼️ اطبع كصورة'}</button>` : ''}${p.kind === 'lan' && DESK.removePrinter ? ` <button type="button" class="dp-x" title="شيل الطابعة" onclick="dpRemoveNet(this.dataset.n)" data-n="${esc(p.name)}">✕</button>` : ''}</span>`).join('')
       : `<span class="ac-sub">${DESK.platform === 'android' ? 'ما لكينا طابعات — أضف طابعة شبكة تحت، أو اقرن طابعة البلوتوث من إعدادات الجهاز' : 'ما لكينا طابعات — عرّف الطابعة بالجهاز أولاً'}</span>`;
     if (!quiet) toast('🖨️ ' + toA(list.length) + ' طابعة بالحاسبة');
   };
@@ -1807,6 +1828,13 @@ const ordCancelCore = id=>{
     if (!r || !r.ok) { toast('❌ ' + ((r && r.error) || 'ما انضافت')); return; }
     toast('✅ انضافت ' + r.name + ' — اختارها لقسمها وجرّبها بـ 🧪');
     ['dpNetName', 'dpNetIp'].forEach((id) => { const el = $(id); if (el) el.value = ''; });
+    dpFind(true);
+  };
+  // طابعة تعريفها يطبع غلط (رموز بدل العربي، أو ورق فارغ طويل): البرنامج يطبعلها الورقة صورة مباشرة
+  window.dpImg = async (name, on) => {
+    if (!DESK || !DESK.setImageMode) return;
+    const r = await DESK.setImageMode(name, on).catch(() => false);
+    toast(r ? '🖼️ «' + name + '» تنطبع كصورة — جرّبها بـ 🧪' : '🖨️ «' + name + '» رجعت للطباعة العادية');
     dpFind(true);
   };
   window.dpRemoveNet = async (name) => {
@@ -1966,8 +1994,29 @@ const ordCancelCore = id=>{
     const next = { ...c, main: ($('dpMain') || {}).value || '', receiptCopies: n('dpRc'), fallback: !!($('dpFb') || {}).checked, printers: {}, copies: {} };
     secList().forEach((x) => { const v = ($('dpP_' + x.id) || {}).value; if (v) next.printers[x.id] = v; const k = n('dpC_' + x.id); if (k > 1) next.copies[x.id] = k; });
     lsSet(dpKey(), next);
+    if (DESK && DESK.setPref) Promise.resolve(DESK.setPref(dpKey(), next)).catch(() => {});   // نسخة ببرنامج الكاشير نفسه
   }
   window.dpSave = dpSave;
+  // إعداد الطابعات محفوظ هم داخل برنامج الكاشير: إذا انمسحت ذاكرة الصفحة (أو تبدّل رابط الكاشير) يرجع وحده
+  let dpRestored = '';
+  function dpRestore() {
+    if (!DESK || !DESK.getPref || !restData || dpRestored === rid()) return;
+    dpRestored = rid();
+    if (lsGet(dpKey(), null)) { if (DESK.setPref) Promise.resolve(DESK.setPref(dpKey(), dpCfg())).catch(() => {}); return; }
+    Promise.resolve(DESK.getPref(dpKey())).then((v) => {
+      if (!v || typeof v !== 'object' || lsGet(dpKey(), null)) return;
+      lsSet(dpKey(), v);
+      if ($('dpMain')) dpFind(true);
+      toast('🖨️ رجعت الطابعات المحفوظة بهالحاسبة');
+    }).catch(() => {});
+  }
+  // اختيار الطابعة ينحفظ أول ما يتغيّر (قبل: ينحفظ بس بـ«حفظ الإعدادات»، وأي تحديث للإعدادات يرجّعه) — ويبقى لحد ما الكاشير يغيّره
+  document.addEventListener('change', (e) => {
+    const id = (e.target && e.target.id) || '';
+    if (!DESK || !/^dp(Main|P_|Rc$|C_|Fb$)/.test(id)) return;
+    dpSave();
+    toast(/^dp(Main|P_)/.test(id) ? '✅ انحفظت الطابعة «' + (e.target.value || 'الافتراضية') + '» — تبقى لحد ما تغيّرها' : '✅ انحفظ');
+  });
   window.qzFind = async () => {
     try { await qzReady(); const list = await qz.printers.find(); renderQzPrinters(list); toast('🖨️ وُجدت ' + toA(list.length) + ' طابعة'); }
     catch (e) { toast('❌ ما اتصل ببرنامج QZ Tray — تأكد أنه مثبت وشغّال'); }
@@ -2005,6 +2054,7 @@ const ordCancelCore = id=>{
     if ($('kdsLink')) $('kdsLink').style.display = kOff ? '' : 'none';
     if (kOff && $('kitchenScreen') && $('kitchenScreen').classList.contains('on')) goTab('cashier');
     renderPagers();
+    dpRestore();
     dpEnforceTest();
   }
   function listenRest() {
@@ -2196,7 +2246,7 @@ const ordCancelCore = id=>{
   // ── شريط «جاهز للزبون» فوق السلة: الطلبات اللي على شاشة «طلبك جاهز» — ضغطة على الرقم = «تم التسليم»، و«سلّم الكل» ──
   const readyKeepMs = () => { const k = +scrCfg().keepMin; return k > 0 ? Math.max(2, Math.min(60, k)) * 60000 : 10 * 60000; };
   window.posReadyKeep = readyKeepMs;
-  const readyNow = () => (restData && feat('screen')) ? orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready')
+  const readyNow = () => (restData && feat('screen')) ? orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready') && ordMine(o)
     && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < readyKeepMs()).sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0)) : [];
   function renderReadyBar() {
     let el = $('readyBar');
@@ -2874,27 +2924,39 @@ const ordCancelCore = id=>{
     clearTimeout(lanFwT); lanFwT = setTimeout(lanFwCheck, 10 * 60000);
     Promise.resolve(L.fw()).then((r) => { lanFw = r || null; lanUi(); }, () => {});
   }
+  // شنو صار بآخر «اسمح» — يبقى مكتوب بالشريط (حتى الكاشير يصوّره)
+  let lanFwMsg = '';
+  const fwWhy = (r) => !r ? '⚠️ ما وصل رد من البرنامج — سكّر برنامج الكاشير وافتحه وجرّب مرة ثانية'
+    : r.refused ? '❌ انضغط «لا» على سؤال ويندوز (أو الحساب يحتاج رمز المسؤول) — اضغط «اسمح» مرة ثانية واختار «نعم»'
+    : r.shields ? '⛔ ويندوز مأشّر «امنع كل الاتصالات الداخلة» (Block all incoming connections) — اضغط «افتح جدار الحماية» ← «تشغيل أو إيقاف» (Turn on or off) ← شيل هالعلامة من «خاص» و«عام»'
+    : r.fixed || r.created ? '⚠️ السماح انضاف بس الجدار بعده يمنع — غالباً برنامج حماية ثاني (مكافح فيروسات) — اسمح لـ«Sora3a Cashier» بيه، أو اضغط «افتح جدار الحماية» وأشّر عليه بـ«خاص» و«عام»'
+    : '⚠️ ويندوز ما قبل يضيف السماح' + (r.err ? ' (' + r.err + ')' : '') + ' — اضغط «افتح جدار الحماية» وأشّر على «Sora3a Cashier» بـ«خاص» و«عام»';
   function lanFwBar() {
     let b = $('lanFwBar');
     if (!(lanOn && lanFw && lanFw.ok === false) || lanFwHide) { if (b) b.remove(); return; }
-    if (b) return;
-    b = document.createElement('div');
-    b.id = 'lanFwBar';
-    b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9000;max-width:360px;background:#7f1d1d;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:14px;line-height:1.7';
-    b.innerHTML = `<div>⛔ جدار حماية ويندوز يمنع شاشة المطبخ والمجهز و«طلبك جاهز» توصل لهذا الجهاز — إذا انقطع النت ما توصلها الطلبات</div>
-      <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="btn-soft" style="flex:1" onclick="lanFwFix()">🛡️ اسمح بضغطة</button><button type="button" class="btn-soft" onclick="lanFwLater()">لاحقاً</button></div>`;
-    document.body.appendChild(b);
+    const L = lanApi();
+    const msg = lanFwMsg || (lanFw.shields ? fwWhy(lanFw) : '');
+    const h = `<div>⛔ جدار حماية ويندوز يمنع شاشة المطبخ والمجهز و«طلبك جاهز» توصل لهذا الجهاز — إذا انقطع النت ما توصلها الطلبات</div>
+      ${msg ? `<div class="fw-why" style="margin-top:6px;padding:6px 8px;border-radius:10px;background:rgba(0,0,0,.25);font-size:13px">${esc(msg)}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">${lanFw.shields ? '' : '<button type="button" class="btn-soft" style="flex:1" onclick="lanFwFix()">🛡️ اسمح بضغطة</button>'}${L && L.fwOpen ? '<button type="button" class="btn-soft" onclick="lanFwOpen()">⚙️ افتح جدار الحماية</button>' : ''}<button type="button" class="btn-soft" onclick="lanFwLater()">لاحقاً</button></div>`;
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'lanFwBar';
+      b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9000;max-width:380px;background:#7f1d1d;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:14px;line-height:1.7';
+      document.body.appendChild(b);
+    }
+    if (b.innerHTML !== h) b.innerHTML = h;
   }
   window.lanFwLater = () => { lanFwHide = true; lanFwBar(); };
+  window.lanFwOpen = () => { const L = lanApi(); if (L && L.fwOpen) Promise.resolve(L.fwOpen()).catch(() => {}); };
   window.lanFwFix = async () => {
     const L = lanApi(); if (!L || !L.fwFix) return;
     toast('🛡️ ويندوز راح يسألك «تسمح لهذا التطبيق يسوي تغييرات؟» — اضغط «نعم»');
     const r = await Promise.resolve(L.fwFix()).catch(() => null);
     if (r) lanFw = r;
+    lanFwMsg = r && r.ok ? '' : fwWhy(r);
     lanUi();
-    toast(r && r.ok ? '✅ تم — الشاشات تكدر توصل لهذا الجهاز حتى بدون نت'
-      : r && r.refused ? '❌ انضغط «لا» — عيدها واضغط «نعم»'
-      : '⚠️ ما تأكدنا — إذا عندك برنامج حماية ثاني (مكافح فيروسات) اسمح لبرنامج سرعة بيه');
+    toast(r && r.ok ? '✅ تم — الشاشات تكدر توصل لهذا الجهاز حتى بدون نت' : lanFwMsg);
   };
 
   // السلة على الهاتف: تفتح وتغلق بلمسة على رأسها
@@ -3324,7 +3386,7 @@ const ordCancelCore = id=>{
   const CAP_NOANS = () => window.__capNoAns || 5 * 60000;
   // دلفري خلص تجهيزه يرجع لكاشيره (الجهاز اللي سجّله)؛ إذا ما اختار كابتن خلال ٣ دقايق يطلع لكل كاشيرية الدلفري
   const CAP_BACK = () => window.__capBack || 3 * 60000;
-  const capNoAns = () => orders.filter((o) => getOrderType(o) === 'delivery' && o.status === 'pending' && o.captainId
+  const capNoAns = () => orders.filter((o) => getOrderType(o) === 'delivery' && o.status === 'pending' && o.captainId && ordMine(o)
     && !(o.rejectedBy || []).includes(o.captainId) && Date.now() - (o.assignedAtMs || o.createdAtMs || Date.now()) > CAP_NOANS());
   setInterval(() => { if (restData) renderCapWait(); }, 30000);
   function renderCapWait() {

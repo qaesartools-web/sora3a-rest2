@@ -13,6 +13,10 @@ if (allowed.includes(location.origin)) {
     printers: () => ipcRenderer.invoke('sora:printers'),
     print: (html, opts) => ipcRenderer.invoke('sora:print', String(html || ''), opts || {}),
     jobs: () => ipcRenderer.invoke('sora:jobs'),
+    getPref: (k) => ipcRenderer.invoke('sora:pref:get', String(k || '')),
+    setPref: (k, v) => ipcRenderer.invoke('sora:pref:set', String(k || ''), v),
+    canImageMode: arg('sora-platform') === 'win32',
+    setImageMode: (name, on) => ipcRenderer.invoke('sora:imagemode:set', String(name || ''), !!on),
     reprint: (id) => ipcRenderer.invoke('sora:reprint', Number(id)),
     getTestMode: () => ipcRenderer.invoke('sora:testmode:get'),
     setTestMode: (on) => ipcRenderer.invoke('sora:testmode:set', !!on),
@@ -32,6 +36,7 @@ if (allowed.includes(location.origin)) {
     broadcast: (m) => ipcRenderer.send('sora:lan:broadcast', m),
     fw: () => ipcRenderer.invoke('sora:lan:fw'),
     fwFix: () => ipcRenderer.invoke('sora:lan:fwfix'),
+    fwOpen: () => ipcRenderer.invoke('sora:lan:fwopen'),
     on: (cb) => { ipcRenderer.on('sora:lan', (_e, v) => { try { cb(v); } catch (e) {} }); },
   });
 }

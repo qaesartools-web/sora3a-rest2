@@ -4,7 +4,8 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, Menu, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { createPrinter, makeRenderer, makeVirtualRenderer } = require('./printer');
+const { createPrinter, makeRenderer, makeRawRenderer, makeAutoRenderer, makeVirtualRenderer } = require('./printer');
+const { createRaw } = require('./rawprint');
 const { createHub } = require('./lan');
 const { createFirewall } = require('./firewall');
 
@@ -123,6 +124,26 @@ function setupIpc() {
     return printer.print(html, opts);
   });
   ipcMain.handle('sora:jobs', (e) => (fromApp(e) ? printer.jobs() : []));
+  // إعدادات صغيرة تنحفظ بالبرنامج نفسه (اختيار الطابعات) — تبقى حتى لو انمسحت ذاكرة الصفحة
+  const prefKey = (k) => typeof k === 'string' && /^[\w:.-]{1,80}$/.test(k);
+  ipcMain.handle('sora:pref:get', (e, k) => (fromApp(e) && prefKey(k) ? ((readCfg().prefs || {})[k] ?? null) : null));
+  ipcMain.handle('sora:pref:set', (e, k, v) => {
+    if (!fromApp(e) || !prefKey(k)) return false;
+    let s; try { s = JSON.stringify(v); } catch (err) { return false; }
+    if (!s || s.length > 20000) return false;
+    const c = readCfg(), prefs = { ...(c.prefs || {}), [k]: JSON.parse(s) };
+    if (Object.keys(prefs).length > 50) return false;
+    writeCfg({ ...c, prefs });
+    return true;
+  });
+  // «طباعة صورة» لطابعة معيّنة (ويندوز) — تنحفظ بهالحاسبة
+  ipcMain.handle('sora:imagemode:set', (e, name, on) => {
+    if (!fromApp(e) || process.platform !== 'win32' || typeof name !== 'string' || !name || name.length > 200) return false;
+    const c = readCfg(), arr = (k) => new Set(Array.isArray(c[k]) ? c[k] : []), onS = arr('imagePrinters'), offS = arr('normalPrinters');
+    if (on) { onS.add(name); offS.delete(name); } else { onS.delete(name); offS.add(name); }
+    writeCfg({ ...c, imagePrinters: [...onS].slice(0, 50), normalPrinters: [...offS].slice(0, 50) });
+    return !!on;
+  });
   ipcMain.handle('sora:reprint', (e, id) => (fromApp(e) ? printer.reprint(id) : { ok: false, error: 'طلب مرفوض' }));
   ipcMain.handle('sora:testmode:get', (e) => fromApp(e) && testMode);
   ipcMain.handle('sora:testmode:set', (e, on) => {
@@ -156,6 +177,12 @@ function setupIpc() {
   fw = createFirewall();
   ipcMain.handle('sora:lan:fw', (e) => (fromApp(e) ? fw.check() : null));
   ipcMain.handle('sora:lan:fwfix', (e) => (fromApp(e) ? fw.fix() : null));
+  // «افتح جدار الحماية»: صفحة «التطبيقات المسموحة» بويندوز (إذا السماح بضغطة ما كفى)
+  ipcMain.handle('sora:lan:fwopen', (e) => {
+    if (!fromApp(e) || process.platform !== 'win32') return false;
+    require('child_process').execFile('control.exe', ['/name', 'Microsoft.WindowsFirewall', '/page', 'pageConfigureApps'], { windowsHide: false }, () => {});
+    return true;
+  });
 }
 
 // تحديث البرنامج نفسه تلقائياً (ينزل بالخلفية ويتثبت عند الإغلاق)
@@ -187,9 +214,31 @@ app.whenReady().then(() => {
   testMode = !!readCfg().testMode;
   // أول تشغيل للنسخة المثبتة: يفتح وحده مع تشغيل الجهاز (يكدر الكاشير يطفيه من الإعدادات)
   if (app.isPackaged && !readCfg().autoStartSet) setAutoStart(true);
+  const getPrinters = () => (win && !win.isDestroyed() ? win.webContents.getPrintersAsync() : Promise.resolve([]));
+  // ويندوز: الطابعة المعرّفة بتعريف «Generic / Text Only» تنطبعلها الورقة صورة ESC/POS (العربي يطلع صحيح)
+  const raw = process.platform === 'win32' ? createRaw({ tmpDir: app.getPath('temp') }) : null;
+  const normal = makeRenderer(BrowserWindow, app.getPath('temp'));
+  //  وطابعات الفواتير الحرارية المعروفة (SAM4S، POS-80، Xprinter…) هم صورة: بعرض الطابعة بالضبط وبدون ورق فارغ
+  //  + الكاشير يكدر يشغّل/يطفي «طباعة صورة» لأي طابعة من الإعدادات
+  const imgCfg = () => { const c = readCfg(); const set = (k) => new Set(Array.isArray(c[k]) ? c[k] : []); return { on: set('imagePrinters'), off: set('normalPrinters') }; };
+  const needsImage = async (n) => {
+    if (!raw || !n) return false;
+    if (await raw.isTextOnly(n)) return true;   // التعريف النصي يطبع العربي رموز — دائماً صورة
+    const c = imgCfg();
+    if (c.on.has(n)) return true;
+    if (c.off.has(n)) return false;
+    return raw.isThermal(n);
+  };
   printer = createPrinter({
-    getPrinters: () => (win && !win.isDestroyed() ? win.webContents.getPrintersAsync() : Promise.resolve([])),
-    render: makeRenderer(BrowserWindow, app.getPath('temp')),
+    getPrinters,
+    isTextOnly: raw ? (n) => raw.isTextOnly(n) : null,
+    isImage: raw ? needsImage : null,
+    render: raw ? makeAutoRenderer({
+      normal, raw: makeRawRenderer(BrowserWindow, app.getPath('temp'), (n, b, t) => raw.send(n, b, t)),
+      isTextOnly: needsImage,
+      dpiOf: (n) => raw.dpi(n),
+      defaultName: async () => ((await getPrinters()).find((p) => p.isDefault) || {}).name || '',
+    }) : normal,
     virtual: { enabled: () => testMode, render: makeVirtualRenderer(BrowserWindow, app.getPath('temp'), testDir(), onPaper) },
   });
   setupIpc();

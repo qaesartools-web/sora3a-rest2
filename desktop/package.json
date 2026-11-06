@@ -12,7 +12,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/*.test.js",
+    "test": "node --test --test-timeout=90000 test/*.test.js",
     "dist": "electron-builder --publish never"
   },
   "dependencies": {
@@ -29,6 +29,8 @@
       "main.js",
       "preload.js",
       "printer.js",
+      "escpos.js",
+      "rawprint.js",
       "lan.js",
       "firewall.js",
       "offline.html",
