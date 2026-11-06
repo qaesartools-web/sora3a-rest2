@@ -8,8 +8,10 @@ const CUT = Buffer.from([0x1d, 0x56, 0x42, 0x00]);            // قص جزئي �
 const KICK = Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]);      // فتح درج الفلوس (ESC p 0 25 250)
 const feed = (lines) => Buffer.from([0x1b, 0x64, Math.max(0, Math.min(255, lines | 0))]);
 
-// عدد النقاط بعرض الورقة (203 نقطة بالإنج): 80 ملم ← 576، 58 ملم ← 384
-const dotsFor = (widthMm) => (widthMm <= 60 ? 384 : 576);
+// عرض الطباعة بالنقاط: 58 ملم ← 384. 80 ملم: طابعة 203 نقطة بالإنج ← 576، طابعة 180 (مثل SAM4S GIANT-100) ← 512.
+// إذا ما نعرف دقة الطابعة (تعريف نصي) ناخذ 512 — تدخل بكل طابعات 80 ملم (بالـ203 تطلع بالنص وأضيق شوية) وما ينقص شي من الأطراف
+const dotsFor = (widthMm, dpi = 0) => (widthMm <= 60 ? 384 : dpi >= 190 ? 576 : 512);
+const CENTER = Buffer.from([0x1b, 0x61, 0x01]);               // الصورة بنص الورقة
 
 // صورة BGRA (مثل NativeImage.toBitmap بالإلكترون) ← أبيض/أسود حسب الإضاءة، والشفاف = أبيض
 function threshold(bgra, width, height, cut = 170) {
@@ -58,9 +60,9 @@ function raster(black, width, height) {
 // ورقة كاملة: تهيئة + الصورة + تغذية + قص، مكررة بعدد النسخ (+ فتح الدرج إذا مطلوب)
 function job(black, width, height, copies = 1, { kick = false } = {}) {
   const img = raster(black, width, height), parts = [];
-  for (let c = 0; c < Math.max(1, copies | 0); c++) parts.push(INIT, img, feed(4), CUT);
+  for (let c = 0; c < Math.max(1, copies | 0); c++) parts.push(INIT, CENTER, img, feed(4), CUT);
   if (kick) parts.push(KICK);
   return Buffer.concat(parts);
 }
 
-module.exports = { INIT, CUT, KICK, feed, dotsFor, threshold, trimBottom, raster, job };
+module.exports = { INIT, CUT, KICK, CENTER, feed, dotsFor, threshold, trimBottom, raster, job };

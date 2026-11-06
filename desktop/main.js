@@ -124,6 +124,14 @@ function setupIpc() {
     return printer.print(html, opts);
   });
   ipcMain.handle('sora:jobs', (e) => (fromApp(e) ? printer.jobs() : []));
+  // «طباعة صورة» لطابعة معيّنة (ويندوز) — تنحفظ بهالحاسبة
+  ipcMain.handle('sora:imagemode:set', (e, name, on) => {
+    if (!fromApp(e) || process.platform !== 'win32' || typeof name !== 'string' || !name || name.length > 200) return false;
+    const c = readCfg(), set = new Set(Array.isArray(c.imagePrinters) ? c.imagePrinters : []);
+    if (on) set.add(name); else set.delete(name);
+    writeCfg({ ...c, imagePrinters: [...set].slice(0, 50) });
+    return set.has(name);
+  });
   ipcMain.handle('sora:reprint', (e, id) => (fromApp(e) ? printer.reprint(id) : { ok: false, error: 'طلب مرفوض' }));
   ipcMain.handle('sora:testmode:get', (e) => fromApp(e) && testMode);
   ipcMain.handle('sora:testmode:set', (e, on) => {
@@ -192,12 +200,16 @@ app.whenReady().then(() => {
   // ويندوز: الطابعة المعرّفة بتعريف «Generic / Text Only» تنطبعلها الورقة صورة ESC/POS (العربي يطلع صحيح)
   const raw = process.platform === 'win32' ? createRaw({ tmpDir: app.getPath('temp') }) : null;
   const normal = makeRenderer(BrowserWindow, app.getPath('temp'));
+  //  + الكاشير يكدر يشغّل «طباعة صورة» لأي طابعة (إذا تعريفها يضيّع ورق أو يطبع غلط)
+  const imageSet = () => new Set(Array.isArray(readCfg().imagePrinters) ? readCfg().imagePrinters : []);
   printer = createPrinter({
     getPrinters,
     isTextOnly: raw ? (n) => raw.isTextOnly(n) : null,
+    isImage: raw ? (n) => imageSet().has(n) : null,
     render: raw ? makeAutoRenderer({
       normal, raw: makeRawRenderer(BrowserWindow, app.getPath('temp'), (n, b, t) => raw.send(n, b, t)),
-      isTextOnly: (n) => raw.isTextOnly(n),
+      isTextOnly: async (n) => imageSet().has(n) || raw.isTextOnly(n),
+      dpiOf: (n) => raw.dpi(n),
       defaultName: async () => ((await getPrinters()).find((p) => p.isDefault) || {}).name || '',
     }) : normal,
     virtual: { enabled: () => testMode, render: makeVirtualRenderer(BrowserWindow, app.getPath('temp'), testDir(), onPaper) },

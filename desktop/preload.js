@@ -13,6 +13,8 @@ if (allowed.includes(location.origin)) {
     printers: () => ipcRenderer.invoke('sora:printers'),
     print: (html, opts) => ipcRenderer.invoke('sora:print', String(html || ''), opts || {}),
     jobs: () => ipcRenderer.invoke('sora:jobs'),
+    canImageMode: arg('sora-platform') === 'win32',
+    setImageMode: (name, on) => ipcRenderer.invoke('sora:imagemode:set', String(name || ''), !!on),
     reprint: (id) => ipcRenderer.invoke('sora:reprint', Number(id)),
     getTestMode: () => ipcRenderer.invoke('sora:testmode:get'),
     setTestMode: (on) => ipcRenderer.invoke('sora:testmode:set', !!on),

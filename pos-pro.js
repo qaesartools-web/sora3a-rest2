@@ -1796,7 +1796,8 @@ const ordCancelCore = id=>{
     const m = $('dpMain'); if (m) m.innerHTML = dpOpt(list, m.value || c.main, '— الطابعة الافتراضية للويندوز —');
     secList().forEach((x) => { const sel = $('dpP_' + x.id); if (sel) sel.innerHTML = dpOpt(list, sel.value || (c.printers || {})[x.id] || '', '— نفس الطابعة الرئيسية —'); });
     const st = $('dpStatus');
-    if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}${p.textOnly ? ' <small title="تعريف الطابعة نصي (Generic / Text Only) — البرنامج يطبعلها الورقة صورة حتى العربي يطلع صحيح">🖼️ تنطبع كصورة</small>' : ''}${p.kind === 'lan' && DESK.removePrinter ? ` <button type="button" class="dp-x" title="شيل الطابعة" onclick="dpRemoveNet(this.dataset.n)" data-n="${esc(p.name)}">✕</button>` : ''}</span>`).join('')
+    if (st) st.innerHTML = list.length ? list.map((p) => `<span class="dp-pr ${p.ok ? 'ok' : 'bad'}">${p.ok ? '🟢' : '🔴'} ${esc(p.displayName)}${p.ok ? '' : ' — ' + esc(p.statusText)}${p.textOnly ? ' <small title="تعريف الطابعة نصي (Generic / Text Only) — البرنامج يطبعلها الورقة صورة حتى العربي يطلع صحيح">🖼️ تنطبع كصورة</small>'
+        : DESK.canImageMode && DESK.setImageMode ? ` <button type="button" class="dp-img${p.image ? ' on' : ''}" data-n="${esc(p.name)}" data-on="${p.image ? '' : '1'}" onclick="dpImg(this.dataset.n, !!this.dataset.on)" title="إذا الفاتورة تطلع غلط أو تضيّع ورق بتعريف هالطابعة: البرنامج يطبعها صورة مباشرة">${p.image ? '🖼️ تنطبع كصورة ✓' : '🖼️ اطبع كصورة'}</button>` : ''}${p.kind === 'lan' && DESK.removePrinter ? ` <button type="button" class="dp-x" title="شيل الطابعة" onclick="dpRemoveNet(this.dataset.n)" data-n="${esc(p.name)}">✕</button>` : ''}</span>`).join('')
       : `<span class="ac-sub">${DESK.platform === 'android' ? 'ما لكينا طابعات — أضف طابعة شبكة تحت، أو اقرن طابعة البلوتوث من إعدادات الجهاز' : 'ما لكينا طابعات — عرّف الطابعة بالجهاز أولاً'}</span>`;
     if (!quiet) toast('🖨️ ' + toA(list.length) + ' طابعة بالحاسبة');
   };
@@ -1807,6 +1808,13 @@ const ordCancelCore = id=>{
     if (!r || !r.ok) { toast('❌ ' + ((r && r.error) || 'ما انضافت')); return; }
     toast('✅ انضافت ' + r.name + ' — اختارها لقسمها وجرّبها بـ 🧪');
     ['dpNetName', 'dpNetIp'].forEach((id) => { const el = $(id); if (el) el.value = ''; });
+    dpFind(true);
+  };
+  // طابعة تعريفها يطبع غلط (رموز بدل العربي، أو ورق فارغ طويل): البرنامج يطبعلها الورقة صورة مباشرة
+  window.dpImg = async (name, on) => {
+    if (!DESK || !DESK.setImageMode) return;
+    const r = await DESK.setImageMode(name, on).catch(() => false);
+    toast(r ? '🖼️ «' + name + '» تنطبع كصورة — جرّبها بـ 🧪' : '🖨️ «' + name + '» رجعت للطباعة العادية');
     dpFind(true);
   };
   window.dpRemoveNet = async (name) => {

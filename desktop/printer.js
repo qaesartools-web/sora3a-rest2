@@ -96,8 +96,8 @@ function makeRenderer(BrowserWindow, tmpDir) {
 // طباعة صورة ESC/POS (للطابعات المعرّفة بتعريف «Generic / Text Only» — هذا التعريف يطبع العربي رموز):
 // الورقة تترسم بنافذة مخفية بعرض نقاط الطابعة (80 ملم = 576 نقطة)، تتحول أبيض/أسود، وتروح للطابعة «خام» بدون التعريف
 function makeRawRenderer(BrowserWindow, tmpDir, send, escpos = require('./escpos')) {
-  return async function renderRaw(html, { printer, widthMm, copies, title }) {
-    const dots = escpos.dotsFor(widthMm);
+  return async function renderRaw(html, { printer, widthMm, copies, title, dpi }) {
+    const dots = escpos.dotsFor(widthMm, dpi || 0);
     let bytes = null;
     await withPage(BrowserWindow, tmpDir, html, widthMm, { offscreen: true }, async (win, hPx, pxW) => {
       const z = dots / pxW;
@@ -117,15 +117,16 @@ function makeRawRenderer(BrowserWindow, tmpDir, send, escpos = require('./escpos
   };
 }
 
-// يختار وحده: طابعة بتعريف نصي ← صورة ESC/POS، وغيرها ← طباعة الويندوز العادية
-function makeAutoRenderer({ normal, raw, isTextOnly, defaultName }) {
+// يختار وحده: طابعة بتعريف نصي (أو الكاشير شغّلها «صورة») ← صورة ESC/POS، وغيرها ← طباعة الويندوز العادية
+function makeAutoRenderer({ normal, raw, isTextOnly, defaultName, dpiOf = null }) {
   return async function render(html, o) {
     let name = o.printer;
     if (!name && defaultName) name = await defaultName().catch(() => '');
     let textOnly = false;
     try { textOnly = !!(raw && name && await isTextOnly(name)); } catch (e) { textOnly = false; }
     if (!textOnly) return normal(html, o);
-    try { return await raw(html, { ...o, printer: name }); }
+    const dpi = dpiOf ? await dpiOf(name).catch(() => 0) : 0;
+    try { return await raw(html, { ...o, printer: name, dpi }); }
     catch (e) {
       // الصورة ما انرسمت/ما وصلت ← نجرب الطباعة العادية مرة (أحسن من ما تطلع الورقة أبد)
       try { return await normal(html, o); } catch (e2) { throw e; }
@@ -170,7 +171,7 @@ function cleanOpts(o) {
   };
 }
 
-function createPrinter({ getPrinters: getReal, render: renderReal, virtual = null, retries = 1, platform = process.platform, isTextOnly = null }) {
+function createPrinter({ getPrinters: getReal, render: renderReal, virtual = null, retries = 1, platform = process.platform, isTextOnly = null, isImage = null }) {
   const testOn = () => !!(virtual && virtual.enabled());
   const getPrinters = async () => [...(await getReal().catch(() => [])), ...(testOn() ? VIRTUAL : [])];
   const render = (html, o) => (isVirtual(o.printer) ? virtual.render(html, o) : renderReal(html, o));
@@ -223,7 +224,7 @@ function createPrinter({ getPrinters: getReal, render: renderReal, virtual = nul
       const list = await getPrinters().catch(() => []);
       const tx = isTextOnly ? await Promise.all(list.map((p) => (isVirtual(p.name) ? false : isTextOnly(p.name).catch(() => false)))) : [];
       return list.map((p, i) => ({ name: p.name, displayName: p.displayName || p.name, isDefault: !!p.isDefault, ...describeStatus(p.status, isVirtual(p.name) ? 'win32' : platform),
-        ...(tx[i] ? { textOnly: true } : {}) }));
+        ...(tx[i] ? { textOnly: true } : {}), ...(isImage && !isVirtual(p.name) && isImage(p.name) ? { image: true } : {}) }));
     },
     jobs: () => jobs.map(({ html, opts, ...j }) => ({ ...j, canReprint: !!html })),
     async reprint(id) {

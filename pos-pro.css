@@ -297,6 +297,8 @@ kbd{font-family:ui-monospace,monospace;font-size:10px;background:var(--panel2);b
 .sh-save{margin-top:6px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.35)}
 .dp-net{margin-top:10px;padding:10px 12px;border-radius:12px;border:1px dashed rgba(59,130,246,.45);background:rgba(59,130,246,.06)}
 .dp-x{border:0;background:transparent;color:#b91c1c;font-weight:900;cursor:pointer;padding:0 2px}
+.dp-img{border:1px solid var(--line);background:transparent;border-radius:999px;font:inherit;font-size:11px;font-weight:800;padding:1px 8px;margin-inline-start:4px;cursor:pointer}
+.dp-img.on{background:rgba(22,163,74,.15);border-color:rgba(22,163,74,.5)}
 
 /* ── الطلبات الأونلاين (QR / الويتر) ── */
 .webs{top:auto;bottom:16px;max-height:calc(100vh - 140px);overflow:auto;}

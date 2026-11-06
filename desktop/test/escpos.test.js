@@ -13,8 +13,9 @@ function img(w, h, blackRows) {
   return b;
 }
 
-test('paper width → printer dots (80 mm = 576, 58 mm = 384)', () => {
-  assert.equal(E.dotsFor(80), 576); assert.equal(E.dotsFor(58), 384);
+test('paper width → printer dots: 80 mm at 203 dpi = 576, at 180 dpi (SAM4S GIANT-100) = 512, unknown = 512 (fits every 80 mm printer); 58 mm = 384', () => {
+  assert.equal(E.dotsFor(80, 203), 576); assert.equal(E.dotsFor(80, 180), 512); assert.equal(E.dotsFor(80), 512);
+  assert.equal(E.dotsFor(58), 384); assert.equal(E.dotsFor(58, 203), 384);
 });
 
 test('threshold: dark = black, light and transparent = white', () => {
@@ -37,9 +38,9 @@ test('job: init + image + feed + cut for each copy; blank tail trimmed', () => {
   const w = 8, h = 6, black = E.threshold(img(w, h, [1]), w, h);
   assert.equal(E.trimBottom(black, w, h), 2);
   const j = E.job(black, w, 2, 2);
-  const one = 2 + (8 + 2) + 3 + 4;
+  const one = 2 + 3 + (8 + 2) + 3 + 4;
   assert.equal(j.length, one * 2);
-  assert.deepEqual([...j.subarray(0, 2)], [0x1b, 0x40]);
+  assert.deepEqual([...j.subarray(0, 5)], [0x1b, 0x40, 0x1b, 0x61, 0x01], 'init + centre the image');
   assert.deepEqual([...j.subarray(one - 4, one)], [0x1d, 0x56, 0x42, 0x00]);
   assert.deepEqual([...E.job(black, w, 2, 1, { kick: true }).subarray(-5)], [0x1b, 0x70, 0x00, 0x19, 0xfa]);
 });
@@ -50,9 +51,9 @@ test('Generic / Text Only driver is detected (the one that prints Arabic as ╟�
   assert.equal(isTextOnlyDriver('POS-80C'), false);
   assert.equal(isTextOnlyDriver('EPSON TM-T20II Receipt5'), false);
   assert.equal(isTextOnlyDriver(''), false);
-  const m = parseDrivers('[{"n":"CHALLENGE MONSTER 80mm","d":"Generic / Text Only"},{"n":"طابعة المطبخ","d":"POS-80C"}]');
-  assert.equal(m.get('CHALLENGE MONSTER 80mm'), 'Generic / Text Only'); assert.equal(m.get('طابعة المطبخ'), 'POS-80C');
-  assert.equal(parseDrivers('{"n":"One","d":"X"}').get('One'), 'X');
+  const m = parseDrivers('[{"n":"CHALLENGE MONSTER 80mm","d":"Generic / Text Only","r":0},{"n":"طابعة المطبخ","d":"SAM4S GIANT-100","r":180}]');
+  assert.deepEqual(m.get('CHALLENGE MONSTER 80mm'), { driver: 'Generic / Text Only', dpi: 0 }); assert.deepEqual(m.get('طابعة المطبخ'), { driver: 'SAM4S GIANT-100', dpi: 180 });
+  assert.equal(parseDrivers('{"n":"One","d":"X"}').get('One').driver, 'X');
   assert.equal(parseDrivers('garbage').size, 0);
 });
 
@@ -60,13 +61,15 @@ test('raw sender: printer name and file go by environment (never inside the comm
   const calls = [];
   const raw = createRaw({ tmpDir: require('os').tmpdir(), run: async (script, env) => {
     calls.push({ script, env });
-    if (script === DRIVERS_PS) return '[{"n":"CHALLENGE MONSTER 80mm","d":"Generic / Text Only"},{"n":"Kitchen","d":"POS-80C"}]';
+    if (script === DRIVERS_PS) return '[{"n":"CHALLENGE MONSTER 80mm","d":"Generic / Text Only","r":60},{"n":"Kitchen","d":"SAM4S GIANT-100","r":180}]';
     assert.equal(require('fs').readFileSync(env.SORA_RAW_FILE).toString('hex'), '1b40');
     return 'OK';
   } });
   assert.equal(await raw.isTextOnly('CHALLENGE MONSTER 80mm'), true);
   assert.equal(await raw.isTextOnly('Kitchen'), false);
   assert.equal(calls.length, 1, 'driver list cached');
+  assert.equal(await raw.dpi('Kitchen'), 180, 'dpi from the real driver');
+  assert.equal(await raw.dpi('CHALLENGE MONSTER 80mm'), 0, 'text-only driver does not know the printer dpi');
   assert.equal(await raw.isTextOnly('New one'), false);
   assert.equal(calls.length, 2, 'unknown printer → read the list again');
   await raw.send('طابعة "x" & y', Buffer.from([0x1b, 0x40]), 'فاتورة #5');
@@ -80,14 +83,15 @@ test('auto renderer: text-only printer → image (raw), other printers → norma
   const used = [];
   const render = makeAutoRenderer({
     normal: async (_h, o) => used.push(['normal', o.printer]),
-    raw: async (_h, o) => used.push(['raw', o.printer]),
+    raw: async (_h, o) => used.push(['raw', o.printer, o.dpi]),
     isTextOnly: async (n) => n === 'CHALLENGE MONSTER 80mm',
+    dpiOf: async () => 180,
     defaultName: async () => 'CHALLENGE MONSTER 80mm',
   });
   await render('x', { printer: 'CHALLENGE MONSTER 80mm' });
   await render('x', { printer: 'Kitchen' });
   await render('x', { printer: '' });
-  assert.deepEqual(used, [['raw', 'CHALLENGE MONSTER 80mm'], ['normal', 'Kitchen'], ['raw', 'CHALLENGE MONSTER 80mm']]);
+  assert.deepEqual(used, [['raw', 'CHALLENGE MONSTER 80mm', 180], ['normal', 'Kitchen'], ['raw', 'CHALLENGE MONSTER 80mm', 180]]);
   // فحص التعريف خرب ← طباعة عادية (ما توكف الطباعة)
   const r2 = makeAutoRenderer({ normal: async () => used.push(['normal2']), raw: async () => used.push(['raw2']), isTextOnly: async () => { throw new Error('ps'); } });
   await r2('x', { printer: 'A' });
@@ -101,7 +105,9 @@ test('auto renderer: text-only printer → image (raw), other printers → norma
 });
 
 test('printer list marks text-only printers (the cashier shows «تنطبع كصورة»)', async () => {
-  const p = createPrinter({ platform: 'win32', getPrinters: async () => [{ name: 'M', status: 0 }, { name: 'K', status: 0 }], render: async () => {}, isTextOnly: async (n) => n === 'M' });
+  const p = createPrinter({ platform: 'win32', getPrinters: async () => [{ name: 'M', status: 0 }, { name: 'K', status: 0 }, { name: 'G', status: 0 }], render: async () => {},
+    isTextOnly: async (n) => n === 'M', isImage: (n) => n === 'G' });
   const l = await p.printers();
   assert.equal(l[0].textOnly, true); assert.equal(l[1].textOnly, undefined);
+  assert.equal(l[2].image, true, 'image mode switched on by the cashier'); assert.equal(l[1].image, undefined);
 });

@@ -24,13 +24,13 @@ function runPs(script, env = {}, timeout = 30000) {
 const DRIVERS_PS = `$ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.Encoding]::UTF8
 try { $p = Get-CimInstance -ClassName Win32_Printer } catch { $p = Get-WmiObject -Class Win32_Printer }
-@($p | ForEach-Object { @{ n = [string]$_.Name; d = [string]$_.DriverName } }) | ConvertTo-Json -Compress`;
+@($p | ForEach-Object { @{ n = [string]$_.Name; d = [string]$_.DriverName; r = [int]$_.HorizontalResolution } }) | ConvertTo-Json -Compress`;
 
 function parseDrivers(out) {
   const map = new Map();
   if (!out) return map;
   let j; try { j = JSON.parse(out); } catch (e) { return map; }
-  for (const x of Array.isArray(j) ? j : [j]) if (x && x.n) map.set(String(x.n), String(x.d || ''));
+  for (const x of Array.isArray(j) ? j : [j]) if (x && x.n) map.set(String(x.n), { driver: String(x.d || ''), dpi: Number(x.r) > 0 ? Number(x.r) : 0 });
   return map;
 }
 
@@ -80,12 +80,15 @@ function createRaw({ tmpDir, run = runPs, ttlMs = 5 * 60000 } = {}) {
   return {
     drivers,
     // هل هالطابعة تحتاج طباعة صورة ESC/POS؟ (طابعة جديدة ما بالذاكرة ← نعيد القراءة مرة)
-    async isTextOnly(name) {
-      if (!name) return false;
+    async info(name) {
+      if (!name) return null;
       let m = await drivers(false);
       if (!m.has(name)) m = await drivers(true);
-      return isTextOnlyDriver(m.get(name));
+      return m.get(name) || null;
     },
+    async isTextOnly(name) { const i = await this.info(name); return !!(i && isTextOnlyDriver(i.driver)); },
+    // دقة الطابعة من تعريفها (التعريف النصي ما يعرفها ← 0)
+    async dpi(name) { const i = await this.info(name); return i && !isTextOnlyDriver(i.driver) && i.dpi >= 150 && i.dpi <= 600 ? i.dpi : 0; },
     async send(printerName, bytes, title = 'Sora3a') {
       const file = path.join(tmpDir, 'sora3a-raw-' + crypto.randomUUID() + '.bin');
       fs.writeFileSync(file, bytes);
