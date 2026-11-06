@@ -165,6 +165,12 @@ function setupIpc() {
   fw = createFirewall();
   ipcMain.handle('sora:lan:fw', (e) => (fromApp(e) ? fw.check() : null));
   ipcMain.handle('sora:lan:fwfix', (e) => (fromApp(e) ? fw.fix() : null));
+  // «افتح جدار الحماية»: صفحة «التطبيقات المسموحة» بويندوز (إذا السماح بضغطة ما كفى)
+  ipcMain.handle('sora:lan:fwopen', (e) => {
+    if (!fromApp(e) || process.platform !== 'win32') return false;
+    require('child_process').execFile('control.exe', ['/name', 'Microsoft.WindowsFirewall', '/page', 'pageConfigureApps'], { windowsHide: false }, () => {});
+    return true;
+  });
 }
 
 // تحديث البرنامج نفسه تلقائياً (ينزل بالخلفية ويتثبت عند الإغلاق)

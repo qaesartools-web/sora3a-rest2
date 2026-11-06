@@ -34,6 +34,7 @@ if (allowed.includes(location.origin)) {
     broadcast: (m) => ipcRenderer.send('sora:lan:broadcast', m),
     fw: () => ipcRenderer.invoke('sora:lan:fw'),
     fwFix: () => ipcRenderer.invoke('sora:lan:fwfix'),
+    fwOpen: () => ipcRenderer.invoke('sora:lan:fwopen'),
     on: (cb) => { ipcRenderer.on('sora:lan', (_e, v) => { try { cb(v); } catch (e) {} }); },
   });
 }

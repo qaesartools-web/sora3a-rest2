@@ -2894,27 +2894,39 @@ const ordCancelCore = id=>{
     clearTimeout(lanFwT); lanFwT = setTimeout(lanFwCheck, 10 * 60000);
     Promise.resolve(L.fw()).then((r) => { lanFw = r || null; lanUi(); }, () => {});
   }
+  // شنو صار بآخر «اسمح» — يبقى مكتوب بالشريط (حتى الكاشير يصوّره)
+  let lanFwMsg = '';
+  const fwWhy = (r) => !r ? '⚠️ ما وصل رد من البرنامج — سكّر برنامج الكاشير وافتحه وجرّب مرة ثانية'
+    : r.refused ? '❌ انضغط «لا» على سؤال ويندوز (أو الحساب يحتاج رمز المسؤول) — اضغط «اسمح» مرة ثانية واختار «نعم»'
+    : r.shields ? '⛔ ويندوز مأشّر «امنع كل الاتصالات الداخلة» (Block all incoming connections) — اضغط «افتح جدار الحماية» ← «تشغيل أو إيقاف» (Turn on or off) ← شيل هالعلامة من «خاص» و«عام»'
+    : r.fixed || r.created ? '⚠️ السماح انضاف بس الجدار بعده يمنع — غالباً برنامج حماية ثاني (مكافح فيروسات) — اسمح لـ«Sora3a Cashier» بيه، أو اضغط «افتح جدار الحماية» وأشّر عليه بـ«خاص» و«عام»'
+    : '⚠️ ويندوز ما قبل يضيف السماح' + (r.err ? ' (' + r.err + ')' : '') + ' — اضغط «افتح جدار الحماية» وأشّر على «Sora3a Cashier» بـ«خاص» و«عام»';
   function lanFwBar() {
     let b = $('lanFwBar');
     if (!(lanOn && lanFw && lanFw.ok === false) || lanFwHide) { if (b) b.remove(); return; }
-    if (b) return;
-    b = document.createElement('div');
-    b.id = 'lanFwBar';
-    b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9000;max-width:360px;background:#7f1d1d;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:14px;line-height:1.7';
-    b.innerHTML = `<div>⛔ جدار حماية ويندوز يمنع شاشة المطبخ والمجهز و«طلبك جاهز» توصل لهذا الجهاز — إذا انقطع النت ما توصلها الطلبات</div>
-      <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="btn-soft" style="flex:1" onclick="lanFwFix()">🛡️ اسمح بضغطة</button><button type="button" class="btn-soft" onclick="lanFwLater()">لاحقاً</button></div>`;
-    document.body.appendChild(b);
+    const L = lanApi();
+    const msg = lanFwMsg || (lanFw.shields ? fwWhy(lanFw) : '');
+    const h = `<div>⛔ جدار حماية ويندوز يمنع شاشة المطبخ والمجهز و«طلبك جاهز» توصل لهذا الجهاز — إذا انقطع النت ما توصلها الطلبات</div>
+      ${msg ? `<div class="fw-why" style="margin-top:6px;padding:6px 8px;border-radius:10px;background:rgba(0,0,0,.25);font-size:13px">${esc(msg)}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">${lanFw.shields ? '' : '<button type="button" class="btn-soft" style="flex:1" onclick="lanFwFix()">🛡️ اسمح بضغطة</button>'}${L && L.fwOpen ? '<button type="button" class="btn-soft" onclick="lanFwOpen()">⚙️ افتح جدار الحماية</button>' : ''}<button type="button" class="btn-soft" onclick="lanFwLater()">لاحقاً</button></div>`;
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'lanFwBar';
+      b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9000;max-width:380px;background:#7f1d1d;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:14px;line-height:1.7';
+      document.body.appendChild(b);
+    }
+    if (b.innerHTML !== h) b.innerHTML = h;
   }
   window.lanFwLater = () => { lanFwHide = true; lanFwBar(); };
+  window.lanFwOpen = () => { const L = lanApi(); if (L && L.fwOpen) Promise.resolve(L.fwOpen()).catch(() => {}); };
   window.lanFwFix = async () => {
     const L = lanApi(); if (!L || !L.fwFix) return;
     toast('🛡️ ويندوز راح يسألك «تسمح لهذا التطبيق يسوي تغييرات؟» — اضغط «نعم»');
     const r = await Promise.resolve(L.fwFix()).catch(() => null);
     if (r) lanFw = r;
+    lanFwMsg = r && r.ok ? '' : fwWhy(r);
     lanUi();
-    toast(r && r.ok ? '✅ تم — الشاشات تكدر توصل لهذا الجهاز حتى بدون نت'
-      : r && r.refused ? '❌ انضغط «لا» — عيدها واضغط «نعم»'
-      : '⚠️ ما تأكدنا — إذا عندك برنامج حماية ثاني (مكافح فيروسات) اسمح لبرنامج سرعة بيه');
+    toast(r && r.ok ? '✅ تم — الشاشات تكدر توصل لهذا الجهاز حتى بدون نت' : lanFwMsg);
   };
 
   // السلة على الهاتف: تفتح وتغلق بلمسة على رأسها

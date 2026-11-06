@@ -34,6 +34,40 @@ test('program paths with quotes stay inside the PowerShell string', () => {
   assert.ok(elevateScript(fixScript(exe)).includes('-Verb RunAs'));
 });
 
+test('«block all incoming connections» is ticked → blocked even with an allow rule (the fix cannot change it — the banner says how)', () => {
+  const r = judge({ rules: [{ a: 'Allow', p: 0 }], cats: [PUB], fw: ON, sh: ['Public'] });
+  assert.equal(r.ok, false); assert.equal(r.shields, true);
+  assert.equal(judge({ rules: [{ a: 'Allow', p: 0 }], cats: [PRIV], fw: ON, sh: ['Public'] }).ok, true, 'only the connected network counts');
+});
+
+test('rules read through the Windows firewall API (works without admin) count the same; duplicates are fine', () => {
+  // قبل: البرنامج مو مسؤول ← أوامر NetSecurity ما ترجع قواعد ← «ممنوع» دائماً حتى بعد السماح
+  const r = judge({ rules: [{ a: 'Allow', p: 0, s: 'c' }, { a: 'Allow', p: 0, s: 'n' }], cats: [PUB, PUB], fw: ON, sh: [], adm: false });
+  assert.equal(r.ok, true); assert.equal(r.admin, false);
+});
+
+test('check reads both NetSecurity and HNetCfg.FwPolicy2, with the program path normalised; fix falls back to netsh and writes its result', () => {
+  const c = checkScript('C:\\x.exe'), f = fixScript('C:\\x.exe', 'C:\\Temp\\r.json');
+  assert.match(c, /HNetCfg\.FwPolicy2/); assert.match(c, /ExpandEnvironmentVariables/); assert.match(c, /BlockAllInboundTraffic/); assert.match(c, /AllowInboundRules/);
+  assert.match(f, /netsh advfirewall firewall add rule/); assert.match(f, /WriteAllText\('C:\\Temp\\r\.json'/); assert.match(f, /Rules\.Remove/);
+  assert.match(f, /exit 3/);
+});
+
+test('fix reports what happened (from its result file)', async () => {
+  const fsx = require('fs');
+  const fw = createFirewall({ win: true, exe: 'C:\\x.exe', tmpDir: require('os').tmpdir(), run: async (s) => {
+    if (s.includes('-Verb RunAs')) {
+      const inner = Buffer.from(s.match(/'-EncodedCommand','([^']+)'/)[1], 'base64').toString('utf16le');
+      const file = inner.match(/WriteAllText\('([^']+)'/)[1];
+      fsx.writeFileSync(file, '\uFEFF{"removed":2,"created":3,"via":"netsh","err":"Access denied"}');
+      return { code: 0, out: '' };
+    }
+    return { code: 0, out: '{"rules":[{"a":"Allow","p":0}],"cats":[0],"fw":["Public"],"sh":[]}' };
+  } });
+  const r = await fw.fix();
+  assert.equal(r.ok, true); assert.equal(r.fixed, true); assert.equal(r.created, 3); assert.equal(r.removed, 2); assert.equal(r.via, 'netsh'); assert.equal(r.err, 'Access denied');
+});
+
 test('not Windows: nothing to check', async () => {
   const fw = createFirewall({ win: false, run: () => { throw new Error('should not run'); } });
   assert.equal((await fw.check()).ok, true);
@@ -68,6 +102,7 @@ test('Windows: real check, allow and re-check', { skip: process.platform !== 'wi
     const r = await fw.fix();
     assert.equal(r.fixed, true, 'fix script must run');
     assert.equal(r.ok, true);
+    assert.ok(r.created >= 1, 'result file read: ' + JSON.stringify(r));
     const names = ps(`Get-NetFirewallApplicationFilter | Where-Object { $_.Program -eq '${exe.replace(/'/g, "''")}' } | Get-NetFirewallRule | ForEach-Object { $_.DisplayName }`);
     assert.ok(!names.includes('sora3a-test-block'), 'old block rule removed');
     assert.ok(names.includes(RULE));
