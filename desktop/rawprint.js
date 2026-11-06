@@ -10,6 +10,10 @@ const crypto = require('crypto');
 // التعريف اللي يحوّل الورقة لكتابة بس (العربي يطلع رموز) — هذا نطبعله صورة ESC/POS
 const TEXT_ONLY = /generic\s*\/\s*text\s*only|generic text|text only/i;
 const isTextOnlyDriver = (driver) => TEXT_ONLY.test(String(driver || ''));
+// تعريفات طابعات الفواتير الحرارية (ESC/POS) المعروفة: تعريفها بالويندوز يطبع الورقة بعرض 80 كامل (تنكص الكتابة من اليمين)
+//  وبطول ورقة ثابت (297 ملم فارغة) — الصورة المباشرة أدق: بعرض الطابعة بالضبط وتنقص على قد الكتابة
+const THERMAL = /sam4s|giant-?\d|ellix|pos[- ]?(80|58)|xp-?\d{2,3}|xprinter|(80|58)\s*mm\s*series|rongta|\brp-?\d{2,3}|thermal\s*receipt/i;
+const isThermalDriver = (driver) => !isTextOnlyDriver(driver) && THERMAL.test(String(driver || ''));
 
 const encode = (script) => Buffer.from(script, 'utf16le').toString('base64');
 function runPs(script, env = {}, timeout = 30000) {
@@ -87,6 +91,7 @@ function createRaw({ tmpDir, run = runPs, ttlMs = 5 * 60000 } = {}) {
       return m.get(name) || null;
     },
     async isTextOnly(name) { const i = await this.info(name); return !!(i && isTextOnlyDriver(i.driver)); },
+    async isThermal(name) { const i = await this.info(name); return !!(i && isThermalDriver(i.driver)); },
     // دقة الطابعة من تعريفها (التعريف النصي ما يعرفها ← 0)
     async dpi(name) { const i = await this.info(name); return i && !isTextOnlyDriver(i.driver) && i.dpi >= 150 && i.dpi <= 600 ? i.dpi : 0; },
     async send(printerName, bytes, title = 'Sora3a') {
@@ -100,4 +105,4 @@ function createRaw({ tmpDir, run = runPs, ttlMs = 5 * 60000 } = {}) {
   };
 }
 
-module.exports = { createRaw, isTextOnlyDriver, parseDrivers, DRIVERS_PS, SEND_PS, runPs };
+module.exports = { createRaw, isTextOnlyDriver, isThermalDriver, parseDrivers, DRIVERS_PS, SEND_PS, runPs };

@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const E = require('../escpos');
-const { createRaw, isTextOnlyDriver, parseDrivers, SEND_PS, DRIVERS_PS } = require('../rawprint');
+const { createRaw, isTextOnlyDriver, isThermalDriver, parseDrivers, SEND_PS, DRIVERS_PS } = require('../rawprint');
 const { makeAutoRenderer, createPrinter } = require('../printer');
 
 // صورة BGRA صغيرة: مربع أسود بنص أبيض
@@ -51,6 +51,11 @@ test('Generic / Text Only driver is detected (the one that prints Arabic as ╟�
   assert.equal(isTextOnlyDriver('POS-80C'), false);
   assert.equal(isTextOnlyDriver('EPSON TM-T20II Receipt5'), false);
   assert.equal(isTextOnlyDriver(''), false);
+  // طابعات الفواتير الحرارية المعروفة ← صورة وحدها (تعريفها يكص اليمين ويطلع ورق فارغ طويل)
+  for (const d of ['SAM4S GIANT-100', 'SAM4S ELLIX40', 'POS-80C', 'POS-58', 'XP-80C', 'Xprinter XP-Q200', '80mm Series Printer', 'RONGTA 80mm Series Printer', 'RP80 Printer'])
+    assert.equal(isThermalDriver(d), true, d);
+  for (const d of ['Generic / Text Only', 'Microsoft Print to PDF', 'HP LaserJet M1132 MFP', 'EPSON TM-T20II Receipt5', ''])
+    assert.equal(isThermalDriver(d), false, d);
   const m = parseDrivers('[{"n":"CHALLENGE MONSTER 80mm","d":"Generic / Text Only","r":0},{"n":"طابعة المطبخ","d":"SAM4S GIANT-100","r":180}]');
   assert.deepEqual(m.get('CHALLENGE MONSTER 80mm'), { driver: 'Generic / Text Only', dpi: 0 }); assert.deepEqual(m.get('طابعة المطبخ'), { driver: 'SAM4S GIANT-100', dpi: 180 });
   assert.equal(parseDrivers('{"n":"One","d":"X"}').get('One').driver, 'X');
@@ -106,7 +111,7 @@ test('auto renderer: text-only printer → image (raw), other printers → norma
 
 test('printer list marks text-only printers (the cashier shows «تنطبع كصورة»)', async () => {
   const p = createPrinter({ platform: 'win32', getPrinters: async () => [{ name: 'M', status: 0 }, { name: 'K', status: 0 }, { name: 'G', status: 0 }], render: async () => {},
-    isTextOnly: async (n) => n === 'M', isImage: (n) => n === 'G' });
+    isTextOnly: async (n) => n === 'M', isImage: async (n) => n === 'G' || n === 'M' });
   const l = await p.printers();
   assert.equal(l[0].textOnly, true); assert.equal(l[1].textOnly, undefined);
   assert.equal(l[2].image, true, 'image mode switched on by the cashier'); assert.equal(l[1].image, undefined);

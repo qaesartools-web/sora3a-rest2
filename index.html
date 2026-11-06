@@ -1413,10 +1413,11 @@ function getOrderType(o){
 function renderOrdSum(){
   const el=document.getElementById('ordSum');if(!el)return;
   const s=bizStart(),e=s+86400000;   // يوم العمل (من الفتح للإغلاق)
-  const os=orders.filter(o=>(o.createdAtMs||0)>=s&&(o.createdAtMs||0)<e);
+  const mine=window.posOrdMine?orders.filter(o=>posOrdMine(o)):orders;   // الكاشير: حسابات طلباته بس
+  const os=mine.filter(o=>(o.createdAtMs||0)>=s&&(o.createdAtMs||0)<e);
   const f=finCalc(os,s,e);
   const low=acc.materials.filter(m=>matStatus(m)!=='ok');
-  const waiting=orders.filter(o=>getOrderType(o)==='takeaway'&&['preparing','ready'].includes(o.status)).length;
+  const waiting=mine.filter(o=>getOrderType(o)==='takeaway'&&['preparing','ready'].includes(o.status)).length;
   el.innerHTML=`<div class="rcard"><div class="rtitle">📅 حسابات اليوم</div>
    <div class="rstats">
     <div class="rstat"><div class="rsv">${fmt(Math.round(f.sales))}</div><div class="rsl">صافي المبيعات د.ع</div></div>
@@ -2966,7 +2967,7 @@ const HOLD_ST=['preparing','ready'];
 const holdIsDeliv=o=>getOrderType(o)==='delivery'&&!!o.awaitCap&&!o.captainId;
 // كل كاشير يشوف بالشريط اللي من اختصاصه (صلاحيات أنواع الطلبات)
 const holdMine=o=>!window.posPerm||posPerm(holdIsDeliv(o)?'oDeliv':holdIsTable(o)?'oSalon':'oHold');
-function heldOrders(){return orders.filter(o=>HOLD_ST.includes(o.status)&&(getOrderType(o)==='takeaway'||o.held||holdIsDeliv(o))&&holdMine(o));}
+function heldOrders(){return orders.filter(o=>HOLD_ST.includes(o.status)&&(getOrderType(o)==='takeaway'||o.held||holdIsDeliv(o))&&holdMine(o)&&(!window.posOrdMine||posOrdMine(o)));}
 function holdMins(o){return Math.max(0,Math.floor((Date.now()-(o.createdAtMs||Date.now()))/60000));}
 function holdLabel(o){return o.tableNo?'طاولة '+o.tableNo:(window.kNum?kNum(o):(o.holdNum||o.id.substring(0,4).toUpperCase()));}
 const holdIsTable=o=>getOrderType(o)==='salon'&&!!o.held;

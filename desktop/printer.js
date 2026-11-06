@@ -222,9 +222,10 @@ function createPrinter({ getPrinters: getReal, render: renderReal, virtual = nul
     print,
     async printers() {
       const list = await getPrinters().catch(() => []);
-      const tx = isTextOnly ? await Promise.all(list.map((p) => (isVirtual(p.name) ? false : isTextOnly(p.name).catch(() => false)))) : [];
+      const ask = (fn) => (fn ? Promise.all(list.map((p) => (isVirtual(p.name) ? false : Promise.resolve().then(() => fn(p.name)).catch(() => false)))) : []);
+      const [tx, im] = await Promise.all([ask(isTextOnly), ask(isImage)]);
       return list.map((p, i) => ({ name: p.name, displayName: p.displayName || p.name, isDefault: !!p.isDefault, ...describeStatus(p.status, isVirtual(p.name) ? 'win32' : platform),
-        ...(tx[i] ? { textOnly: true } : {}), ...(isImage && !isVirtual(p.name) && isImage(p.name) ? { image: true } : {}) }));
+        ...(tx[i] ? { textOnly: true } : {}), ...(im[i] ? { image: true } : {}) }));
     },
     jobs: () => jobs.map(({ html, opts, ...j }) => ({ ...j, canReprint: !!html })),
     async reprint(id) {

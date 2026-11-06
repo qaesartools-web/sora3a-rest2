@@ -127,10 +127,10 @@ function setupIpc() {
   // «طباعة صورة» لطابعة معيّنة (ويندوز) — تنحفظ بهالحاسبة
   ipcMain.handle('sora:imagemode:set', (e, name, on) => {
     if (!fromApp(e) || process.platform !== 'win32' || typeof name !== 'string' || !name || name.length > 200) return false;
-    const c = readCfg(), set = new Set(Array.isArray(c.imagePrinters) ? c.imagePrinters : []);
-    if (on) set.add(name); else set.delete(name);
-    writeCfg({ ...c, imagePrinters: [...set].slice(0, 50) });
-    return set.has(name);
+    const c = readCfg(), arr = (k) => new Set(Array.isArray(c[k]) ? c[k] : []), onS = arr('imagePrinters'), offS = arr('normalPrinters');
+    if (on) { onS.add(name); offS.delete(name); } else { onS.delete(name); offS.add(name); }
+    writeCfg({ ...c, imagePrinters: [...onS].slice(0, 50), normalPrinters: [...offS].slice(0, 50) });
+    return !!on;
   });
   ipcMain.handle('sora:reprint', (e, id) => (fromApp(e) ? printer.reprint(id) : { ok: false, error: 'طلب مرفوض' }));
   ipcMain.handle('sora:testmode:get', (e) => fromApp(e) && testMode);
@@ -200,15 +200,24 @@ app.whenReady().then(() => {
   // ويندوز: الطابعة المعرّفة بتعريف «Generic / Text Only» تنطبعلها الورقة صورة ESC/POS (العربي يطلع صحيح)
   const raw = process.platform === 'win32' ? createRaw({ tmpDir: app.getPath('temp') }) : null;
   const normal = makeRenderer(BrowserWindow, app.getPath('temp'));
-  //  + الكاشير يكدر يشغّل «طباعة صورة» لأي طابعة (إذا تعريفها يضيّع ورق أو يطبع غلط)
-  const imageSet = () => new Set(Array.isArray(readCfg().imagePrinters) ? readCfg().imagePrinters : []);
+  //  وطابعات الفواتير الحرارية المعروفة (SAM4S، POS-80، Xprinter…) هم صورة: بعرض الطابعة بالضبط وبدون ورق فارغ
+  //  + الكاشير يكدر يشغّل/يطفي «طباعة صورة» لأي طابعة من الإعدادات
+  const imgCfg = () => { const c = readCfg(); const set = (k) => new Set(Array.isArray(c[k]) ? c[k] : []); return { on: set('imagePrinters'), off: set('normalPrinters') }; };
+  const needsImage = async (n) => {
+    if (!raw || !n) return false;
+    if (await raw.isTextOnly(n)) return true;   // التعريف النصي يطبع العربي رموز — دائماً صورة
+    const c = imgCfg();
+    if (c.on.has(n)) return true;
+    if (c.off.has(n)) return false;
+    return raw.isThermal(n);
+  };
   printer = createPrinter({
     getPrinters,
     isTextOnly: raw ? (n) => raw.isTextOnly(n) : null,
-    isImage: raw ? (n) => imageSet().has(n) : null,
+    isImage: raw ? needsImage : null,
     render: raw ? makeAutoRenderer({
       normal, raw: makeRawRenderer(BrowserWindow, app.getPath('temp'), (n, b, t) => raw.send(n, b, t)),
-      isTextOnly: async (n) => imageSet().has(n) || raw.isTextOnly(n),
+      isTextOnly: needsImage,
       dpiOf: (n) => raw.dpi(n),
       defaultName: async () => ((await getPrinters()).find((p) => p.isDefault) || {}).name || '',
     }) : normal,

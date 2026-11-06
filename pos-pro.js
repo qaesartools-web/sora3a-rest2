@@ -1098,7 +1098,7 @@ function orderActionsCore(o){
     if (!$('kitchenScreen').classList.contains('on')) return;
     $('kdsSub').textContent = list.length ? toA(list.length) + ' طلب قيد التحضير' : '';
     // الجاهز اللي ينتظر الزبون (هو اللي يطلع بـ«جاهز» على التلفزيون): «تم التسليم» يشيله من الشاشة
-    const rdy = orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready') && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < (window.posReadyKeep ? posReadyKeep() : 10 * 60000))
+    const rdy = orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready') && (!window.posOrdMine || posOrdMine(o)) && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < (window.posReadyKeep ? posReadyKeep() : 10 * 60000))
       .sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0));
     const kr = $('kdsReady');
     if (kr) {
@@ -1139,7 +1139,10 @@ function orderActionsCore(o){
 
   // تحديث الشاشات عند وصول الطلبات
   // الأساس (كان بـ index.html) — نفس الكود
+// الكاشير يشوف طلباته بس (صاحب المطعم يشوف الكل)
+function ordersMine(){return window.posOrdMine?orders.filter(o=>posOrdMine(o)):orders;}
 function renderOrdersCore(){
+  const orders=ordersMine();
   const salon=orders.filter(o=>getOrderType(o)==='salon');
   const take=orders.filter(o=>getOrderType(o)==='takeaway');
   const deliv=orders.filter(o=>getOrderType(o)==='delivery');
@@ -1407,6 +1410,15 @@ const showMTabCore = tab=>{
   const TABS = ['cashier', 'orders', 'capPay', 'kitchen', 'shift', 'reports', 'menu', 'acc'];
   const TAB_PERM = { reports: 'reports', acc: 'inventory' };
   const isCashierRole = () => !!(window.posUser && window.posUser.role === 'cashier');
+  // كل كاشير يشوف طلباته بس (اللي سجّلها هو بحسابه): الطلبات، «جاهز للزبون»، المعلّقة، الكابتن ما رد — صاحب المطعم يشوف الكل
+  //  الطلب القديم اللي ما بيه منو سجّله: حسب الجهاز اللي انسجّل منه
+  const ordMine = (o) => {
+    if (!o || !isCashierRole()) return true;
+    const u = window.posUser.uid || '';
+    if (o.byUid) return !u || o.byUid === u;
+    return !o.device || o.device === deviceId;
+  };
+  window.posOrdMine = ordMine;
   // التقارير والأرباح والمبيعات الشهرية: للمالك فقط (الكاشير يطبع تقرير اليوم من الوردية)
   const tabAllowed = (t) => t === 'reports' ? !isCashierRole() : t === 'kitchen' ? !featOn('kitchen') : t === 'capPay' ? feat('captain') && myPerm('oDeliv') : t === 'menu' ? can('settings') : (!TAB_PERM[t] || can(TAB_PERM[t]));
   // التحديث التلقائي ينتظر لحد ما الكاشير يكون فاضي: سلة فارغة، لا نافذة مفتوحة، لا مكالمة
@@ -2204,7 +2216,7 @@ const ordCancelCore = id=>{
   // ── شريط «جاهز للزبون» فوق السلة: الطلبات اللي على شاشة «طلبك جاهز» — ضغطة على الرقم = «تم التسليم»، و«سلّم الكل» ──
   const readyKeepMs = () => { const k = +scrCfg().keepMin; return k > 0 ? Math.max(2, Math.min(60, k)) * 60000 : 10 * 60000; };
   window.posReadyKeep = readyKeepMs;
-  const readyNow = () => (restData && feat('screen')) ? orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready')
+  const readyNow = () => (restData && feat('screen')) ? orders.filter((o) => ordWaiting(o) && (o.kitchen === 'ready' || o.status === 'ready') && ordMine(o)
     && Date.now() - (o.kitchenReadyAt || o.readyAt || Date.now()) < readyKeepMs()).sort((a, b) => (a.kitchenReadyAt || a.readyAt || 0) - (b.kitchenReadyAt || b.readyAt || 0)) : [];
   function renderReadyBar() {
     let el = $('readyBar');
@@ -3332,7 +3344,7 @@ const ordCancelCore = id=>{
   const CAP_NOANS = () => window.__capNoAns || 5 * 60000;
   // دلفري خلص تجهيزه يرجع لكاشيره (الجهاز اللي سجّله)؛ إذا ما اختار كابتن خلال ٣ دقايق يطلع لكل كاشيرية الدلفري
   const CAP_BACK = () => window.__capBack || 3 * 60000;
-  const capNoAns = () => orders.filter((o) => getOrderType(o) === 'delivery' && o.status === 'pending' && o.captainId
+  const capNoAns = () => orders.filter((o) => getOrderType(o) === 'delivery' && o.status === 'pending' && o.captainId && ordMine(o)
     && !(o.rejectedBy || []).includes(o.captainId) && Date.now() - (o.assignedAtMs || o.createdAtMs || Date.now()) > CAP_NOANS());
   setInterval(() => { if (restData) renderCapWait(); }, 30000);
   function renderCapWait() {
