@@ -54,7 +54,7 @@
 
   // ══════════ الإعدادات ══════════
   const DEFAULTS = {
-    receiptTitle: '', receiptSub: '', receiptPhone: '', receiptFooter: 'شكراً لزيارتكم ❤️',
+    receiptTitle: '', receiptSub: '', receiptPhone: '', receiptFooter: 'شكراً لزيارتكم ❤️', receiptLogo: true,
     defaultFee: 5000, feePresets: [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000], taxPct: 0, servicePct: 0, tables: 0, pagers: 10,
     printKitchen: false, quickAdd: true, paper: 80, drawer: false,
     // أقسام المطبخ: كل قسم يستلم أصنافه فقط، ورقم الطلب يوحّدها
@@ -540,7 +540,7 @@ function openDelivModalCore(){
     curCust = null;
     applySaleToStock(sold.map((c) => ({ name: c.name, variant: c.variant, qty: c.qty })), ref.id);
     if (o.kSec) printOrderAll({ id: ref.id, ...o }, null);
-    else printSlip('🍳 تذكرة مطبخ #' + num_, { customer: o.customer, phone: o.phone }, items.map((i) => ({ ...i, name: i.name + (i.note ? ' [' + i.note + ']' : '') })), t.total, 'المجموع', o.note);
+    else printSlip('🍳 تذكرة مطبخ #' + num_, { id: ref.id, ...o }, items, t.total, 'المجموع', o.note);
     toast('🍳 حُفظ الطلب #' + num_ + ' — قيد التحضير' + (o.pager ? ' • 📟 بيجر ' + toA(o.pager) : ''));
     cart = cart.filter((c) => !sold.includes(c)); disc = { type: 'amt', value: 0, reason: '' }; renderCart();
   };
@@ -735,58 +735,107 @@ function orderActionsCore(o){
 
   // ══════════ الفاتورة ══════════
   const PAY_AR = { cash: 'نقداً', card: 'بطاقة', mixed: 'مختلط', later: 'آجل — لم يُدفع', cod: 'عند الاستلام (الكابتن)', credit: 'دين — على حساب الزبون' };
+  // ══════════ تصميم الورق (فاتورة الكاشير وتذكرة المطبخ) — أسود وأبيض للطابعة الحرارية ══════════
+  //  الفاتورة: الشعار يسار والاسم والأرقام يمين، معلومات بعمودين بمربعات، جدول أصناف بحدود، ومربع «الصافي»
+  //  تذكرة المطبخ: مربعات بعمودين (نوع الطلب، التسلسل، البيجر، رقم الفاتورة، التاريخ، الوقت) + جدول الصنف والكمية والملاحظات
+  const rLogoKey = () => 'pos_rlogo_' + rid();
+  const rLogo = () => { const v = lsGet(rLogoKey(), ''); return /^data:image\/(png|jpeg|webp);base64,/.test(v) ? v : ''; };
+  window.posReceiptLogo = rLogo;
+  const rLogoPv = () => { const l = rLogo(); return l ? `<img src="${l}" alt="">` : '<span class="ac-sub">ماكو شعار — يتحط من برج سرعة (المطعم ← الفاتورة)</span>'; };
+  const prnW = () => (settings.paper === 58 ? 210 : 300);
+  const prnZ = (n) => Math.round(n * (settings.paper === 58 ? 0.8 : 1) * 10) / 10 + 'px';
+  const prnFont = "@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800;900&display=swap');";
+  const prnDate = (o) => { const d = new Date(o.createdAtMs || Date.now()); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate(); };
+  const prnTime = (o) => { if (o.createdAt && /^\d{1,2}:\d{2}$/.test(String(o.createdAt).trim())) return t12(o.createdAt); const d = new Date(o.createdAtMs || Date.now()); return t12(d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0')); };
+  const prnType = (o, captain) => { const t = getOrderType(o); return t === 'salon' ? 'صالة' + (o.tableNo ? ' — طاولة ' + o.tableNo : '') : t === 'takeaway' ? 'سفري' : 'دلفري' + ((o.captainName || (captain && captain.name)) ? ' — ' + (o.captainName || captain.name) : ''); };
+  const prnInv = (o) => String(o.id || '').substring(0, 6).toUpperCase();
+  // خانة: عنوان + قيمة (bx = مربع، big = رقم كبير)
+  const fld = (label, val, cls) => `<div class="f"><div class="l">${esc(label)}</div><div class="v ${cls || ''}">${val}</div></div>`;
+  function kTicketCss(W) {
+    const z = prnZ;
+    return `.kt2{font-family:'Tajawal',Arial,sans-serif;direction:rtl;width:${W}px;padding:6px 4px;color:#000;font-weight:800;line-height:1.3;box-sizing:border-box}
+      .kt2 *{margin:0;padding:0;box-sizing:border-box;color:inherit}
+      .kt2 .bar{background:#000;color:#fff;text-align:center;font-size:${z(18)};font-weight:900;padding:4px;margin-bottom:6px}
+      .kt2 .ttl{text-align:center;font-size:${z(17)};font-weight:900;border:2px solid #000;padding:3px;margin-bottom:6px}
+      .kt2 .grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px}
+      .kt2 .f .l{font-size:${z(14)};font-weight:800;margin-bottom:2px}
+      .kt2 .f .v{border:1.8px solid #000;text-align:center;font-size:${z(16)};font-weight:900;padding:3px 4px;min-height:${z(28)}}
+      .kt2 .f .v.big{font-size:${z(26)};line-height:1.1}
+      .kt2 .nt{margin-top:6px;font-size:${z(15)};font-weight:800}
+      .kt2 table{width:100%;border-collapse:collapse;margin-top:8px}
+      .kt2 th,.kt2 td{border:1.6px solid #000;padding:4px;font-size:${z(16)};font-weight:900;vertical-align:middle}
+      .kt2 th{font-size:${z(14.5)}}
+      .kt2 td.q{text-align:center;width:16%;font-size:${z(19)}}
+      .kt2 td.m{width:30%;font-size:${z(13.5)};font-weight:800}
+      .kt2 .oth{margin-top:6px;font-size:${z(13)};font-weight:700}`;
+  }
+  // تذكرة المطبخ (لكل قسم، أو كاملة، أو ورقة «إضافة على الطلب»)
+  function kTicketHTML(o, items, opt = {}) {
+    const W = prnW();
+    const pager = o.pager ? esc(String(o.pager)) : '';
+    const rows = items.map((i) => `<tr><td>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}</td><td class="q">${esc(String(i.qty))}</td><td class="m">${esc(i.note || '')}</td></tr>`).join('');
+    const note = opt.note != null ? opt.note : o.note;
+    return `<style>${kTicketCss(W)}</style><div class="kt2">
+      ${opt.bar ? `<div class="bar">${esc(opt.bar)}</div>` : ''}${opt.title ? `<div class="ttl">${esc(opt.title)}</div>` : ''}
+      <div class="grid">${fld('نوع الطلب:', esc(prnType(o)))}${fld('التسلسل:', '#' + esc(String(kNum(o))), 'big')}
+        ${fld('رقم البيجر:', pager)}${fld('رقم الفاتورة:', esc(prnInv(o)))}
+        ${fld('التاريخ:', esc(prnDate(o)))}${fld('الوقت:', esc(prnTime(o)))}</div>
+      ${note ? `<div class="nt">الملاحظة: ${esc(note)}</div>` : ''}
+      <table><tr><th>الصنف</th><th>الكمية</th><th>الملاحظات</th></tr>${rows}</table>
+      ${opt.others ? `<div class="oth">يكتمل مع: ${esc(opt.others)}</div>` : ''}
+      ${opt.total != null ? `<table><tr><th>${esc(opt.totalLabel || 'المجموع')}</th><td class="q">${fmt(opt.total)} د.ع</td></tr></table>` : ''}
+    </div>`;
+  }
+  window.posKitchenTicket = (o, items, opt) => `<html><head><meta charset="UTF-8"><style>${prnFont}body{margin:0}</style></head><body>${kTicketHTML(o, items, opt)}</body></html>`;
   function receiptHTML(o, captain, pay, withKitchen) {
     const items = orderItemsFull(o).map((i, k) => ({ ...i, note: (o.items && o.items[k] && o.items[k].note) || i.note }));
     const title = settings.receiptTitle || restData.name || 'سرعة';
     const subL = settings.receiptSub || restData.area || '';
-    const phone = settings.receiptPhone || restData.phone || '';
-    const d = new Date(o.createdAtMs || Date.now());
-    const type = o.orderType || 'delivery';
-    // رقم الطلب الكبير = نفس الرقم بشاشة المجهز وشاشة «طلبك جاهز»
-    const big = `<div class="num">#${esc(kNum(o))}</div>`;
-    const head = type === 'salon' ? `${big}<div class="type">🪑 صالة${o.tableNo ? ' — طاولة ' + esc(o.tableNo) : ''}</div>`
-      : type === 'takeaway' ? `${big}<div class="type">🥡 سفري</div>`
-      : `${big}<div class="type">🏍️ دلفري${(o.captainName || (captain && captain.name)) ? ' — ' + esc(o.captainName || captain.name) : ''}</div>`;
-    const pg = o.pager ? `<div class="type" style="font-size:18px">📟 بيجر رقم ${esc(o.pager)}</div>` : '';
+    // أكثر من رقم: كل رقم بسطر (افصلهن بفاصلة أو /)
+    const phones = String(settings.receiptPhone || restData.phone || '').split(/[,،\/|]|\s{2,}/).map((x) => x.trim()).filter(Boolean).slice(0, 3);
+    const type = getOrderType(o);
     const sub_ = o.subtotal != null ? o.subtotal : items.reduce((s, i) => s + (i.price || 0) * i.qty, 0);
     const p = (pay && pay.payment) || o.payment || {};
-    const W = settings.paper === 58 ? 210 : 300;
-    // طابعة حرارية أسود وأبيض: الخط كبير وعريض وكله أسود صافي (بدون رمادي) حتى يقرا بسهولة
-    const f = settings.paper === 58 ? 0.82 : 1, z = (n) => Math.round(n * f * 10) / 10 + 'px';
-    const css = `@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800;900&display=swap');
-      *{margin:0;padding:0;color:inherit}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:8px 6px;width:${W}px;color:#000;font-weight:700;line-height:1.35}
-      .logo{text-align:center;font-size:${z(24)};font-weight:900;}.sub{text-align:center;font-size:${z(14)};font-weight:700;}
-      .div{border-top:2px dashed #000;margin:6px 0;}.num{text-align:center;font-size:${z(44)};font-weight:900;line-height:1.1}
-      .type{text-align:center;background:#000;color:#fff;padding:4px;font-size:${z(18)};font-weight:900;margin:4px 0;}
-      .row{display:flex;justify-content:space-between;font-size:${z(14.5)};font-weight:700;margin-bottom:3px;gap:6px;}
-      .item{font-size:${z(16.5)};font-weight:800;margin-bottom:5px;}.item .l{display:flex;justify-content:space-between;gap:6px;}.item .n{font-size:${z(14.5)};font-weight:700}
-      .total{display:flex;justify-content:space-between;font-size:${z(22)};font-weight:900;margin-top:4px;padding-top:4px;border-top:3px solid #000;}
-      .foot{text-align:center;font-size:${z(14.5)};font-weight:700;margin-top:8px;}.kt .item{font-size:${z(21)};font-weight:900;}.pb{page-break-before:always;}`;
-    const rcpt = `<div class="logo">${esc(title)}</div>${subL ? `<div class="sub">${esc(subL)}</div>` : ''}${phone ? `<div class="sub">📞 ${esc(phone)}</div>` : ''}
-      <div class="div"></div>${head}${pg}<div class="div"></div>
-      <div class="row"><span>رقم الطلب</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div>
-      <div class="row"><span>التاريخ</span><span>${esc(d.toLocaleDateString('ar-IQ-u-nu-latn'))} ${esc(t12(o.createdAt))}</span></div>
-      ${o.customer && type === 'delivery' ? `<div class="row"><span>الزبون</span><span>${esc(o.customer)}</span></div>` : ''}
-      ${o.phone ? `<div class="row"><span>الهاتف</span><span>${esc(o.phone)}</span></div>` : ''}
-      ${o.address && type === 'delivery' ? `<div class="row"><span>العنوان</span><span>${esc(o.address)}</span></div>` : ''}
-      <div class="div"></div>
-      ${items.map((i) => `<div class="item"><div class="l"><span>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''} ×${i.qty}</span><span>${fmt((i.price || 0) * i.qty)}</span></div>${i.note ? `<div class="n">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}
-      <div class="div"></div>
+    const W = prnW(), z = prnZ;
+    const logo = settings.receiptLogo === false ? '' : rLogo();
+    const css = `${prnFont}
+      *{margin:0;padding:0;box-sizing:border-box;color:inherit}body{font-family:'Tajawal',Arial,sans-serif;direction:rtl;padding:6px 4px;width:${W}px;color:#000;font-weight:700;line-height:1.3}
+      .hd{display:flex;align-items:center;gap:8px;margin-bottom:6px}.hd .nm{flex:1;text-align:center}
+      .hd .nm b{display:block;font-size:${z(logo ? 21 : 24)};font-weight:900;line-height:1.15}.hd .nm .ph{display:block;font-size:${z(16)};font-weight:800;direction:ltr}
+      .hd .nm .sb{display:block;font-size:${z(13.5)};font-weight:700}.hd .lg{width:40%;flex:none;text-align:center}.hd .lg img{max-width:100%;max-height:120px}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin:4px 0 2px}
+      .f .l{font-size:${z(13.5)};font-weight:800;margin-bottom:1px}.f .v{font-size:${z(15)};font-weight:800;text-align:center}
+      .f .v.bx{border:1.8px solid #000;padding:2px 4px;min-height:${z(26)}}.f .v.big{font-size:${z(24)};font-weight:900;line-height:1.1}
+      .wide{font-size:${z(14)};font-weight:800;margin-top:3px}
+      table.it{width:100%;border-collapse:collapse;margin-top:8px}table.it th,table.it td{border:1.6px solid #000;padding:3px 4px;font-size:${z(14.5)};font-weight:800;vertical-align:middle}
+      table.it th{font-weight:900}table.it td.q,table.it td.p{text-align:center;white-space:nowrap}table.it td.q{width:15%}table.it td.p{width:25%}
+      table.it td small{display:block;font-size:${z(12.5)};font-weight:700}
+      .row{display:flex;justify-content:space-between;font-size:${z(14)};font-weight:800;margin:3px 2px 0;gap:6px}
+      .tot{display:flex;width:86%;margin:8px auto 0;border:2px solid #000}.tot span{flex:1;text-align:center;padding:4px;font-size:${z(20)};font-weight:900}.tot span+span{border-right:2px solid #000}
+      .foot{text-align:center;font-size:${z(14)};font-weight:800;margin-top:8px}.pb{page-break-before:always}`;
+    const deliv = type === 'delivery';
+    const due = deliv && o.fee ? (o.value || 0) + (o.fee || 0) : (o.value || 0);
+    const rcpt = `<div class="hd"><div class="nm"><b>${esc(title)}</b>${phones.map((x) => `<span class="ph">${esc(x)}</span>`).join('')}${subL ? `<span class="sb">${esc(subL)}</span>` : ''}</div>${logo ? `<div class="lg"><img src="${logo}" alt=""></div>` : ''}</div>
+      <div class="grid">${fld('نوع الطلب:', esc(prnType(o, captain)))}${fld('رقم الطلب:', '#' + esc(String(kNum(o))), 'bx big')}
+        ${fld('التاريخ:', esc(prnDate(o)))}${fld('الوقت:', esc(prnTime(o)))}
+        ${fld('رقم الفاتورة:', esc(prnInv(o)))}${o.pager || Number(settings.pagers) > 0 ? fld('رقم البيجر:', esc(String(o.pager || '')), 'bx') : o.byName ? fld('الكاشير:', esc(o.byName)) : '<div></div>'}</div>
+      ${o.customer && deliv ? `<div class="wide">الزبون: ${esc(o.customer)}</div>` : ''}${o.phone ? `<div class="wide">الهاتف: <span dir="ltr">${esc(o.phone)}</span></div>` : ''}
+      ${o.address && deliv ? `<div class="wide">العنوان: ${esc(o.address)}</div>` : ''}
+      <table class="it"><tr><th>اسم الصنف</th><th>الكمية</th><th>السعر</th></tr>
+        ${items.map((i) => `<tr><td>${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<small>${esc(i.note)}</small>` : ''}</td><td class="q">${esc(String(i.qty))}</td><td class="p">${fmt((i.price || 0) * i.qty)}</td></tr>`).join('')}</table>
       ${o.discount ? `<div class="row"><span>المجموع</span><span>${fmt(sub_)}</span></div><div class="row"><span>خصم${o.discountInfo && o.discountInfo.reason ? ' (' + esc(o.discountInfo.reason) + ')' : ''}</span><span>-${fmt(o.discount)}</span></div>` : ''}
       ${o.service ? `<div class="row"><span>خدمة</span><span>${fmt(o.service)}</span></div>` : ''}
       ${o.tax ? `<div class="row"><span>ضريبة</span><span>${fmt(o.tax)}</span></div>` : ''}
-      <div class="total"><span>الإجمالي</span><span>${fmt(o.value)} د.ع</span></div>
-      ${type === 'delivery' && o.fee ? `<div class="row"><span>أجور التوصيل</span><span>${fmt(o.fee)}</span></div><div class="row" style="font-weight:900;font-size:${z(17)}"><span>المطلوب من الزبون</span><span>${fmt((o.value || 0) + (o.fee || 0))} د.ع</span></div>` : ''}
-      ${type === 'delivery' && o.fee === 0 ? `<div class="row" style="font-weight:900"><span>🎁 التوصيل مجاني</span><span>0</span></div><div class="row" style="font-weight:900;font-size:${z(17)}"><span>المطلوب من الزبون</span><span>${fmt(o.value || 0)} د.ع</span></div>` : ''}
-      ${p.method ? `<div class="div"></div><div class="row"><span>طريقة الدفع</span><span>${esc(PAY_AR[p.method] || p.method)}</span></div>` : ''}
+      ${deliv && o.fee ? `<div class="row"><span>الطلب</span><span>${fmt(o.value)}</span></div><div class="row"><span>أجور التوصيل</span><span>${fmt(o.fee)}</span></div>` : ''}
+      ${deliv && o.fee === 0 ? `<div class="row"><span>التوصيل</span><span>مجاني</span></div>` : ''}
+      <div class="tot"><span>${deliv ? 'المطلوب' : 'الصافي'}</span><span>${fmt(due)}</span></div>
+      ${p.method ? `<div class="row" style="margin-top:6px"><span>طريقة الدفع</span><span>${esc(PAY_AR[p.method] || p.method)}</span></div>` : ''}
       ${p.card && p.method === 'mixed' ? `<div class="row"><span>بطاقة</span><span>${fmt(p.card)}</span></div>` : ''}
-      ${p.method === 'credit' && p.cust ? `<div class="row" style="font-weight:900"><span>على حساب</span><span>${esc(p.cust.name)}${p.cust.phone ? ' • ' + esc(p.cust.phone) : ''}</span></div>` : ''}
+      ${p.method === 'credit' && p.cust ? `<div class="row"><span>على حساب</span><span>${esc(p.cust.name)}${p.cust.phone ? ' • ' + esc(p.cust.phone) : ''}</span></div>` : ''}
       ${p.received && (p.method === 'cash' || p.method === 'mixed') ? `<div class="row"><span>المستلم نقداً</span><span>${fmt(p.received)}</span></div><div class="row"><span>الباقي</span><span>${fmt(p.change || 0)}</span></div>` : ''}
-      <div class="div"></div><div class="foot">${esc(settings.receiptFooter || 'شكراً لزيارتكم ❤️')}</div>
+      ${settings.receiptFooter ? `<div class="foot">${esc(settings.receiptFooter)}</div>` : ''}
       ${window.SB ? SB.receipt() : ''}`;
-    const kt = withKitchen ? `<div class="pb kt"><div class="logo">🍳 تذكرة مطبخ</div><div class="div"></div>${head}${pg}
-      <div class="row"><span>${esc(t12(o.createdAt))}</span><span>${esc(String(o.id || '').substring(0, 6).toUpperCase())}</span></div><div class="div"></div>
-      ${items.map((i) => `<div class="item">${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<div class="n">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}</div>` : '';
+    const kt = withKitchen ? `<div class="pb">${kTicketHTML(o, items)}</div>` : '';
     return `<html><head><meta charset="UTF-8"><style>${css}</style></head><body>${rcpt}${kt}</body></html>`;
   }
   window.printOrderReceipt = function (o, type, captain) { printHTML(receiptHTML(o, captain, null, false)); };
@@ -1243,9 +1292,11 @@ const showMTabCore = tab=>{
       <div class="sh-card"><div class="sh-title">🧾 الفاتورة</div>
         <div class="flbl">اسم المطعم على الفاتورة</div><input class="finp" id="stTitle" maxlength="60" value="${esc(s.receiptTitle)}" placeholder="${esc(restData.name || '')}">
         <div class="flbl">السطر الثاني (العنوان)</div><input class="finp" id="stSub" maxlength="80" value="${esc(s.receiptSub)}" placeholder="${esc(restData.area || '')}">
-        <div class="set-row"><div><div class="flbl">رقم الهاتف</div><input class="finp" id="stPhone" maxlength="30" value="${esc(s.receiptPhone)}" placeholder="${esc(restData.phone || '')}"></div>
+        <div class="set-row"><div><div class="flbl">رقم الهاتف (رقمين؟ افصلهن بفاصلة)</div><input class="finp" id="stPhone" maxlength="60" dir="ltr" value="${esc(s.receiptPhone)}" placeholder="${esc(restData.phone || '07xx, 07xx')}"></div>
           <div><div class="flbl">عرض ورق الطابعة</div><select class="fsel" id="stPaper"><option value="80" ${s.paper !== 58 ? 'selected' : ''}>80 ملم</option><option value="58" ${s.paper === 58 ? 'selected' : ''}>58 ملم</option></select></div></div>
         <div class="flbl">نص أسفل الفاتورة</div><input class="finp" id="stFooter" maxlength="120" value="${esc(s.receiptFooter)}">
+        <div class="flbl">شعار الفاتورة</div><div id="stLogoPv" class="st-logo">${rLogoPv()}</div>
+        <label class="set-check"><input type="checkbox" id="stRLogo" ${s.receiptLogo !== false ? 'checked' : ''}> اطبع الشعار فوق الفاتورة</label>
         <label class="set-check"><input type="checkbox" id="stKitchen" ${s.printKitchen ? 'checked' : ''}> طباعة تذكرة مطبخ مع كل فاتورة</label>
         <label class="set-check"><input type="checkbox" id="stDrawer" ${s.drawer ? 'checked' : ''}> 💵 درج الفلوس ينفتح وحده مع كل فاتورة</label>
         <div class="ac-sub" style="line-height:1.8">إذا عندك درج فلوس موصول بطابعة الفواتير بالكيبل: شغّلها، وكل ما تطبع فاتورة الدرج ينفتح وحده. ما عندك درج؟ خليها مطفية.</div>
@@ -1309,7 +1360,7 @@ const showMTabCore = tab=>{
     const clamp = (v, a, b) => Math.max(a, Math.min(b, num(v)));
     const next = {
       receiptTitle: $('stTitle').value.trim(), receiptSub: $('stSub').value.trim(), receiptPhone: $('stPhone').value.trim(), receiptFooter: $('stFooter').value.trim(),
-      paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked, drawer: $('stDrawer').checked,
+      paper: $('stPaper').value === '58' ? 58 : 80, printKitchen: $('stKitchen').checked, drawer: $('stDrawer').checked, receiptLogo: $('stRLogo') ? $('stRLogo').checked : true,
       // ما إلها خانات بالإعدادات بعد: تبقى مثل ما هي (أجرة التوصيل الافتراضية تنحط بالطلب وبالمنيو الأونلاين)
       defaultFee: settings.defaultFee ?? DEFAULTS.defaultFee, feePresets: settings.feePresets || DEFAULTS.feePresets, taxPct: settings.taxPct || 0, servicePct: settings.servicePct || 0,
       tables: Math.round(clamp($('stTables').value, 0, 200)), pagers: Math.round(clamp($('stPagers').value, 0, 30)),
@@ -1655,21 +1706,11 @@ const ordCancelCore = id=>{
   // ── تذكرة القسم: رقم الطلب كبير + أصناف القسم فقط
   function secTicketBody(o, sid) {
     const sc = secById(sid) || { name: sid, emoji: '' };
-    const t = getOrderType(o), W = settings.paper === 58 ? 210 : 300;
-    const label = t === 'salon' ? '🪑 صالة' + (o.tableNo ? ' — طاولة ' + o.tableNo : '') : t === 'takeaway' ? '🥡 سفري' : '🏍️ دلفري';
     const items = (o.items || []).filter((i) => i.sec === sid);
     const others = Object.keys(o.kSec || {}).filter((x) => x !== sid).map((x) => (secById(x) || {}).name).filter(Boolean);
-    return `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;width:${W}px;padding:8px;color:#000">
-      <div style="text-align:center;font-size:20px;font-weight:900;background:#000;color:#fff;padding:4px">${esc(sc.emoji || '')} قسم ${esc(sc.name)}</div>
-      <div style="text-align:center;font-size:56px;font-weight:900;line-height:1.1;margin-top:4px">#${esc(kNum(o))}</div>
-      <div style="text-align:center;font-size:14px;font-weight:700">${esc(label)}${o.pager ? ' • 📟 بيجر ' + esc(o.pager) : ''} • ${esc(t12(o.createdAt))}</div>
-      <div style="border-top:2px dashed #000;margin:6px 0"></div>
-      ${items.map((i) => `<div style="font-size:20px;font-weight:900;margin:4px 0">${i.qty}× ${esc(i.name)}${i.variant && i.variant !== 'وحدة' ? ' (' + esc(i.variant) + ')' : ''}${i.note ? `<div style="font-size:15px;font-weight:700">📝 ${esc(i.note)}</div>` : ''}</div>`).join('')}
-      ${o.note ? `<div style="border-top:1px dashed #000;margin-top:6px;padding-top:4px;font-size:15px;font-weight:700">📝 ${esc(o.note)}</div>` : ''}
-      ${others.length ? `<div style="border-top:1px dashed #000;margin-top:6px;padding-top:4px;font-size:13px">يكتمل مع: ${esc(others.join('، '))}</div>` : ''}
-    </div>`;
+    return kTicketHTML(o, items, { bar: 'قسم ' + sc.name, others: others.join('، ') });
   }
-  const docOf = (body) => `<html><head><meta charset="UTF-8"></head><body style="margin:0">${body}</body></html>`;
+  const docOf = (body) => `<html><head><meta charset="UTF-8"><style>${prnFont}</style></head><body style="margin:0">${body}</body></html>`;
   window.secTicketBody = secTicketBody;
 
   // ── الطباعة: QZ Tray يرسل كل تذكرة لطابعة قسمها، وإلا كل التذاكر بنفس الطابعة (كل تذكرة بورقة)
@@ -2058,6 +2099,12 @@ const ordCancelCore = id=>{
     dpEnforceTest();
   }
   function listenRest() {
+    // شعار الفاتورة (يحطه برج سرعة) — ينحفظ بالجهاز حتى ينطبع حتى بدون نت
+    unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', rid(), 'theme', 'receipt'), (s) => {
+      const v = s.exists() ? String(s.data().data || '') : '';
+      if (/^data:image\/(png|jpeg|webp);base64,/.test(v)) lsSet(rLogoKey(), v); else if (!s.metadata.fromCache) lsSet(rLogoKey(), '');
+      const pv = $('stLogoPv'); if (pv) pv.innerHTML = rLogoPv();
+    }, () => {}));
     unsubs.push(fb().onSnapshot(fb().doc(fb().db, 'restaurants', rid()), (s) => {
       if (!s.exists() || !restData) return;
       const before = JSON.stringify([restData.features || {}, restData.svcOff || {}]), beforeH = JSON.stringify(restData.hours || null);
@@ -3369,8 +3416,7 @@ const ordCancelCore = id=>{
   // طلب الطاولة الأونلاين: تذكرة المطبخ فقط (الفاتورة عند الحساب)
   function webKitchenPrint(o, items, total) {
     if (o.kSec) { printOrderAll(o, null); return; }
-    printSlip('🍳 ' + (o.source === 'waiter' ? 'ويتر' : 'QR') + ' — ' + o.customer + ' #' + kNum(o), { customer: o.customer + (o.waiter ? ' • ' + o.waiter : '') },
-      items.map((i) => ({ ...i, name: i.name + (i.note ? ' [' + i.note + ']' : '') })), total, 'المجموع', o.note);
+    printSlip('🍳 تذكرة مطبخ — ' + (o.source === 'waiter' ? 'ويتر' + (o.waiter ? ' ' + o.waiter : '') : 'QR'), o, items, total, 'المجموع', o.note);
   }
   // مرحلة الطلب تنعكس على تلفون الزبون
   function webStageOf(o) {
