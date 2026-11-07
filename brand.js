@@ -174,7 +174,7 @@
   function receipt() {
     return '<div style="text-align:center;margin-top:8px;border-top:1px dashed #000;padding-top:8px;color:#000">' +
       '<div style="width:30px;height:30px;margin:0 auto 2px">' + mark('#000') + '</div>' +
-      '<div style="font-weight:800;font-size:13px">منظومة سرعة للمطاعم</div>' +
+      '<div style="font-weight:800;font-size:13px">نظام سرعة لإدارة المطاعم</div>' +
       '<div dir="ltr" style="font-weight:700;font-size:12.5px">' + esc(cur.phone) + '</div>' +
       '<div dir="ltr" style="font-size:11px">' + esc(cur.email) + '</div></div>';
   }
