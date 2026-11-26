@@ -2,19 +2,23 @@
  "apps": {
   "BL6STCwGBpV6GQJbLbb9": {
    "v": "1795359314640-66616b2b",
-   "code": "317afc5c832f584eec7bb1eeb4b9430790e5a0af",
+   "code": "16b3ab3c2c0c0bb3d99cab5834637bf3b39ccb78",
    "pkg": "iq.sora3a.menu.rbl6stcwgbpv6gqjblbb9",
    "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/download/menu-apps/sora3a-menu-BL6STCwGBpV6GQJbLbb9.apk",
-   "ver": 500006,
+   "ver": 500013,
    "cert": "e52b503c9268fafb14ccd1ff1a544fdcf1f21fc8b8f085cc1ffb62cf35b4d5e4"
   },
   "Tn5DUcohx9R3ZkaBRoA16BGqFhg1": {
    "v": "1795306066395-66616b2b",
-   "code": "317afc5c832f584eec7bb1eeb4b9430790e5a0af",
+   "code": "16b3ab3c2c0c0bb3d99cab5834637bf3b39ccb78",
    "pkg": "iq.sora3a.menu.rtn5ducohx9r3zkabroa16bgqfhg1",
    "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/download/menu-apps/sora3a-menu-Tn5DUcohx9R3ZkaBRoA16BGqFhg1.apk",
-   "ver": 500006,
+   "ver": 500013,
    "cert": "e52b503c9268fafb14ccd1ff1a544fdcf1f21fc8b8f085cc1ffb62cf35b4d5e4"
   }
+ },
+ "general": {
+  "ver": 98,
+  "url": "https://github.com/qaesartools-web/sora3a-rest2/releases/download/menu-android/sora3a-menu.apk"
  }
 }
